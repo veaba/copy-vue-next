@@ -6,11 +6,11 @@ Override for vue-next.
 
 ## runtime-core
 
-### vNode 虚拟 DOM
+### vNode
 
-## 学习
+## new syntax
 
-1. Vue-next 中，有大量 `;` 开头的代码。
+1. `;` begin syntax
 
 ```ts
 export function recordInstanceBoundEffect(effect: ReactiveEffect) {
@@ -20,7 +20,7 @@ export function recordInstanceBoundEffect(effect: ReactiveEffect) {
 }
 ```
 
-2. 这种呢？分号开头，换行是 `options` 单独一行
+2. `options` new line
 
 ```ts
 function parseName(name: string): [string, EventListenerOptions | undefined] {
@@ -38,7 +38,7 @@ function parseName(name: string): [string, EventListenerOptions | undefined] {
 }
 ```
 
-3. `as` 语句
+3. `as` syntax
 
 ```ts
 const c = _computed(getterOrOptions as any); 

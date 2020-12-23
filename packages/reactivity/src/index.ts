@@ -1,11 +1,5 @@
-import { Ref } from "./ref";
-export type ComputedGetter<T> = (ctx?: any) => T;
-export type ComputedSetter<T> = (v: T) => void;
+// import {Ref} from "./ref";
 
-export interface ComputedRef<T = any> extends WritableComputedRef<T> {
-  readonly value: T;
-}
+export {computed, ComputedRef, WritableComputedRef} from "./computed";
 
-export interface WritableComputedRef<T> extends Ref<T> {
-  readonly effect: ReactiveEffect<T>;
-}
+export {reactive} from 'reactive'
