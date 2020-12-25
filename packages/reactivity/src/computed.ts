@@ -70,9 +70,10 @@ class ComputedRefImpl<T> {
         private readonly _setter: ComputedSetter<T>,
         isReadonly: boolean
     ) {
-        this._dirty = true // TODO
+        this._dirty = true
         this.effect = effect(getter, {
             lazy: true,
+            // 调度员
             scheduler: () => {
                 if (!this._dirty) {
                     this._dirty = true

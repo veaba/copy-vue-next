@@ -1,12 +1,17 @@
 /** 处理器**/
 import {ITERATE_KEY, track, trigger} from "./effect";
 import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol} from "@vue/shared";
+import {extend, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol} from "@vue/shared";
 import {reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, toRaw} from "./reactive";
 import {isRef} from "./ref";
 
 const get = createGetter()  // 每个getter 都有收集器选项
 const set = createSetter()  // 每个setter 都有收集器选择
+const readonlyGet = createGetter(true)
+
+const shallowGet = createGetter(false, true)
+const shallowSet = createSetter(true)
+const shallowReadonlyGet = createGetter(true, true)
 
 const arrayInstrumentations: Record<string, Function> = {}
 
@@ -24,6 +29,30 @@ export const mutableHandlers: ProxyHandler<object> = {
     has,
     ownKeys
 }
+
+/**
+ * @readonlyHandlers 无法被setx
+ * */
+export const readonlyHandlers: ProxyHandler<object> = {
+    get: readonlyGet,
+    set(target, key) {
+        if (__DEV__) {
+            console.warn(`
+                设置 “${String(key)}” 上的key 操作失败：target is readonly.
+            `, target)
+        }
+        return true
+    },
+    deleteProperty(target, key) {
+        if (__DEV__) {
+            console.warn(`
+                删除 “${String(key)}” 上的key 操作失败：target is readonly.
+            `, target)
+        }
+        return true
+    }
+}
+
 
 // 删除 prop
 function deleteProperty(target: object, key: string | symbol): boolean {
@@ -51,7 +80,7 @@ function ownKeys(target: object): (string | number | symbol)[] {
 
 
 // 创建 getter TODO: 原版不加 可选标志
-function createGetter(isReadonly?: false, shallow?: false) {
+function createGetter(isReadonly = false, shallow = false) {
     return function get(target: object, key: string | symbol, receiver: object) {
         if (key === ReactiveFlags.IS_REACTIVE) {
             return !isReadonly
@@ -94,7 +123,7 @@ function createGetter(isReadonly?: false, shallow?: false) {
 }
 
 // 创建 setter
-function createSetter(shallow?: false) {
+function createSetter(shallow = false) {
     return function set(
         target: object,
         key: string | symbol,
@@ -128,4 +157,21 @@ function createSetter(shallow?: false) {
     }
 }
 
+// shallow reactive 处理器
+export const shallowReactiveHandlers: ProxyHandler<object> = extend(
+    {},
+    mutableHandlers,
+    {
+        get: shallowGet,
+        set: shallowSet,
+    }
+)
 
+// shallow readonly 处理器
+export const shallowReadonlyHandlers: ProxyHandler<object> = extend(
+    {},
+    readonlyHandlers,
+    {
+        get: shallowReadonlyGet
+    }
+)
