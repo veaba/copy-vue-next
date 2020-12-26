@@ -220,10 +220,10 @@ class CustomRefImpl<T> {
     }
 
     get value() {
-        return this._get
+        return this._get()
     }
 
     set value(newVal) {
-        this._set = newVal
+        this._set(newVal)
     }
 }

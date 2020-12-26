@@ -39,3 +39,17 @@ export {
     ShallowUnwrapRef,
     RefUnwrapBailTypes
 } from "./ref"
+
+// effect
+export {
+    effect,
+    stop,
+    trigger,
+    track,
+    enableTracking,
+    resetTracking,
+    ITERATE_KEY,
+    ReactiveEffect,
+    ReactiveEffectOptions,
+    DebuggerEvent
+} from "./effect"

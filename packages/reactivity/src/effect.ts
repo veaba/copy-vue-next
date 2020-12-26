@@ -66,6 +66,16 @@ export type DebuggerEvent = {
 
 /******* 函数声明 **********/
 
+export function stop(effect: ReactiveEffect) {
+    if (effect.active) {
+        cleanup(effect)
+        if (effect.options.onStop) {
+            effect.options.onStop()
+        }
+        effect.active = false;
+    }
+}
+
 // TODO:track 函数是干嘛的？
 export function track(target: object, type: TrackOpTypes, key: unknown) {
     if (!shouldTrack || activeEffect === undefined) {
