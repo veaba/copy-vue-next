@@ -48,3 +48,23 @@ const c = _computed(getterOrOptions as any);
 
 - typeScript: `infer K`
 	- ts 类型推断
+
+- 在ts 开发中，省略 `{`，`}` 容易丢失
+
+```js
+if (!effect.active) {
+	return options.scheduler ? undefined : fn()
+}
+// 经过ts 编译后，容易丢失，变成下面的情况
+if (!effect.active)
+	return options.scheduler ? undefined : fn()
+
+```
+或者
+
+```ts
+if (isReadonly(value)) return isReactive((value as Target)[ReactiveFlags.RAW])
+// 最后成这样=>
+if (isReadonly(value)) 
+    return isReactive((value as Target)[ReactiveFlags.RAW])
+```

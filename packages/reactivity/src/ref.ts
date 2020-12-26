@@ -93,7 +93,7 @@ export function toRefs<T extends object>(object: T): ToRefs<T> {
     }
 
     const ret: any = isArray(object) ? new Array(object.length) : {} // 内部补齐length属性
-    // 循环追个转为 Ref
+    // 循环逐个转为 Ref
     for (const key in object) {
         ret[key] = toRef(object, key)
     }
@@ -150,7 +150,9 @@ export function proxyRefs<T extends object>(
  * @param shallow true 表示为shallowRef
  * */
 function createRef(rawValue: unknown, shallow = false) {
-    if (isRef(rawValue)) return rawValue
+    if (isRef(rawValue)) {
+        return rawValue
+    }
     return new RefImpl(rawValue, shallow)
 }
 

@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "isolatedModules": false,
     "baseUrl": ".",
     "outDir": "dist",
     "sourceMap": false,
@@ -14,12 +15,21 @@
     "esModuleInterop": true,
     "removeComments": false,
     "jsx": "preserve",
-    "lib": ["esnext", "dom"],
-    "types": ["jest", "puppeteer", "node"],
+    "lib": [
+      "esnext",
+      "dom"
+    ],
+    "types": [
+      "node"
+    ],
     "rootDir": ".",
     "paths": {
-      "@vue/*": ["packages/*/src"],
-      "vue": ["packages/vue/src"]
+      "@vue/*": [
+        "packages/*/src"
+      ],
+      "vue": [
+        "packages/vue/src"
+      ]
     }
   },
   "include": [
@@ -28,5 +38,10 @@
     "packages/runtime-dom/types/jsx.d.ts",
     "packages/*/__tests__",
     "test-dts"
+  ],
+  "exclude": [
+    "node_modules",
+    "./node_modules",
+    "./node_modules/*"
   ]
 }

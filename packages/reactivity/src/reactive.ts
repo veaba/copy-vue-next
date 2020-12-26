@@ -10,7 +10,7 @@ export const enum ReactiveFlags {
     RAW = '__v_raw'
 }
 
-export enum TargetType {
+const enum TargetType {
     INVALID = 0,
     COMMON = 1,
     COLLECTION = 2
@@ -67,7 +67,9 @@ export type DeepReadonly<T> = T extends Builtin
                                     : Readonly<T>
 
 export function isReactive(value: unknown): boolean {
-    if (isReadonly(value)) return isReactive((value as Target)[ReactiveFlags.RAW])
+    if (isReadonly(value)) {
+        return isReactive((value as Target)[ReactiveFlags.RAW])
+    }
     return !!(value && (value as Target)[ReactiveFlags.IS_REACTIVE])
 }
 
@@ -120,12 +122,14 @@ function createReactiveObject(
     // target 已有相应的 Proxy
     const proxyMap = isReadonly ? readonlyMap : reactiveMap
     const existingProxy = proxyMap.get(target) // 现有的 Proxy
-    if (existingProxy) return existingProxy
-
+    if (existingProxy) {
+        return existingProxy
+    }
     // 只有观测到 value 类型的白名单
     const targetType = getTargetType(target)
-    if (targetType === TargetType.INVALID) return target
-
+    if (targetType === TargetType.INVALID) {
+        return target
+    }
     const proxy = new Proxy(
         target,
         targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers

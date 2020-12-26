@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Document</title>
+		<!-- <script src="packages/vue/dist/vue.esm-browser.js" type="module"></script> -->
+		<script>
+			const __DEV__ = true;
+		</script>
+</head>
+<body>
+
+<div id="app"></div>
+</body>
+<script type="module">
+	import {reactive, isReactive} from "./dist/packages/reactivity/src/index.js";
+	
+	const x = reactive({ma: 222});
+	
+	if (isReactive(x)) {
+		console.log('isReactive');
+	} else console.log("no");
+	
+	window.vm = x
+
+</script>
+<!-- <script type="module">
+    import  {createApp,h} from "./packages/vue/dist/vue.esm-browser.js"
+   
+     createApp({
+         data(){
+            return {
+                time:222,
+                d:new Date().getTime(),
+                isPromise: Promise.resolve(1)
+            }
+         },
+         render(){
+             return h("div",{
+             
+             },[
+                 h('span',{
+
+                 },this.time),
+
+                 h('p',{
+                    },this.d)
+             ])
+         }
+     }).mount("#app")
+
+</script> -->
+</html>

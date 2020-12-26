@@ -1,14 +1,17 @@
 export const isFunction = (val: unknown): val is Function => typeof val === 'function'
-
+const __DEV__=true
 
 export const NOOP = () => {
 }
 
 export const objectToString = Object.prototype.toString
-export const toTypeString = (value: unknown): string => objectToString.call(this)
+export const toTypeString = (value: unknown): string => objectToString.call(value)
 
 // 从 "[object RawType]" 等提取字符串 `RawType`
-export const toRawType = (value: unknown): string => objectToString.call(value)
+export const toRawType = (value: unknown): string => {
+    // extract "RawType" from strings like "[object RawType]"
+    return toTypeString(value).slice(8, -1)
+}
 export const extend = Object.assign
 
 const hasOwnProperty = Object.prototype.hasOwnProperty
