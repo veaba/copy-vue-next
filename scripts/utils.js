@@ -6,14 +6,13 @@ const targets = (exports.targets = fs.readdirSync('packages').filter(f => {
     return false
   }
   const pkg = require(`../packages/${f}/package.json`)
-  if (pkg.private && !pkg.buildOptions) {
-    return false
-  }
-  return true
+  return !(pkg.private && !pkg.buildOptions);
+  
 }))
 
 exports.fuzzyMatchTarget = (partialTargets, includeAllMatching) => {
   const matched = []
+	console.log('partialTargets==>',partialTargets)
   partialTargets.forEach(partialTarget => {
     for (const target of targets) {
       if (target.match(partialTarget)) {

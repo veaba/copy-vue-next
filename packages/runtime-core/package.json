@@ -1,0 +1,37 @@
+{
+  "name": "@vue/runtime-core",
+  "version": "3.0.2",
+  "description": "@vue/runtime-core",
+  "main": "index.js",
+  "module": "dist/runtime-core.esm-bundler.js",
+  "types": "dist/runtime-core.d.ts",
+  "files": [
+    "index.js",
+    "dist"
+  ],
+  "buildOptions": {
+    "name": "VueRuntimeCore",
+    "formats": [
+      "esm-bundler",
+      "cjs"
+    ]
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veaba/copy-vue-next.git",
+    "directory": "packages/runtime-core"
+  },
+  "keywords": [
+    "vue"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/veaba/copy-vue-next/issues"
+  },
+  "homepage": "https://github.com/veaba/copy-vue-next/tree/master/packages/runtime-core#readme",
+  "dependencies": {
+    "@vue/shared": "3.0.2",
+    "@vue/reactivity": "3.0.2"
+  }
+}

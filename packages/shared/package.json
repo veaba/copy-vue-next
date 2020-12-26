@@ -1,0 +1,31 @@
+{
+  "name": "@vue/shared",
+  "version": "3.0.2",
+  "description": "internal utils shared across @vue packages",
+  "main": "index.js",
+  "module": "dist/shared.esm-bundler.js",
+  "types": "dist/shared.d.ts",
+  "files": [
+    "index.js",
+    "dist"
+  ],
+  "buildOptions": {
+    "formats": [
+      "esm-bundler",
+      "cjs"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/veaba/copy-vue-next.git",
+    "directory": "packages/shared"
+  },
+  "keywords": [
+    "vue"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/veaba/copy-vue-next/issues"
+  },
+  "homepage": "https://github.com/veaba/copy-vue-next/tree/master/packages/shared#readme"
+}

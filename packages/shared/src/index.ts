@@ -1,5 +1,5 @@
+export * from './codeframe'
 export const isFunction = (val: unknown): val is Function => typeof val === 'function'
-const __DEV__=true
 
 export const NOOP = () => {
 }
@@ -62,3 +62,20 @@ export const def = (obj: object, key: string | symbol, value: any) => {
 export const capitalize = cacheStringFunction(
     (str: string) => str.charAt(0).toUpperCase() + str.slice(1)
 )
+
+let _globalThis: any
+export const getGlobalThis = (): any => {
+    return (
+        _globalThis ||
+        (_globalThis =
+            typeof globalThis !== 'undefined'
+                ? globalThis
+                : typeof self !== 'undefined'
+                ? self
+                : typeof window !== 'undefined'
+                    ? window
+                    : typeof global !== 'undefined'
+                        ? global
+                        : {})
+    )
+}

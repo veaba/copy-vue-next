@@ -53,3 +53,5 @@ export {
     ReactiveEffectOptions,
     DebuggerEvent
 } from "./effect"
+
+export { TrackOpTypes, TriggerOpTypes } from './operations'

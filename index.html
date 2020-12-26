@@ -14,7 +14,7 @@
 <div id="app"></div>
 </body>
 <script type="module">
-	import {reactive, isReactive} from "./dist/packages/reactivity/src/index.js";
+	import {reactive, isReactive,computed,toRefs} from "./dist/packages/reactivity/src/index.js";
 	
 	const x = reactive({ma: 222});
 	
@@ -22,7 +22,19 @@
 		console.log('isReactive');
 	} else console.log("no");
 	
+	const plusOne = computed(()=>x.ma+1)
+	
+	console.info("plusOne==>",plusOne.value);
+	
+	
+	if(isReactive(plusOne)) console.log('plusOne=>','isReactive')
+	else console.log('plusOne=>','noReactive')
+	
+	const plusOne1= toRefs(plusOne)
+	if(isReactive(plusOne1.value)) console.log('plusOne1=>','isReactive')
+	else console.log('plusOne1=>','noReactive')
 	window.vm = x
+	window.plusOne = plusOne
 
 </script>
 <!-- <script type="module">
