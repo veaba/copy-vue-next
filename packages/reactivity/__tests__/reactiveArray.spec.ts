@@ -50,6 +50,7 @@ describe('reactivity/reactive/Array', () => {
     const raw = {}
     const arr = reactive([{}, {}])
     arr.push(raw)
+      // TODO
     expect(arr.indexOf(raw)).toBe(2)
     expect(arr.indexOf(raw, 3)).toBe(-1)
     expect(arr.includes(raw)).toBe(true)
@@ -83,6 +84,7 @@ describe('reactivity/reactive/Array', () => {
     effect(() => {
       index = arr.indexOf(obj)
     })
+      // TODO
     expect(index).toBe(0)
     arr.reverse()
     expect(index).toBe(1)

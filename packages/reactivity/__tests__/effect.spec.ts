@@ -358,6 +358,7 @@ describe('reactivity/effect', () => {
     expect(counterSpy).toHaveBeenCalledTimes(2)
   })
 
+    // TODO
   it('should avoid infinite recursive loops when use Array.prototype.push/unshift/pop/shift', () => {
     ;(['push', 'unshift'] as const).forEach(key => {
       const arr = reactive<number[]>([])

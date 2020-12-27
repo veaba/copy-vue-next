@@ -44,7 +44,7 @@ describe('reactivity/reactive', () => {
     expect(isReactive(observed.array)).toBe(true)
     expect(isReactive(observed.array[0])).toBe(true)
   })
-
+    // TODO
   test('observing subtypes of IterableCollections(Map, Set)', () => {
     // subtypes of Map
     class CustomMap extends Map {}
