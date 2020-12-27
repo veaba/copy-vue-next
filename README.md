@@ -68,3 +68,5 @@ if (isReadonly(value)) return isReactive((value as Target)[ReactiveFlags.RAW])
 if (isReadonly(value)) 
     return isReactive((value as Target)[ReactiveFlags.RAW])
 ```
+
+- 虽然 ts 编译过程，增加 `.js`后缀让,Chrome 运行 ES6 module 的语法，但是，jest 无法调用 `.js` 后缀的路径

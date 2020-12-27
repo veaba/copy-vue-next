@@ -1,12 +1,11 @@
-import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {isArray, isIntegerKey, isMap, EMPTY_OBJ} from "@vue/shared";
-
+import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
+import {isArray, isIntegerKey, isMap, EMPTY_OBJ} from "../../shared/src/index.js";
 
 /******* 全局变量 **********/
 const targetMap = new WeakMap<any, KeyToDepMap>()
 let activeEffect: ReactiveEffect | undefined
-const trackStack: boolean[] = []
 let shouldTrack = true
+const trackStack: boolean[] = []
 let uid = 0
 export const ITERATE_KEY = Symbol(__DEV__ ? "iterate" : "")
 export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? "Map key iterate" : "")
@@ -14,7 +13,7 @@ const effectStack: ReactiveEffect[] = []
 
 /******* interfere 声明****/
 export function isEffect(fn: any): fn is ReactiveEffect {
-    return fn && fn._isEffect
+    return fn && fn._isEffect === true
 }
 
 export function enableTracking() {
@@ -83,11 +82,13 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     }
 
     let depMap = targetMap.get(target)
-    if (!depMap) targetMap.set(target, (depMap = new Map()))
-
+    if (!depMap) {
+        targetMap.set(target, (depMap = new Map()))
+    }
     let dep = depMap.get(key)
-    if (!dep) depMap.set(key, (dep = new Set()))
-
+    if (!dep) {
+        depMap.set(key, (dep = new Set()))
+    }
     if (!dep.has(activeEffect)) {
         dep.add(activeEffect)
         activeEffect.deps.push(dep)
@@ -187,7 +188,9 @@ export function trigger(
         }
         if (effect.options.scheduler) {
             effect.options.scheduler(effect)
-        } else effect()
+        } else {
+            effect()
+        }
     }
     effects.forEach(run)
 }
@@ -198,12 +201,16 @@ export function effect<T = any>(
     fn: () => T,
     options: ReactiveEffectOptions = EMPTY_OBJ
 ): ReactiveEffect<T> {
+
+    console.info('fn==>',fn);
+    console.info('options==>',options);
     if (isEffect(fn)) {
         fn = fn.raw
     }
-
     const effect = createReactiveEffect(fn, options)
+    console.info('effect=>',effect);
     if (!options.lazy) {
+        console.info('!options.lazy')
         effect()
     }
     return effect
@@ -219,16 +226,16 @@ function createReactiveEffect<T = any>(
         }
         if (!effectStack.includes(effect)) {
             cleanup(effect)
-        }
-        try {
-            enableTracking()
-            effectStack.push(effect)
-            activeEffect = effect
-            return fn()
-        } finally {
-            effectStack.pop() // 移除最后一个
-            resetTracking()
-            activeEffect = effectStack[effectStack.length - 1]
+            try {
+                enableTracking()
+                effectStack.push(effect)
+                activeEffect = effect
+                return fn()
+            } finally {
+                effectStack.pop() // 移除最后一个
+                resetTracking()
+                activeEffect = effectStack[effectStack.length - 1]
+            }
         }
     } as ReactiveEffect
     effect.id = uid++

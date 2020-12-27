@@ -1,9 +1,9 @@
 /** 处理器**/
-import {ITERATE_KEY, track, trigger} from "./effect";
-import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {extend, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol} from "@vue/shared";
-import {reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, toRaw} from "./reactive";
-import {isRef} from "./ref";
+import {ITERATE_KEY, track, trigger} from "./effect.js";
+import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
+import {extend, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol} from "../../shared/src/index.js";
+import {reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, Target, toRaw} from "./reactive.js";
+import {isRef} from "./ref.js";
 
 const get = createGetter()  // 每个getter 都有收集器选项
 const set = createSetter()  // 每个setter 都有收集器选择
@@ -78,10 +78,8 @@ function ownKeys(target: object): (string | number | symbol)[] {
     return Reflect.ownKeys(target)
 }
 
-
-// 创建 getter TODO: 原版不加 可选标志
 function createGetter(isReadonly = false, shallow = false) {
-    return function get(target: object, key: string | symbol, receiver: object) {
+    return function get(target: Target, key: string | symbol, receiver: object) {
         if (key === ReactiveFlags.IS_REACTIVE) {
             return !isReadonly
         } else if (key === ReactiveFlags.IS_READONLY) {

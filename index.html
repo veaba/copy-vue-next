@@ -14,27 +14,45 @@
 <div id="app"></div>
 </body>
 <script type="module">
-	import {reactive, isReactive,computed,toRefs} from "./dist/packages/reactivity/src/index.js";
+	import {reactive, isReactive,computed,toRefs,shallowReactive,effect} from "./dist/packages/reactivity/src/index.js";
 	
-	const x = reactive({ma: 222});
+	// const x = reactive({ma: 222});
+	//
+	// if (isReactive(x)) {
+	// 	console.log('isReactive');
+	// } else console.log("no");
+	//
+	// const plusOne = computed(()=>x.ma+1)
+	//
+	// console.info("plusOne==>",plusOne.value);
 	
-	if (isReactive(x)) {
-		console.log('isReactive');
-	} else console.log("no");
+	// class CustomSet extends Set {}
+	// const cset = reactive(new CustomSet())
+	//
+	// console.info('================>',cset);
+	//
+	// console.log('instanceof==>',cset instanceof Set)
+	// console.log('33===>',isReactive(cset))
 	
-	const plusOne = computed(()=>x.ma+1)
+	const onTrackFn = (a,b)=>{
+		console.log('a,b=>',a,b)
+	}
+	const shallowSet = shallowReactive(new Set())
 	
-	console.info("plusOne==>",plusOne.value);
+	console.log('shallowSet=>',shallowSet)
+	let a
+	effect(
+		() => {
+			a = Array.from(shallowSet)
+		},
+		{
+			onTrack: onTrackFn
+		}
+	)
 	
+	console.log('onTrackFn=>',onTrackFn)
 	
-	if(isReactive(plusOne)) console.log('plusOne=>','isReactive')
-	else console.log('plusOne=>','noReactive')
-	
-	const plusOne1= toRefs(plusOne)
-	if(isReactive(plusOne1.value)) console.log('plusOne1=>','isReactive')
-	else console.log('plusOne1=>','noReactive')
-	window.vm = x
-	window.plusOne = plusOne
+
 
 </script>
 <!-- <script type="module">

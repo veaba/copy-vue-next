@@ -1,7 +1,7 @@
-import {reactive, ReactiveFlags, readonly, toRaw} from "./reactive";
-import {capitalize, hasChanged, hasOwn, isMap, isObject, toRawType} from "@vue/shared";
-import {ITERATE_KEY, track, trigger} from "./effect";
-import {TrackOpTypes, TriggerOpTypes} from "./operations";
+import {reactive, ReactiveFlags, readonly, toRaw} from "./reactive.js";
+import {capitalize, hasChanged, hasOwn, isMap, isObject, toRawType} from "../../shared/src/index.js";
+import {ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger} from "./effect.js";
+import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
 import CollatorOptions = Intl.CollatorOptions;
 
 export type CollectionTypes = IterableCollections | WeakCollections
@@ -11,11 +11,39 @@ type WeakCollections = WeakMap<any, any> | WeakSet<any>
 type MapTypes = Map<any, any> | WeakMap<any, any>
 type SetTypes = Set<any> | WeakSet<any>
 
+interface IterationResult {
+    value: any
+    done: boolean
+}
+
+interface Iterator {
+    next(value?: any): IterationResult
+}
+
+interface Iterable {
+    [Symbol.iterator](): Iterator
+}
+
 const toReactive = <T extends unknown>(value: T): T => isObject(value) ? reactive(value) : value
 const toReadonly = <T extends unknown>(value: T): T => isObject(value) ? readonly(value as Record<any, any>) : value
 const toShallow = <T extends unknown>(value: T): T => value
 const getProto = <T extends CollectionTypes>(v: T): any => Reflect.getPrototypeOf(v)
 
+// TODO：为什么这里不写成 class？
+const shallowInstrumentations: Record<string, Function> = {
+    get(this: MapTypes, key: unknown) {
+        return get(this, key, false, true)
+    },
+    get size() {
+        return size((this as unknown) as IterableCollections)
+    },
+    has,
+    add,
+    set,
+    delete: deleteEntry,
+    clear,
+    forEach: createForEach(false, true)
+}
 const mutableInstrumentations: Record<string, Function> = {
     get(this: MapTypes, key: unknown) {
         return get(this, key)
@@ -48,6 +76,68 @@ const readonlyInstrumentations: Record<string, Function> = {
     clear: createReadonlyMethod(TriggerOpTypes.CLEAR),
     forEach: createForEach(true, false),
 }
+function createIterableMethod(
+    method: string | symbol,
+    isReadonly: boolean,
+    isShallow: boolean
+) {
+    return function (
+        this: IterableCollections,
+        ...args: unknown[]
+    ): Iterable & Iterator {
+        const target = (this as any)[ReactiveFlags.RAW]
+        const rawTarget = toRaw(target)
+        const targetIsMap = isMap(rawTarget)
+        const isPair = method === 'entries' || (method === Symbol.iterator && targetIsMap)
+        const isKeyOnly = method === 'keys' && targetIsMap
+        const innerIterator = target[method](...args)
+        const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
+        !isReadonly && track(
+            rawTarget,
+            TrackOpTypes.ITERATE,
+            isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
+        )
+        // 返回一个封装的迭代器，该迭代器返回真实迭代器抛出的值得观测版
+        return {
+            // 迭代器 protocol
+            next() {
+                const {value, done} = innerIterator.next()
+                return done
+                    ? {value, done}
+                    : {
+                        value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
+                        done
+                    }
+            },
+            // iterator protocol
+            [Symbol.iterator]() {
+                return this
+            }
+        }
+    }
+}
+
+
+// TODO：2020年12月27日23:50:10遗漏了此部分，导致：TypeError: Method Set.prototype.values called on incompatible receiver [object Object]
+const iteratorMethods = ['keys', 'values', 'entries', Symbol.iterator]
+iteratorMethods.forEach(method => {
+    mutableInstrumentations[method as string] = createIterableMethod(
+        method,
+        false,
+        false
+    )
+    readonlyInstrumentations[method as string] = createIterableMethod(
+        method,
+        true,
+        false
+    )
+    shallowInstrumentations[method as string] = createIterableMethod(
+        method,
+        false,
+        true
+    )
+})
+
 
 function createReadonlyMethod(type: TriggerOpTypes): Function {
     return function (this: CollatorOptions, ...args: unknown[]) {
@@ -61,22 +151,6 @@ function createReadonlyMethod(type: TriggerOpTypes): Function {
     }
 }
 
-// TODO：为什么这里不写成 class？
-const shallowInstrumentations: Record<string, Function> = {
-    get(this: MapTypes, key: unknown) {
-        return get(this, key, false, true)
-    },
-    get size() {
-        return size((this as unknown) as IterableCollections)
-    },
-    has,
-    add,
-    set,
-    delete: deleteEntry,
-    clear,
-    forEach: createForEach(false, true)
-}
-
 // shallowInstrumentations add
 function add(this: SetTypes, value: unknown) {
     value = toRaw(value)
@@ -84,7 +158,9 @@ function add(this: SetTypes, value: unknown) {
     const proto = getProto(target)
     const hasKey = proto.has.call(target, value)
     const result = target.add(value)
-    if (!hasKey) trigger(target, TriggerOpTypes.ADD, value, value)
+    if (!hasKey) {
+        trigger(target, TriggerOpTypes.ADD, value, value)
+    }
     return result
 }
 
@@ -93,7 +169,9 @@ function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
     const target = (this as any) [ReactiveFlags.RAW]
     const rawTarget = toRaw(target)
     const rawKey = toRaw(key)
-    if (key !== rawKey) !isReadonly && track(rawTarget, TrackOpTypes.HAS, key)
+    if (key !== rawKey) {
+        !isReadonly && track(rawTarget, TrackOpTypes.HAS, key)
+    }
     !isReadonly && track(rawTarget, TrackOpTypes.HAS, rawKey)
     return key === rawKey ? target.has(key) : target.has(key) || target.has(rawKey)
 }
@@ -125,8 +203,11 @@ function get(
 
     const {has} = getProto(rawTarget)
     const wrap = isReadonly ? toReadonly : isShallow ? toShallow : toReactive
-    if (has.call(rawTarget, key)) return wrap(target.get(key))
-    else if (has.call(rawTarget, rawKey)) return wrap(target.get(rawKey))
+    if (has.call(rawTarget, key)) {
+        return wrap(target.get(key))
+    } else if (has.call(rawTarget, rawKey)) {
+        return wrap(target.get(rawKey))
+    }
 }
 
 // shallowInstrumentations set
@@ -139,13 +220,17 @@ function set(this: MapTypes, key: unknown, value: unknown) {
     if (!hadKey) {
         key = toRaw(key)
         hadKey = has.call(target, key)
-    } else if (__DEV__) checkIdentityKeys(target, has, key)
+    } else if (__DEV__) {
+        checkIdentityKeys(target, has, key)
+    }
 
     const oldValue = get.call(target, key)
     const result = target.set(key, value)
     if (!hadKey) {
         trigger(target, TriggerOpTypes.ADD, key, value)
-    } else if (hasChanged(value, oldValue)) trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+    } else if (hasChanged(value, oldValue)) {
+        trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+    }
     return result
 }
 
@@ -157,12 +242,16 @@ function deleteEntry(this: CollectionTypes, key: unknown) {
     if (!hadKey) {
         key = toRaw(key)
         hadKey = has.call(target, key)
-    } else if (__DEV__) checkIdentityKeys(target, has, key)
+    } else if (__DEV__) {
+        checkIdentityKeys(target, has, key)
+    }
 
     const oldValue = get ? get.call(target, key) : undefined
     // 前置操作，再排队响应化
     const result = target.delete(key)
-    if (hadKey) trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+    if (hadKey) {
+        trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+    }
     return result
 }
 
@@ -173,7 +262,9 @@ function clear(this: IterableCollections) {
     const oldTarget = __DEV__ ? isMap(target) ? new Map(target) : new Set(target) : undefined
     // 前置操作，再排队响应化
     const result = target.clear()
-    if (hadItems) trigger(target, TriggerOpTypes.CLEAR, undefined, undefined, oldTarget)
+    if (hadItems) {
+        trigger(target, TriggerOpTypes.CLEAR, undefined, undefined, oldTarget)
+    }
     return result
 }
 
@@ -193,14 +284,18 @@ function createForEach(isReadonly: boolean, isShallow: boolean) {
             // 重要！确保回调符合以下要求：
             // 1. 被调用的响应式映射为 `this` 和 第三个参数
             // 2. 收集器的值应该是一个对应的 reactive/readonly
-            return callback(thisArg, wrap(value), wrap(key), observed)
+            return callback.call(thisArg, wrap(value), wrap(key), observed)
         })
     }
 }
 
 
 function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
-    const instrumentations = shallow ? shallowInstrumentations : isReadonly ? readonlyInstrumentations : mutableInstrumentations
+    const instrumentations = shallow
+        ? shallowInstrumentations
+        : isReadonly
+            ? readonlyInstrumentations
+            : mutableInstrumentations
     return (
         target: CollectionTypes,
         key: string | symbol,
@@ -213,7 +308,9 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
             return target
         }
         return Reflect.get(
-            hasOwn(instrumentations, key) && key in target ? instrumentations : target, key, receiver
+            hasOwn(instrumentations, key) && key in target ? instrumentations : target,
+            key,
+            receiver
         )
     };
 }
@@ -222,12 +319,13 @@ export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
     get: createInstrumentationGetter(false, false)
 }
 
-// 只读依赖收集处理器
-export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
-    get: createInstrumentationGetter(true, false)
-}
 // 浅层收集器
 export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = {
+    get: createInstrumentationGetter(false, true)
+}
+
+// 只读依赖收集处理器
+export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
     get: createInstrumentationGetter(true, false)
 }
 

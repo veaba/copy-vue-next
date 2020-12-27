@@ -1,7 +1,7 @@
-import {Ref, UnwrapRef} from "./ref";
-import {isObject, toRawType, def} from "@vue/shared";
-import {mutableHandlers, readonlyHandlers, shallowReactiveHandlers, shallowReadonlyHandlers} from "./baeHandlers";
-import {mutableCollectionHandlers, readonlyCollectionHandlers, shallowCollectionHandlers} from "./collectionHandlers";
+import {Ref, UnwrapRef} from "./ref.js";
+import {isObject, toRawType, def} from "../../shared/src/index.js";
+import {mutableHandlers, readonlyHandlers, shallowReactiveHandlers, shallowReadonlyHandlers} from "./baseHandlers.js";
+import {mutableCollectionHandlers, readonlyCollectionHandlers, shallowCollectionHandlers} from "./collectionHandlers.js";
 
 export const enum ReactiveFlags {
     SKIP = '__v_skip',
@@ -22,7 +22,7 @@ function targetTypeMap(rawType: string) {
         case 'Array':
             return TargetType.COMMON
         case 'Map':
-        case 'SeT':
+        case 'Set':
         case 'WeakMap':
         case 'WeakSet':
             return TargetType.COLLECTION
@@ -100,7 +100,7 @@ function getTargetType(value: Target) {
         ? TargetType.INVALID : targetTypeMap(toRawType(value))
 }
 
-// TODO: core
+// core
 function createReactiveObject(
     target: Target,
     isReadonly: boolean,
@@ -125,6 +125,7 @@ function createReactiveObject(
     if (existingProxy) {
         return existingProxy
     }
+
     // 只有观测到 value 类型的白名单
     const targetType = getTargetType(target)
     if (targetType === TargetType.INVALID) {

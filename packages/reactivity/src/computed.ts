@@ -1,8 +1,8 @@
-import {isFunction, NOOP} from "@vue/shared";
-import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {ReactiveEffect, track, trigger, effect} from "./effect";
-import {ReactiveFlags, toRaw} from './reactive'
-import {Ref} from "./ref";
+import {isFunction, NOOP} from "../../shared/src/index.js";
+import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
+import {ReactiveEffect, track, trigger, effect} from "./effect.js";
+import {ReactiveFlags, toRaw} from './reactive.js'
+import {Ref} from "./ref.js";
 
 
 export interface WritableComputedOptions<T> {

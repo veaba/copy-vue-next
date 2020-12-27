@@ -33,7 +33,6 @@ module.exports = {
   watchPathIgnorePatterns: ['/node_modules/', '/dist/', '/.git/'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
   moduleNameMapper: {
-    // reactivity: '<rootDir>/packages/reactivity/src',
     '^@vue/(.*?)$': '<rootDir>/packages/$1/src',
     vue: '<rootDir>/packages/vue/src'
   },

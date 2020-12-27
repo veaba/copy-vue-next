@@ -28,5 +28,11 @@
     "packages/runtime-dom/types/jsx.d.ts",
     "packages/*/__tests__",
     "test-dts"
+  ],
+  "exclude": [
+    "node_modules",
+    "./node_modules",
+    "./node_modules/*",
+    "./node_modules/@types/node/index.d.ts",
   ]
 }

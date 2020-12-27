@@ -1,11 +1,10 @@
 import {CollectionTypes} from "./collectionHandlers";
-import {track, trigger} from "./effect";
-import {isProxy, isReactive, reactive, toRaw} from "./reactive";
-import {TrackOpTypes, TriggerOpTypes} from "./operations";
-import {hasChanged, isArray, isObject} from "@vue/shared";
+import {track, trigger} from "./effect.js";
+import {isProxy, isReactive, reactive, toRaw} from "./reactive.js";
+import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
+import {hasChanged, isArray, isObject} from "../../shared/src/index.js";
 
-declare const RefSymbol: unique symbol;  // TODO: unique?
-
+declare const RefSymbol: unique symbol;
 
 export interface Ref<T = any> {
     value: T;
