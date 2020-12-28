@@ -1,7 +1,7 @@
-import {Ref, UnwrapRef} from "./ref.js";
-import {isObject, toRawType, def} from "../../shared/src/index.js";
-import {mutableHandlers, readonlyHandlers, shallowReactiveHandlers, shallowReadonlyHandlers} from "./baseHandlers.js";
-import {mutableCollectionHandlers, readonlyCollectionHandlers, shallowCollectionHandlers} from "./collectionHandlers.js";
+import {Ref, UnwrapRef} from "./ref";
+import {isObject, toRawType, def} from "@vue/shared";
+import {mutableHandlers, readonlyHandlers, shallowReactiveHandlers, shallowReadonlyHandlers} from "./baseHandlers";
+import {mutableCollectionHandlers, readonlyCollectionHandlers, shallowCollectionHandlers} from "./collectionHandlers";
 
 export const enum ReactiveFlags {
     SKIP = '__v_skip',

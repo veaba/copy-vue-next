@@ -1,4 +1,4 @@
-export * from './codeframe.js'
+export * from './codeframe'
 export const isFunction = (val: unknown): val is Function => typeof val === 'function'
 
 export const NOOP = () => {

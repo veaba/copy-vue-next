@@ -216,7 +216,7 @@ describe('reactivity/reactive', () => {
     const assertValue = (value: any) => {
       reactive(value)
       expect(
-        `value cannot be made reactive: ${String(value)}`
+        `value 无法被响应式化: ${String(value)}`
       ).toHaveBeenWarnedLast()
     }
 

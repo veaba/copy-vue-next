@@ -1,8 +1,8 @@
 import {CollectionTypes} from "./collectionHandlers";
-import {track, trigger} from "./effect.js";
-import {isProxy, isReactive, reactive, toRaw} from "./reactive.js";
-import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
-import {hasChanged, isArray, isObject} from "../../shared/src/index.js";
+import {track, trigger} from "./effect";
+import {isProxy, isReactive, reactive, toRaw} from "./reactive";
+import {TrackOpTypes, TriggerOpTypes} from "./operations";
+import {hasChanged, isArray, isObject} from "@vue/shared";
 
 declare const RefSymbol: unique symbol;
 
@@ -76,7 +76,7 @@ export type ToRefs<T = any> = { [K in keyof T]: ToRef<T[K]> }
 
 export function isRef<T>(r: Ref<T> | unknown): r is Ref<T>
 export function isRef(r: any): r is Ref {
-    return Boolean(r && r.__v_isRef)
+    return Boolean(r && r.__v_isRef===true)
 }
 
 export function toRef<T extends object, K extends keyof T>(
@@ -88,7 +88,7 @@ export function toRef<T extends object, K extends keyof T>(
 
 export function toRefs<T extends object>(object: T): ToRefs<T> {
     if (__DEV__ && !isProxy(object)) {
-        console.warn(`toRefs() 期待的是一个响应式对象，但收到的缺失一个普通对象`)
+        console.warn(`toRefs() expects a reactive object but received a plain one.`)
     }
 
     const ret: any = isArray(object) ? new Array(object.length) : {} // 内部补齐length属性

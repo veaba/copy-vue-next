@@ -10,7 +10,7 @@ export {
     toRaw,
     ReactiveFlags,
     DeepReadonly
-} from "./reactive.js"
+} from "./reactive"
 
 // computed
 export {
@@ -20,7 +20,7 @@ export {
     WritableComputedOptions,
     ComputedGetter,
     ComputedSetter
-} from "./computed.js";
+} from "./computed";
 
 // ref
 export {
@@ -38,7 +38,7 @@ export {
     UnwrapRef,
     ShallowUnwrapRef,
     RefUnwrapBailTypes
-} from "./ref.js"
+} from "./ref"
 
 // effect
 export {
@@ -52,6 +52,6 @@ export {
     ReactiveEffect,
     ReactiveEffectOptions,
     DebuggerEvent
-} from "./effect.js"
+} from "./effect"
 
 export { TrackOpTypes, TriggerOpTypes } from './operations.js'

@@ -1,7 +1,7 @@
-import {reactive, ReactiveFlags, readonly, toRaw} from "./reactive.js";
-import {capitalize, hasChanged, hasOwn, isMap, isObject, toRawType} from "../../shared/src/index.js";
-import {ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger} from "./effect.js";
-import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
+import {reactive, ReactiveFlags, readonly, toRaw} from "./reactive";
+import {capitalize, hasChanged, hasOwn, isMap, isObject, toRawType} from "@vue/shared";
+import {ITERATE_KEY, MAP_KEY_ITERATE_KEY, track, trigger} from "./effect";
+import {TrackOpTypes, TriggerOpTypes} from "./operations";
 import CollatorOptions = Intl.CollatorOptions;
 
 export type CollectionTypes = IterableCollections | WeakCollections
@@ -144,7 +144,7 @@ function createReadonlyMethod(type: TriggerOpTypes): Function {
         if (__DEV__) {
             const key = args[0] ? `on key "${args[0]}"` : ``
             console.warn(
-                `${capitalize(type)} operation ${key}failed: target is readonly.`,
+                `${capitalize(type)} operation ${key} failed: target is readonly.`,
                 toRaw(this)
             );
         }

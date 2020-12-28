@@ -1,5 +1,5 @@
-import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
-import {isArray, isIntegerKey, isMap, EMPTY_OBJ} from "../../shared/src/index.js";
+import {TrackOpTypes, TriggerOpTypes} from "./operations";
+import {isArray, isIntegerKey, isMap, EMPTY_OBJ} from "@vue/shared";
 
 /******* 全局变量 **********/
 const targetMap = new WeakMap<any, KeyToDepMap>()
@@ -19,6 +19,11 @@ export function isEffect(fn: any): fn is ReactiveEffect {
 export function enableTracking() {
     trackStack.push(shouldTrack)
     shouldTrack = true
+}
+
+export function pauseTracking() {
+    trackStack.push(shouldTrack)
+    shouldTrack = false
 }
 
 export function resetTracking() {
@@ -201,16 +206,12 @@ export function effect<T = any>(
     fn: () => T,
     options: ReactiveEffectOptions = EMPTY_OBJ
 ): ReactiveEffect<T> {
-
-    console.info('fn==>',fn);
-    console.info('options==>',options);
     if (isEffect(fn)) {
         fn = fn.raw
     }
     const effect = createReactiveEffect(fn, options)
-    console.info('effect=>',effect);
+
     if (!options.lazy) {
-        console.info('!options.lazy')
         effect()
     }
     return effect

@@ -1,9 +1,9 @@
 /** 处理器**/
-import {ITERATE_KEY, track, trigger} from "./effect.js";
-import {TrackOpTypes, TriggerOpTypes} from "./operations.js";
-import {extend, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol} from "../../shared/src/index.js";
-import {reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, Target, toRaw} from "./reactive.js";
-import {isRef} from "./ref.js";
+import {ITERATE_KEY, resetTracking, pauseTracking, track, trigger} from "./effect";
+import {TrackOpTypes, TriggerOpTypes} from "./operations";
+import {extend, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol} from "@vue/shared";
+import {reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, Target, toRaw} from "./reactive";
+import {isRef} from "./ref";
 
 const get = createGetter()  // 每个getter 都有收集器选项
 const set = createSetter()  // 每个setter 都有收集器选择
@@ -16,6 +16,35 @@ const shallowReadonlyGet = createGetter(true, true)
 const arrayInstrumentations: Record<string, Function> = {}
 
 // instrument identity-sensitive Array methods to account for possible reactive values
+// values
+;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
+    const method = Array.prototype[key] as any
+    arrayInstrumentations[key] = function (this: unknown[], ...args: unknown[]) {
+        const arr = toRaw(this)
+        for (let i = 0, l = this.length; i < l; i++) {
+            track(arr, TrackOpTypes.GET, i + '')
+        }
+        // 我们先用原始的 args 来运行方法（可能是反应式的)
+        const res = method.apply(arr, args)
+        if (res === -1 || res === false) {
+            // 如果还不行，就用原始值再运行一遍
+            return method.apply(arr, args.map(toRaw))
+        } else {
+            return res
+        }
+    }
+})
+
+// instrument length-altering 变更 methods ，以免长度被追踪
+;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
+    const method = Array.prototype[key] as any
+    arrayInstrumentations[key] = function (this: unknown[], ...args: unknown[]) {
+        pauseTracking()
+        const res = method.apply(this, args)
+        resetTracking()
+        return res
+    }
+})
 
 const builtInSymbols = new Set(
     Object.getOwnPropertyNames(Symbol)
@@ -37,17 +66,13 @@ export const readonlyHandlers: ProxyHandler<object> = {
     get: readonlyGet,
     set(target, key) {
         if (__DEV__) {
-            console.warn(`
-                设置 “${String(key)}” 上的key 操作失败：target is readonly.
-            `, target)
+            console.warn(`Set operation on key "${String(key)}" failed: target is readonly.`, target)
         }
         return true
     },
     deleteProperty(target, key) {
         if (__DEV__) {
-            console.warn(`
-                删除 “${String(key)}” 上的key 操作失败：target is readonly.
-            `, target)
+            console.warn(`Delete operation on key "${String(key)}" failed: target is readonly.`, target)
         }
         return true
     }
