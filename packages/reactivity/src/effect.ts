@@ -201,16 +201,11 @@ export function effect<T = any>(
     fn: () => T,
     options: ReactiveEffectOptions = EMPTY_OBJ
 ): ReactiveEffect<T> {
-
-    console.info('fn==>',fn);
-    console.info('options==>',options);
     if (isEffect(fn)) {
         fn = fn.raw
     }
     const effect = createReactiveEffect(fn, options)
-    console.info('effect=>',effect);
     if (!options.lazy) {
-        console.info('!options.lazy')
         effect()
     }
     return effect

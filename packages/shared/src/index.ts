@@ -47,7 +47,7 @@ const cacheStringFunction = <T extends (str: string) => string>(fn: T): T => {
     }) as any
 }
 
-// TODO: 这个def 函数是做什么？
+// 对象添加一个不可枚举的私有属性，类似 `__proto__`
 export const def = (obj: object, key: string | symbol, value: any) => {
     Object.defineProperty(obj, key, {
         configurable: true,

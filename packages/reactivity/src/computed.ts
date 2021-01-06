@@ -58,8 +58,8 @@ export interface ComputedRef<T = any> extends WritableComputedRef<T> {
 
 // Computed响应式实现的类
 class ComputedRefImpl<T> {
-    private _value!: T
-    private _dirty: boolean
+    private _value!: T // TODO：这种写法是什么意思？
+    private _dirty: boolean // 脏数据检查
 
     public readonly effect: ReactiveEffect<T>
     public readonly __v_isRef = true

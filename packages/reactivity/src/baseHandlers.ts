@@ -16,7 +16,6 @@ const shallowReadonlyGet = createGetter(true, true)
 const arrayInstrumentations: Record<string, Function> = {}
 
 // instrument identity-sensitive Array methods to account for possible reactive values
-
 const builtInSymbols = new Set(
     Object.getOwnPropertyNames(Symbol)
         .map(key => (Symbol as any)[key])
@@ -137,13 +136,12 @@ function createSetter(shallow = false) {
                 return true
             }
         } else {
-            // TODO
             // 在shallow（浅层） 模式下，无论对象是否被动，都原样设置
         }
         const hadKey = isArray(target) && isIntegerKey(key) ? Number(key) < target.length : hasOwn(target, key)
         const result = Reflect.set(target, key, value, receiver)
 
-        // 如果目标是原生原型链上的东西，则不触发
+        // 如果 target 是原生原型链上的东西，则不触发
         if (target === toRaw(receiver)) {
             if (!hadKey) {
                 trigger(target, TriggerOpTypes.ADD, key, value)

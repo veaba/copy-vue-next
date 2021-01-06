@@ -35,6 +35,7 @@ describe('reactivity/reactive/Array', () => {
     const reactiveValue = reactive(value)
     observed[0] = value
     expect(observed[0]).toBe(reactiveValue)
+    expect(observed[0]).toBe(value)
     expect(original[0]).toBe(value)
     // delete
     delete observed[0]
@@ -84,7 +85,6 @@ describe('reactivity/reactive/Array', () => {
     effect(() => {
       index = arr.indexOf(obj)
     })
-      // TODO
     expect(index).toBe(0)
     arr.reverse()
     expect(index).toBe(1)
