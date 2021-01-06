@@ -95,9 +95,9 @@ function createGetter(isReadonly = false, shallow = false) {
             return res
         }
 
-        // 如果存在
+        // 非只读
         if (!isReadonly) {
-            track(target, TrackOpTypes.GET, key)
+            track(target, TrackOpTypes.GET, key) // 内容发生时，设置新的值
         }
         if (shallow) {
             return res

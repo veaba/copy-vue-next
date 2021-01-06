@@ -1,7 +1,11 @@
 import {Ref, UnwrapRef} from "./ref.js";
 import {isObject, toRawType, def} from "../../shared/src/index.js";
 import {mutableHandlers, readonlyHandlers, shallowReactiveHandlers, shallowReadonlyHandlers} from "./baseHandlers.js";
-import {mutableCollectionHandlers, readonlyCollectionHandlers, shallowCollectionHandlers} from "./collectionHandlers.js";
+import {
+    mutableCollectionHandlers,
+    readonlyCollectionHandlers,
+    shallowCollectionHandlers
+} from "./collectionHandlers.js";
 
 export const enum ReactiveFlags {
     SKIP = '__v_skip',
@@ -133,7 +137,7 @@ function createReactiveObject(
     }
     const proxy = new Proxy(
         target,
-        targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
+        targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers // TODO: collectionHandler 与 baseHandler 区别
     )
     proxyMap.set(target, proxy)
     return proxy

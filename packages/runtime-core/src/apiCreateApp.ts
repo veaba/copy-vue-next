@@ -1,0 +1,78 @@
+import {ComponentOptions} from "./componentOptions";
+import {ConcreteComponent, Data} from "./component";
+import {ComponentPublicInstance} from "./componentPublicInstance";
+
+export interface AppConfig {
+    // @private
+    readonly isNativeTag?: (tag: string) => boolean
+
+    performance: boolean
+    optionMergeStrategies: Record<string, OptionMergeFunction>
+    globalProperties: Record<string, any>
+    isCustomElement: (tag: string) => boolean
+    errorHandler?: (
+        err: unknown,
+        instance: ComponentPublicInstance | null,
+        info: string
+    ) => void
+    warnHandler?: (
+        msg: string,
+        instance: ComponentPublicInstance | null,
+        trace: string
+    ) => void
+}
+
+export interface App<HostElement = any> {
+    version: string
+    config: AppConfig
+
+    // 内部: 这里需要为 server-renderer 和 devtools 暴露这些内容
+    _uid: number
+    _component: ConcreteComponent
+    _props: Data | null
+    _container: HostElement | null
+    _context: AppContext
+
+    use(plugin: Plugin, ...options: any[]): this
+
+    mixin(mixin: ComponentOptions): this
+
+    component(name: string): Component | undefined
+
+    component(name: string, component: Component): this
+
+    directive(name: string): Directive | undefined
+
+    directive(name: string, directive: Directive): this
+
+    mount(
+        rootContainer: HostElement | string,
+        isHydrate: boolean // true 是  SSR
+    ): ComponentPublicInstance
+
+    unmount(rootContainer: HostElement | string): void
+
+    provide<T>(key: InjectionKey<T> | string, value: T): this
+}
+
+export interface AppContext {
+    app: App  // 针对devtools
+    config: AppConfig
+    mixins: ComponentOptions[]
+    components: Record<string, Component>
+    directives: Record<string, Directive>
+    provides: Record<string | symbol, any>
+
+    /**
+     * 取消优化 props 规范化的标志
+     * @internal
+     * */
+    deopt?: boolean
+
+    /**
+     * HMR only
+     * @internal
+     * */
+    reload?: () => void
+
+}

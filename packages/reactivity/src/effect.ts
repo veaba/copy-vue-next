@@ -75,7 +75,10 @@ export function stop(effect: ReactiveEffect) {
     }
 }
 
-// TODO:track 函数是干嘛的？
+/**
+ * 用于修改值, proxy 中，内容发生变化时用于修改新的值
+ * 针对 get
+ * */
 export function track(target: object, type: TrackOpTypes, key: unknown) {
     if (!shouldTrack || activeEffect === undefined) {
         return
@@ -104,6 +107,10 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
     }
 }
 
+/**
+ * 在 proxy 中的 setter 中进行此操作，称为 trigger
+ * 针对 set
+ * */
 export function trigger(
     target: object,
     type: TriggerOpTypes,
@@ -196,7 +203,10 @@ export function trigger(
 }
 
 
-// effect
+/**
+ * 跟踪更改它的函数
+ * 在 proxy 中，getter 中执行此操作，成为 effect
+ * */
 export function effect<T = any>(
     fn: () => T,
     options: ReactiveEffectOptions = EMPTY_OBJ

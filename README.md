@@ -60,13 +60,38 @@ if (!effect.active)
 	return options.scheduler ? undefined : fn()
 
 ```
+
 或者
 
 ```ts
 if (isReadonly(value)) return isReactive((value as Target)[ReactiveFlags.RAW])
 // 最后成这样=>
-if (isReadonly(value)) 
+if (isReadonly(value))
     return isReactive((value as Target)[ReactiveFlags.RAW])
 ```
 
 - 虽然 ts 编译过程，增加 `.js`后缀让,Chrome 运行 ES6 module 的语法，但是，jest 无法调用 `.js` 后缀的路径
+
+- ts中，为什么在 type 声明是 `|` 开头的？
+
+```ts
+type VNodeChildAtom =
+    | VNode
+    | string
+```
+
+- ts 中，感叹号在后面是做什么？
+
+```ts
+const instance: ComponentInternalInstance = {
+    uid: uid++,
+    vnode,
+    type,
+    parent,
+    appContext,
+    root: null!,// TODO: to be immediately set
+    next: null,
+    subTree: null!, // 将在创建后同步设置
+        
+}
+```
