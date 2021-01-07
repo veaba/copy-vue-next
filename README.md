@@ -92,6 +92,10 @@ const instance: ComponentInternalInstance = {
     root: null!,// TODO: to be immediately set
     next: null,
     subTree: null!, // 将在创建后同步设置
-        
+
 }
 ```
+
+- ts 中，Record
+
+> 把K 的每个属性都转为T类型

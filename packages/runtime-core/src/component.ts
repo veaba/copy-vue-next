@@ -1,16 +1,23 @@
 import {ReactiveEffect} from "@vue/reactivity";
-import {ComponentOptions, ComponentPropsOptions, ComputedOptions, MethodOptions,} from "./componentOptions";
+import {
+    ComponentOptions,
+    ComponentOptionsMixin,
+    ComponentPropsOptions,
+    ComputedOptions,
+    MethodOptions,
+} from "./componentOptions";
 import {NormalizedPropsOptions, normalizePropsOptions} from "./componentProps";
-import {EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions} from "./componentEmits";
-import {AppContext} from "./apiCreateApp";
+import {emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions} from "./componentEmits";
+import {AppContext, createAppContext} from "./apiCreateApp";
 import {VNode, VNodeChild} from "./vnode";
 import {ComponentPublicInstance, createRenderContext} from "./componentPublicInstance";
 import {Directive} from "./directive";
 import {InternalSlots, Slots} from "./componentSlots";
-import {SuspenseBoundary} from "./Suspense";
-import {EMPTY_OBJ} from "@vue/shared";
+import {SuspenseBoundary} from "./suspense";
+import {EMPTY_OBJ, isFunction} from "@vue/shared";
+import {devtoolsComponentAdded} from "./devtools";
 
-const emptyAppcontext = createAppContext()
+const emptyAppContext = createAppContext()
 let uid = 0
 
 type LifecycleHook = Function[] | null
@@ -57,18 +64,39 @@ export type InternalRenderFunction = {
 
 export type Data = Record<string, unknown>
 
-// TODO 提示：不能将这整个接口标记为内部接口，因为一些公共接口扩展了它。
+// 提示：不能将这整个接口标记为内部接口，因为一些公共接口扩展了它。
 export interface ComponentInternalOptions {
     /**
      * @internal
      * */
     __props?: NormalizedPropsOptions
-    ///
+    /**
+     * @internal
+     * */
+    __emits?: ObjectEmitsOptions | null
+    /**
+     * @internal
+     * */
+    __scopeId?: string
+    /**
+     * @internal
+     * */
+    __cssModules?: Data
+    /**
+     * @internal
+     * */
+    __hmrId?: string
+    /**
+     * 这个应该公开，以便devtools可以使用它
+     * */
+    __file?: string
 }
 
 export interface FunctionalComponent<P = {}, E extends EmitsOptions = {}>
     extends ComponentInternalOptions {
     // 这里使用 `any` 是有目的的，所以它可以成为有效的 JSX element 构造函数
+    (props: P, ctx: Omit<SetupContext<E, P>, 'expose'>): any
+
     props?: ComponentPropsOptions<P>
     emits?: E | (keyof E)[]
     inheritAttrs?: boolean
@@ -302,6 +330,21 @@ export interface ComponentInternalInstance {
     [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
 }
 
+
+/**
+ * 在公共API中使用的一种类型，在这里预期有一个组件类型。
+ * 构造函数类型是由 defineComponent() 返回的一个人工类型。
+ *
+ * */
+export type Component<Props = any,
+    RawBindings = any,
+    D = any,
+    C extends ComputedOptions = ComputedOptions,
+    M extends MethodOptions = MethodOptions> =
+    | ConcreteComponent<Props, RawBindings, D, C, M>
+    | ComponentPublicInstanceConstructor<Props>
+
+
 /**
  * 创建组件实例
  * */
@@ -312,7 +355,7 @@ export function createComponentInstance(
 ) {
     const type = vnode.type as ConcreteComponent
     // 继承父级应用上下文, 或者 如果是根级，则从根节点采用
-    const appContext = (parent ? parent.appContext : vnode.appContext) || emptyAppcontext
+    const appContext = (parent ? parent.appContext : vnode.appContext) || emptyAppContext
 
     const instance: ComponentInternalInstance = {
         uid: uid++,
@@ -320,7 +363,7 @@ export function createComponentInstance(
         type,
         parent,
         appContext,
-        root: null!,// TODO: to be immediately set
+        root: null!,// to be immediately set
         next: null,
         subTree: null!, // 将在创建后同步设置
         update: null!, // 将在创建后同步设置
@@ -399,6 +442,39 @@ export let currentInstance: ComponentInternalInstance | null = null;
 
 export function recordInstanceBoundEffect(effect: ReactiveEffect) {
     if (currentInstance) {
-
+        ;(currentInstance.effects || (currentInstance.effects = [])).push(effect)
     }
+}
+
+const classifyRE = /(?:^|[-_])(\w)/g
+const classify = (str: string): string => str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
+
+/* istanbul ignore next */
+export function formatComponentName(
+    instance: ComponentInternalInstance | null,
+    Component: ConcreteComponent,
+    isRoot = false
+): string {
+    let name = isFunction(Component) ? Component.displayName || Component.name : Component.name
+    if (!name || Component.__file) {
+        const match = Component.__file.match(/([^/\\]+)\.vue$/)
+        if (match) {
+            name = match[1]
+        }
+    }
+
+    if (!name && instance && instance.parent) {
+        // 尝试根据反向解析推断名称
+        const inferFormRegistry = (registry: Record<string, any> | undefined) => {
+            for (const key in registry) {
+                if (registry[key] === Component) {
+                    return key
+                }
+            }
+        }
+        name = inferFormRegistry(
+            instance.components || (instance.parent.type as ComponentOptions).components
+        ) || inferFormRegistry(instance.appContext.components)
+    }
+    return name ? classify(name) : isRoot ? `App` : `Anonymous`
 }

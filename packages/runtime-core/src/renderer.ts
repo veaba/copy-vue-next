@@ -4,7 +4,7 @@
 // a generic object.
 // TODO
 import {ComponentInternalInstance} from "./component";
-import {SuspenseBoundary} from "./Suspense";
+import {SuspenseBoundary} from "./suspense";
 import {VNode} from "./vnode";
 
 export interface RendererNode {

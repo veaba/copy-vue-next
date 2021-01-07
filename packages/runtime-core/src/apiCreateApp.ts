@@ -1,6 +1,8 @@
-import {ComponentOptions} from "./componentOptions";
+import {Component, ComponentOptions} from "./componentOptions";
 import {ConcreteComponent, Data} from "./component";
 import {ComponentPublicInstance} from "./componentPublicInstance";
+import {NO} from "@vue/shared";
+import {Directive} from "./directive";
 
 export interface AppConfig {
     // @private
@@ -75,4 +77,24 @@ export interface AppContext {
      * */
     reload?: () => void
 
+}
+
+// 创建 app 上下文
+export function createAppContext(): AppContext {
+    return {
+        app: null as any,
+        config: {
+            isNativeTag: NO,
+            performance: false,
+            globalProperties: {},
+            optionMergeStrategies: {},
+            isCustomElement: NO,
+            errorHandler: undefined,
+            warnHandler: undefined
+        },
+        mixins: [],
+        components: {},
+        directives: {},
+        provides: Object.create(null)
+    }
 }

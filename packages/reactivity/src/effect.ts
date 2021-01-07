@@ -16,6 +16,12 @@ export function isEffect(fn: any): fn is ReactiveEffect {
     return fn && fn._isEffect === true
 }
 
+// reactivity 中没有用到这个，给 warning.ts 用
+export function pauseTracking() {
+    trackStack.push(shouldTrack)
+    shouldTrack = false
+}
+
 export function enableTracking() {
     trackStack.push(shouldTrack)
     shouldTrack = true

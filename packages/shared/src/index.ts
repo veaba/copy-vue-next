@@ -1,8 +1,12 @@
 export * from './codeframe.js'
+let _globalThis: any
 export const isFunction = (val: unknown): val is Function => typeof val === 'function'
 
 export const NOOP = () => {
 }
+
+// 总是返回 false
+export const NO = () => false
 
 export const objectToString = Object.prototype.toString
 export const toTypeString = (value: unknown): string => objectToString.call(value)
@@ -21,6 +25,9 @@ export const isString = (val: unknown): val is string => typeof val === 'string'
 export const isSymbol = (val: unknown): val is symbol => typeof val === 'symbol'
 export const isObject = (val: unknown): val is Record<any, any> =>
     val !== null && typeof val === 'object'
+export const isPromise = <T = any>(val: unknown): val is Promise<T> => {
+    return isObject(val) && isFunction(val.then) && isFunction(val.catch)
+}
 
 export const isArray = Array.isArray
 export const isMap = (val: unknown): val is Map<any, any> => toTypeString(val) === '[object Map]'
@@ -38,6 +45,7 @@ export const hasChanged = (value: any, oldValue: any): boolean =>
 
 export const EMPTY_OBJ: { readonly [key: string]: any } = __DEV__ ? Object.freeze({}) : {}
 
+export const EMPTY_ARR = __DEV__ ? Object.freeze([]) : []
 
 const cacheStringFunction = <T extends (str: string) => string>(fn: T): T => {
     const cache: Record<string, string> = Object.create(null)
@@ -56,14 +64,35 @@ export const def = (obj: object, key: string | symbol, value: any) => {
     })
 }
 
+export const toNumber = (val: any): any => {
+    const n = parseInt(val)
+    return isNaN(n) ? val : n
+}
+
+const camelizeRE = /-(\w)/g
+/**
+ * @private
+ * */
+export const camelize = cacheStringFunction(
+    (str: string): string => {
+        return str.replace(camelizeRE, (_, c) => (c ? c.toUpperCase() : ''))
+    }
+)
+
 /**
  * @private
  * */
 export const capitalize = cacheStringFunction(
     (str: string) => str.charAt(0).toUpperCase() + str.slice(1)
 )
+/**
+ * @private
+ * */
+export const toHandlerKey = cacheStringFunction(
+    (str: string) => (str ? `on${capitalize(str)}` : ``)
+)
 
-let _globalThis: any
+
 export const getGlobalThis = (): any => {
     return (
         _globalThis ||
