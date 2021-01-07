@@ -1,11 +1,21 @@
 // TODO: typo
-import {ComponentInternalInstance} from "./component";
-import {EMPTY_OBJ, isArray, isFunction, isString, NOOP} from "@vue/shared";
-import {isReactive, isRef, ReactiveEffectOptions, Ref} from "@vue/reactivity";
+import {
+    ComponentInternalInstance,
+    recordInstanceBoundEffect,
+    currentInstance,
+    isInSSRComponentSetup
+} from "./component";
+import {EMPTY_OBJ, hasChanged, isArray, isFunction, isMap, isObject, isSet, isString, NOOP, remove} from "@vue/shared";
+import {ComputedRef, effect, isReactive, isRef, ReactiveEffectOptions, Ref, stop} from "@vue/reactivity";
 import {warn} from "./warning";
-import {callWithErrorHandling, ErrorCodes} from "./errorHanding";
+import {callWithAsyncErrorHandling, callWithErrorHandling, ErrorCodes} from "./errorHanding";
+import {queuePreFlushCb, SchedulerJob} from "./scheduler/scheduler";
+import {queuePostRenderEffect} from "./renderer";
 
 type InvalidateCbRegistrator = (cb: () => void) => void
+
+// 在 undefined 的初始值上触发 watcher 的初始值。
+const INITIAL_WATCHER_VALUE = {}
 export type WatchCallback<V = any, OV = any> = (
     value: V,
     oldValue: OV,
@@ -25,14 +35,42 @@ export interface WatchOptions<Immediate = boolean> extends WatchOptionsBase {
 }
 
 export type WatchStopHandle = () => void
+export type WatchSource<T = any> = Ref<T> | ComputedRef<T> | (() => T)
+export type WatchEffect = (onInvalidate: InvalidateCbRegistrator) => void
 
+
+function traverse(value: unknown, seen: Set<unknown> = new Set()) {
+    if (!isObject(value) || seen.has(value)) {
+        return value;
+    }
+    seen.add(value)
+    if (isRef(value)) {
+        traverse(value.value, seen)
+    } else if (isArray(value)) {
+        for (let i = 0; i < value.length; i++) {
+            traverse(value[i], seen)
+        }
+    } else if (isSet(value) || isMap(value)) {
+        value.forEach((v: any) => {
+            traverse(v, seen)
+        })
+    } else {
+        for (const key in value) {
+            traverse(value[key], seen)
+        }
+    }
+}
+
+/**
+ * TODO： 这应该最复杂的函数了吧？
+ * */
 function doWatch(
     source: WatchSource | WatchSource[] | WatchEffect | object,
     cb: WatchCallback | null,
     {
         immediate, deep, flush, onTrack, onTrigger
     }: WatchOptions = EMPTY_OBJ,
-    instance: currentInstance
+    instance = currentInstance
 ): WatchStopHandle {
     if (__DEV__ && !cb) {
         if (immediate !== undefined) {
@@ -57,14 +95,15 @@ function doWatch(
             `a reactive object, or an array of these types.`
         )
     }
+
     let getter: () => any
     let forceTrigger = false
     if (isRef(source)) {
-        getter:() => (source as Ref).value
+        getter = () => (source as Ref).value
         forceTrigger = !!(source as Ref)._shallow
     } else if (isReactive(source)) {
         getter = () => source
-        deep:true
+        deep = true
     } else if (isArray(source)) {
         getter = () => source
         deep = true
@@ -108,7 +147,107 @@ function doWatch(
         __DEV__ && warnInvalidSource(source)
     }
 
-    // TODO
+    if (cb && deep) {
+        const baseGetter = getter
+        getter = () => traverse(baseGetter())
+
+    }
+
+    let cleanup: () => void
+    const onInvalidate: InvalidateCbRegistrator = (fn: () => void) => {
+        cleanup = runner.options.onStop = () => {
+            callWithErrorHandling(fn, instance, ErrorCodes.WATCH_CLEANUP)
+        }
+    }
+
+    // 在SSR中，不需要设置一个实际的 effect，否则是 noop
+    if (__NODE_JS__ && isInSSRComponentSetup) {
+        if (!cb) {
+            getter()
+        } else if (immediate) {
+            callWithAsyncErrorHandling(cb, instance, ErrorCodes.WATCH_CALLBACK, [
+                getter(),
+                undefined,
+                onInvalidate
+            ])
+        }
+        return NOOP
+    }
+    let oldValue = isArray(source) ? [] : INITIAL_WATCHER_VALUE
+    const job: SchedulerJob = () => {
+        if (!runner.active) {
+            return
+        }
+        if (cb) {
+            // watch(source,cb)
+            const newValue = runner()
+            if (deep || forceTrigger || hasChanged(newValue, oldValue)) {
+                // 在再次运行cb之前清理
+                if (cleanup) {
+                    cleanup()
+                }
+                callWithAsyncErrorHandling(cb, instance, ErrorCodes.WATCH_CALLBACK, [
+                    newValue,
+                    //  当第一次更改时，将未定义的值作为旧值传给它。
+                    oldValue === INITIAL_WATCHER_VALUE ? undefined : oldValue,
+                    onInvalidate
+                ])
+                oldValue = newValue
+            }
+        } else {
+            // watchEffect
+            runner()
+        }
+    }
+    // 重点： 将该job 标记为回调，以便 scheduler 知道。
+    // 它允许自触发(#1727)
+    job.allowRecurse = !!cb
+
+    let scheduler: ReactiveEffectOptions['scheduler']
+    if (flush === 'sync') {
+        scheduler = job
+    } else if (flush === 'post') {
+        scheduler = () => queuePostRenderEffect(job, instance && instance.suspense)
+    } else {
+        // 默认: 'pre'
+        scheduler = () => {
+            if (!instance || instance.isMounted) {
+                queuePreFlushCb(job)
+            } else {
+                // 使用 'pre' 选项，第一次调用必须在组件被挂载之前发生，因此它被同步调用。
+                job()
+            }
+        }
+    }
+
+    const runner = effect(getter,
+        {
+            lazy: true,
+            onTrack,
+            onTrigger,
+            scheduler
+        })
+
+    recordInstanceBoundEffect(runner)
+
+    // 初始化运行
+    if (cb) {
+        if (immediate) {
+            job()
+        } else {
+            oldValue = runner()
+        }
+    } else if (flush === 'post') {
+        queuePostRenderEffect(runner, instance && instance.suspense)
+    } else {
+        runner()
+    }
+    return () => {
+        stop(runner)
+        if (instance) {
+            remove(instance.effects!, runner)
+        }
+    }
 }
 
 // this.$watch

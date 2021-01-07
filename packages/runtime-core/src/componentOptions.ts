@@ -143,7 +143,7 @@ export interface ComponentOptionsBase<Props,
     Extends extends ComponentOptionsMixin,
     E extends EmitsOptions,
     EE extends string = string,
-    Default = {}> extends LegacyOptions<Props, D, C, M, Mixin, Extends>,
+    Defaults = {}> extends LegacyOptions<Props, D, C, M, Mixin, Extends>,
     ComponentInternalOptions,
     ComponentCustomOptions {
     setup?: () => Promise<RawBindings> | RawBindings | RenderFunction | void
@@ -163,6 +163,46 @@ export interface ComponentOptionsBase<Props,
     expose?: string[]
 
     serverPrefetch?(): Promise<any>
+
+    // Internal -----------------------------------------
+    /**
+     * 仅SSR
+     * 这是由 compiler-ssr产生的，附在 compile-sfc中
+     * 不是面向用户的，所以编写不严谨，仅供测试用。
+     * @internal
+     * */
+    ssrRender?: (
+        ctx: any,
+        push: (item: any) => void,
+        parentInstance: ComponentInternalInstance,
+        attrs: Data | undefined,
+        // 针对 compile-optimized bindings
+        $props: ComponentInternalInstance['props'],
+        $setup: ComponentInternalInstance['setupState'],
+        $data: ComponentInternalInstance['data'],
+        $options: ComponentInternalInstance['ctx']
+    ) => void
+
+    /**
+     * 仅由 compile-sfc生成，用于标记一个内联的 ssr 渲染函数，并从setup()返回。
+     * @internal
+     * */
+    __ssrInlineRender?: boolean
+    /**
+     * AsyncComponentWrapper 标记
+     * @internal
+     * */
+    __merged?: ComponentOptions
+    // Type 声明 -----------------------------------------
+    // 请注意，这些都是内部的，但需要在d.ts中暴露出来，以便进行类型推理。
+
+    // 纯类型区分符，将 OptionWithoutProps 与 defineComponent() 或 FunctionalComponent 返回的构造函数类型分开。
+    call?: (this: unknown, ...args: unknown[]) => never
+    // 内建Vnode类型的类型区分器。
+    __isFragment?: never
+    __isTeleport?: never
+    __isSuspense?: never
+    __defaults?: Defaults
 }
 
 export type OptionTypesKeys = 'P' | 'B' | 'D' | 'C' | 'M' | 'Defaults'
@@ -180,6 +220,7 @@ export type OptionTypesType<P = {},
     Defaults: Defaults
 }
 
+// TODO
 export type ComponentOptions<Props = {},
     RawBindings = any,
     D = any,
@@ -187,7 +228,14 @@ export type ComponentOptions<Props = {},
     M extends MethodOptions = any,
     Mixin extends ComponentOptionsMixin = any,
     Extends extends ComponentOptionsMixin = any,
-    E extends EmitsOptions = any> = ComponentOptionsBase<Props, RawBindings, D, C, M, Mixin, Extends, E> &
+    E extends EmitsOptions = any> = ComponentOptionsBase<Props,
+    RawBindings,
+    D,
+    C,
+    M,
+    Mixin,
+    Extends,
+    E> &
     ThisType<CreateComponentPublicInstance<{},
         RawBindings,
         D,
@@ -198,6 +246,12 @@ export type ComponentOptions<Props = {},
         E,
         Readonly<Props>>>
 
+export type ExtractComputedReturns<T extends any> = {
+    [key in keyof T]: T[key] extends { get: (...args: any[]) => infer TReturn }
+        ? TReturn
+        : T[key] extends (...args: any[]) => infer TReturn ? TReturn : never
+}
+
 function mergeOptions(to: any, from: any, instance: ComponentInternalInstance) {
     const strats = instance.appContext.config.optionMergeStrategies
     const {mixins, extends: extendsOptions} = from
@@ -205,6 +259,7 @@ function mergeOptions(to: any, from: any, instance: ComponentInternalInstance) {
     mixins && mixins.forEach((m: ComponentOptionsMixin) => mergeOptions(to, m, instance))
 
     for (const key in from) {
+        if (!from.hasOwnProperty(key)) continue
         if (strats && hasOwn(strats, key)) {
             to[key] = strats[key](to[key], from[key], instance.proxy, key)
         } else {

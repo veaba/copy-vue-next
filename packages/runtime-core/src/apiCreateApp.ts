@@ -1,8 +1,16 @@
-import {Component, ComponentOptions} from "./componentOptions";
-import {ConcreteComponent, Data} from "./component";
+import {ComponentOptions} from "./componentOptions";
+import {ConcreteComponent, Data, Component} from "./component";
 import {ComponentPublicInstance} from "./componentPublicInstance";
 import {NO} from "@vue/shared";
 import {Directive} from "./directive";
+import {InjectionKey} from "./apiInject";
+
+export type OptionMergeFunction = (
+    to: unknown,
+    from: unknown,
+    instance: any,
+    key: string
+) => any
 
 export interface AppConfig {
     // @private

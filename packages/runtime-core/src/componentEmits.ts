@@ -1,9 +1,14 @@
-import {ComponentInternalInstance, ConcreteComponent} from "./component";
+import {ComponentInternalInstance, ConcreteComponent, formatComponentName} from "./component";
 import {AppContext} from "./apiCreateApp";
-import {camelize, EMPTY_OBJ, isFunction, toHandlerKey, toNumber} from "@vue/shared";
+import {camelize, EMPTY_OBJ, extend, hyphenate, isArray, isFunction, toHandlerKey, toNumber} from "@vue/shared";
 import {warn} from "./warning";
+import {ComponentOptions} from "./componentOptions";
+import {UnionToIntersection} from "./helpers/typeUtils";
+import {devtoolsComponentEmit} from "./devtools";
+import {callWithAsyncErrorHandling, ErrorCodes} from "./errorHanding";
 
 export type ObjectEmitsOptions = Record<string, ((...args: any[]) => any) | null>
+
 export type EmitsOptions = ObjectEmitsOptions | string[]
 
 export type EmitFn<Options = ObjectEmitsOptions,
@@ -22,7 +27,40 @@ export function normalizeEmitsOptions(
     appContext: AppContext,
     asMixin = false
 ): ObjectEmitsOptions | null {
-    // todo
+    if (!appContext.deopt && comp.__emits !== undefined) {
+        return comp.__emits
+    }
+    const raw = comp.emits
+    let normalized: ObjectEmitsOptions = {}
+
+    // 应用 mixin/extends props
+    let hasExtends = false
+    if (__FEATURE_OPTIONS_API__ && !isFunction(comp)) {
+        const extendEmits = (raw: ComponentOptions) => {
+            hasExtends = true
+            extend(normalized, normalizeEmitsOptions(raw, appContext, true))
+        }
+        if (!asMixin && appContext.mixins.length) {
+            appContext.mixins.forEach(extendEmits)
+        }
+        if (comp.extends) {
+            extendEmits(comp.extends)
+        }
+        if (comp.mixins) {
+            comp.mixins.forEach(extendEmits)
+        }
+    }
+
+    if (!raw && !hasExtends) {
+        return (comp.__emits = null)
+    }
+
+    if (isArray(raw)) {
+        raw.forEach(key => (normalized[key] = null))
+    } else {
+        extend(normalized, raw)
+    }
+    return (comp.__emits = normalized)
 }
 
 export function emit(
@@ -125,7 +163,7 @@ export function emit(
         callWithAsyncErrorHandling(
             onceHandler,
             instance,
-            errorCodes.COMPONENT_EVENT_HANDLER,
+            ErrorCodes.COMPONENT_EVENT_HANDLER,
             args
         )
     }

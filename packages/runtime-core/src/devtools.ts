@@ -42,3 +42,18 @@ function createDevtoolsComponentHook(hook: DevtoolsHooks) {
         )
     }
 }
+
+export function devtoolsComponentEmit(
+    component: ComponentInternalInstance,
+    event: string,
+    params: any[]
+) {
+    if (!devtools) return
+    devtools.emit(
+        DevtoolsHooks.COMPONENT_EMIT,
+        component.appContext.app,
+        component,
+        event,
+        params
+    )
+}

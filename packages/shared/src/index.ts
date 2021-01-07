@@ -17,7 +17,12 @@ export const toRawType = (value: unknown): string => {
     return toTypeString(value).slice(8, -1)
 }
 export const extend = Object.assign
-
+export const remove = <T>(arr: T[], el: T) => {
+    const i = arr.indexOf(el)
+    if (i > -1) {
+        arr.slice(i, 1)
+    }
+}
 const hasOwnProperty = Object.prototype.hasOwnProperty
 export const hasOwn = (val: object, key: string | symbol): key is keyof typeof val => hasOwnProperty.call(val, key)
 
@@ -31,7 +36,7 @@ export const isPromise = <T = any>(val: unknown): val is Promise<T> => {
 
 export const isArray = Array.isArray
 export const isMap = (val: unknown): val is Map<any, any> => toTypeString(val) === '[object Map]'
-
+export const isSet = (val: unknown): val is Set<any> => toTypeString(val) === '[object Set'
 
 export const isIntegerKey = (key: unknown) =>
     isString(key) &&
@@ -85,6 +90,15 @@ export const camelize = cacheStringFunction(
 export const capitalize = cacheStringFunction(
     (str: string) => str.charAt(0).toUpperCase() + str.slice(1)
 )
+
+const hyphenateRE = /\B([A-Z])/g
+/**
+ * @private
+ * */
+export const hyphenate = cacheStringFunction((str: string) =>
+    str.replace(hyphenateRE, '-$1').toLowerCase()
+)
+
 /**
  * @private
  * */

@@ -1,6 +1,7 @@
 import {ComponentInternalInstance, LifecycleHooks} from "./component";
 import {isFunction, isPromise} from "@vue/shared";
 import {VNode} from "./vnode";
+import {popWarningContext, pushWarningContext, warn} from "./warning";
 
 
 // 除生命周期挂钩外，还可以执行用户提供的功能的上下文
@@ -142,6 +143,7 @@ function logError(
     }
 }
 
+
 export function callWithAsyncErrorHandling(
     fn: Function | Function [],
     instance: ComponentInternalInstance | null,
@@ -152,7 +154,7 @@ export function callWithAsyncErrorHandling(
         const res = callWithErrorHandling(fn, instance, type, args)
         if (res && isPromise(res)) {
             res.catch(err => {
-                handlerError(err, instance, type)
+                handleError(err, instance, type)
             });
         }
         return res

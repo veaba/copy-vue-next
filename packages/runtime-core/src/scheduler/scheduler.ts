@@ -69,3 +69,6 @@ export function queueJob(job: SchedulerJob) {
     }
 }
 
+export function queuePreFlushCb(cb:SchedulerCb){
+    queueCb(cb,activePreFlushCbs,pendingPreFlushCbs,preFlushIndex)
+}

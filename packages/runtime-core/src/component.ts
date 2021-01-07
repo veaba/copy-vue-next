@@ -1,7 +1,6 @@
 import {ReactiveEffect} from "@vue/reactivity";
 import {
     ComponentOptions,
-    ComponentOptionsMixin,
     ComponentPropsOptions,
     ComputedOptions,
     MethodOptions,
@@ -10,7 +9,11 @@ import {NormalizedPropsOptions, normalizePropsOptions} from "./componentProps";
 import {emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions} from "./componentEmits";
 import {AppContext, createAppContext} from "./apiCreateApp";
 import {VNode, VNodeChild} from "./vnode";
-import {ComponentPublicInstance, createRenderContext} from "./componentPublicInstance";
+import {
+    ComponentPublicInstance,
+    ComponentPublicInstanceConstructor,
+    createRenderContext
+} from "./componentPublicInstance";
 import {Directive} from "./directive";
 import {InternalSlots, Slots} from "./componentSlots";
 import {SuspenseBoundary} from "./suspense";
@@ -21,6 +24,8 @@ const emptyAppContext = createAppContext()
 let uid = 0
 
 type LifecycleHook = Function[] | null
+
+export let isInSSRComponentSetup = false
 
 export const enum LifecycleHooks {
     BEFORE_CREATE = 'bc',
@@ -44,6 +49,17 @@ export interface SetupContext<E = EmitsOptions, P = Data> {
     slots: Slots
     emit: EmitFn<E>
     expose: (exposed: Record<string, any>) => void
+}
+
+export let currentInstance: ComponentInternalInstance | null = null
+
+// export const getCurrentInstance: () => ComponentInternalInstance | null = () => {
+//     currentInstance || currentRenderingInstance
+// }
+export const setCurrentInstance = (
+    instance: ComponentInternalInstance | null
+) => {
+    currentInstance = instance
 }
 
 /**
@@ -438,7 +454,6 @@ export function createComponentInstance(
     return instance
 }
 
-export let currentInstance: ComponentInternalInstance | null = null;
 
 export function recordInstanceBoundEffect(effect: ReactiveEffect) {
     if (currentInstance) {
@@ -456,7 +471,7 @@ export function formatComponentName(
     isRoot = false
 ): string {
     let name = isFunction(Component) ? Component.displayName || Component.name : Component.name
-    if (!name || Component.__file) {
+    if (!name && Component.__file) {
         const match = Component.__file.match(/([^/\\]+)\.vue$/)
         if (match) {
             name = match[1]
@@ -467,6 +482,7 @@ export function formatComponentName(
         // 尝试根据反向解析推断名称
         const inferFormRegistry = (registry: Record<string, any> | undefined) => {
             for (const key in registry) {
+                if (!registry.hasOwnProperty(key)) continue
                 if (registry[key] === Component) {
                     return key
                 }

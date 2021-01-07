@@ -30,3 +30,7 @@ export type SetupRenderEffectFn = (
     isSVG: boolean,
     optimized: boolean
 ) => void
+
+export const queuePostRenderEffect = __FEATURE_SUSPENSE__
+    ? queueEffectWithSuspense
+    : queuePostFlushCb

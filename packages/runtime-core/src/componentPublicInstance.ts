@@ -3,7 +3,7 @@
 import {
     ComponentOptionsBase,
     ComponentOptionsMixin,
-    ComputedOptions,
+    ComputedOptions, ExtractComputedReturns,
     MethodOptions, OptionTypesKeys, OptionTypesType, resolveMergedOptions
 } from "./componentOptions";
 import {EmitFn, EmitsOptions} from "./componentEmits";
@@ -13,6 +13,7 @@ import {Slots} from "./componentSlots";
 import {extend, NOOP} from "@vue/shared";
 import {UnionToIntersection} from "./helpers/typeUtils";
 import {nextTick, queueJob} from "./scheduler/scheduler";
+import {instanceWatch, WatchOptions, WatchStopHandle} from "./apiWatch";
 
 export interface ComponentRenderContext {
     [key: string]: any
@@ -34,9 +35,12 @@ const publicPropertiesMap: PublicPropertiesMap = extend(Object.create(null), {
     $emit: i => i.emit,
     $options: i => (__FEATURE_OPTIONS_API__ ? resolveMergedOptions(i) : i.type),
     $forceUpdate: i => () => queueJob(i.update),
-    $nextTick: i => nextTick.bind(i.proxy),
+    $nextTick: i => nextTick.bind(i.proxy!),
     $watch: i => (__FEATURE_OPTIONS_API__ ? instanceWatch.bind(i) : NOOP)
 } as PublicPropertiesMap)
+
+export interface ComponentCustomProperties {
+}
 
 export type ComponentPublicInstance<P = {},
     B = {},
@@ -68,7 +72,7 @@ export type ComponentPublicInstance<P = {},
         cb: Function,
         options?: WatchOptions
     ): WatchStopHandle
-} & P & ShallowUnwrapRef<B> & D & ExtractComputedReturs<C> & M & ComponentCustomProperties
+} & P & ShallowUnwrapRef<B> & D & ExtractComputedReturns<C> & M & ComponentCustomProperties
 
 // 在dev模式下，proxy 目标暴露了与`this`相同的属性，以便于控制台检查。在prod模式下，它将是一个空对象，所以这些属性定义可以跳过。
 export function createRenderContext(instance: ComponentInternalInstance) {
@@ -132,7 +136,8 @@ export type CreateComponentPublicInstance<P = {},
     PublicD = UnwrapMixinsType<PublicMixin, 'D'> & EnsureNonVoid<D>,
     PublicC extends ComputedOptions = UnwrapMixinsType<PublicMixin, 'C'> & EnsureNonVoid<C>,
     PublicM extends MethodOptions = UnwrapMixinsType<PublicMixin, 'M'> & EnsureNonVoid<M>,
-    PublicDefaults = UnwrapMixinsType<PublicMixin, 'Defaults'> & EnsureNonVoid<Defaults>> = ComponentPublicInstance<PublicP,
+    PublicDefaults = UnwrapMixinsType<PublicMixin, 'Defaults'> & EnsureNonVoid<Defaults>>
+    = ComponentPublicInstance<PublicP,
     PublicB,
     PublicD,
     PublicC,
