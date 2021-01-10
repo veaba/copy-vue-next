@@ -1,9 +1,13 @@
-import {BooleanFlags, ComponentOptions, Prop} from "./componentOptions";
+import {ComponentOptions} from "./componentOptions";
 import {ConcreteComponent, Data} from "./component";
 import {warn} from "./warning";
 import {AppContext} from "./apiCreateApp";
 import {camelize, EMPTY_ARR, EMPTY_OBJ, extend, hasOwn, isArray, isFunction, isObject, isString} from "@vue/shared";
 
+
+export type ComponentPropsOptions<P = Data> =
+    | ComponentObjectPropsOptions<P>
+    | string[]
 
 type PropMethod<T, TConstructor = any> = T extends (...args: any) => any // 如果是带 args 的函数
     ? { new(): TConstructor; (): T; readonly prototype: TConstructor } // 像构造函数一样创建函数
@@ -23,12 +27,23 @@ export interface PropOptions<T = any, D = T> {
     validator?(value: unknown): boolean
 }
 
+export enum BooleanFlags {
+    shouldCast = 0,
+    shouldCastTrue = 1
+}
+
+
 type NormalizedProp =
     | null
     | (PropOptions & {
     [BooleanFlags.shouldCast]?: boolean
     [BooleanFlags.shouldCastTrue]?: boolean
 })
+
+export type Prop<T, D = T> = PropOptions<T, D> | PropType<T>
+export type ComponentObjectPropsOptions<P = Data> = {
+    [K in keyof P]: Prop<P[K]> | null
+}
 
 
 // normalized value is a tuple of the actual normalized options

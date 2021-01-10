@@ -2,7 +2,7 @@ import {ComponentOptions} from "./componentOptions";
 import {ConcreteComponent, Data, Component} from "./component";
 import {ComponentPublicInstance} from "./componentPublicInstance";
 import {NO} from "@vue/shared";
-import {Directive} from "./directive";
+import {Directives} from "./directives";
 import {InjectionKey} from "./apiInject";
 
 export type OptionMergeFunction = (
@@ -51,9 +51,9 @@ export interface App<HostElement = any> {
 
     component(name: string, component: Component): this
 
-    directive(name: string): Directive | undefined
+    directive(name: string): Directives | undefined
 
-    directive(name: string, directive: Directive): this
+    directive(name: string, directive: Directives): this
 
     mount(
         rootContainer: HostElement | string,
@@ -70,7 +70,7 @@ export interface AppContext {
     config: AppConfig
     mixins: ComponentOptions[]
     components: Record<string, Component>
-    directives: Record<string, Directive>
+    directives: Record<string, Directives>
     provides: Record<string | symbol, any>
 
     /**

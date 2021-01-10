@@ -1,11 +1,10 @@
 import {ReactiveEffect} from "@vue/reactivity";
 import {
     ComponentOptions,
-    ComponentPropsOptions,
     ComputedOptions,
     MethodOptions,
 } from "./componentOptions";
-import {NormalizedPropsOptions, normalizePropsOptions} from "./componentProps";
+import {ComponentPropsOptions, NormalizedPropsOptions, normalizePropsOptions} from "./componentProps";
 import {emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions} from "./componentEmits";
 import {AppContext, createAppContext} from "./apiCreateApp";
 import {VNode, VNodeChild} from "./vnode";
@@ -14,7 +13,7 @@ import {
     ComponentPublicInstanceConstructor,
     createRenderContext
 } from "./componentPublicInstance";
-import {Directive} from "./directive";
+import {Directives} from "./directives";
 import {InternalSlots, Slots} from "./componentSlots";
 import {SuspenseBoundary} from "./suspense";
 import {EMPTY_OBJ, isFunction} from "@vue/shared";
@@ -134,12 +133,11 @@ export type ConcreteComponent<Props = {},
  * 我们暴露了内部实例上的一个 property 子集，因为它们对高阶外部库和工具很有用
  * */
 export interface ComponentInternalInstance {
-    uid: number,
+    uid: number
     type: ConcreteComponent
     parent: ComponentInternalInstance | null
     root: ComponentInternalInstance
     appContext: AppContext
-
     /**
      * vNode: 表示该组件在其父级 vDom 树中的位置
      * */
@@ -197,7 +195,7 @@ export interface ComponentInternalInstance {
      * 解决指令注册，仅适用于带有 mixins 或 extends 的组件。
      * @internal
      * */
-    directives: Record<string, Directive> | null
+    directives: Record<string, Directives> | null
     /**
      * 解决 props options
      * */

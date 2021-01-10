@@ -1,12 +1,11 @@
-// Renderer Node can technically be any object in the context of core renderer
-// logic - they are never directly operated on and always passed to the node op
-// functions provided via options, so the internal constraint is really just
-// a generic object.
-// TODO
 import {ComponentInternalInstance} from "./component";
 import {SuspenseBoundary} from "./suspense";
 import {VNode} from "./vnode";
+import {queueEffectWithSuspense} from "./components/Suspense";
+import {queuePostFlushCb} from "./scheduler";
 
+// 渲染器节点在技术上可以是核心渲染器逻辑上下文中的任何对象--它们从来没有被直接操作过，
+// 总是通过选项传递给提供的节点操作函数，所以内部约束实际上只是一个通用对象。
 export interface RendererNode {
     [key: string]: any
 }
@@ -34,3 +33,5 @@ export type SetupRenderEffectFn = (
 export const queuePostRenderEffect = __FEATURE_SUSPENSE__
     ? queueEffectWithSuspense
     : queuePostFlushCb
+
+//

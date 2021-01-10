@@ -1,15 +1,19 @@
 import {ReactiveFlags, Ref} from "@vue/reactivity";
 import {ComponentInternalInstance} from "./component";
+import {RendererElement, RendererNode} from "./renderer";
+import {DirectiveBinding} from "./directives";
+import {TransitionHooks} from "./BaseTransition";
+import {SuspenseBoundary} from "./suspense";
+import {AppContext} from "./apiCreateApp";
+import {RawSlots} from "./componentSlots";
 
-
-// todo
-export type VNodeTypes = {}
 
 type VNodeMountHook = (vnode: VNode) => void
 type VNodeUpdateHook = (vnode: VNode, oldVNode: VNode) => void
-export type VNodeHook = | VNodeMountHook | VNodeUpdateHook | VNodeMountHook[] | VNodeUpdateHook[]
-
 type VNodeChildAtom = | VNode | string | number | boolean | null | undefined | void
+
+export type VNodeTypes = {}
+export type VNodeHook = | VNodeMountHook | VNodeUpdateHook | VNodeMountHook[] | VNodeUpdateHook[]
 export type VNodeArrayChildren = Array<VNodeArrayChildren | VNodeChildAtom>
 export type VNodeChild = VNodeChildAtom | VNodeArrayChildren
 export type VNodeRef = | string | Ref | ((ref: object | null, refs: Record<string, any>) => void)
@@ -25,6 +29,13 @@ export type VNodeProps = {
     onVnodeBeforeUnmount?: VNodeMountHook | VNodeMountHook[]
     onVnodeUnmounted?: VNodeMountHook | VNodeMountHook[]
 }
+
+export type VNodeNormalizedRefAtom = {
+    i: ComponentInternalInstance,
+    r: VNodeRef
+}
+export type VNodeNormalizedRef = | VNodeNormalizedRefAtom | (VNodeNormalizedRefAtom)[]
+export type VNodeNormalizedChildren = string | VNodeArrayChildren | RawSlots | null
 
 export interface VNode<HostNode = RendererNode,
     HostElement = RendererElement,
@@ -44,7 +55,7 @@ export interface VNode<HostNode = RendererNode,
     scopeId: string | null // SFC only
     children: VNodeNormalizedChildren
     component: ComponentInternalInstance | null
-    dirs: DirectiveBindings | null
+    dirs: DirectiveBinding[] | null
     transition: TransitionHooks<HostElement> | null
 
     // DOM

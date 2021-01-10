@@ -12,7 +12,7 @@ import {ReactiveEffect, shallowReadonly, ShallowUnwrapRef} from "@vue/reactivity
 import {Slots} from "./componentSlots";
 import {extend, NOOP} from "@vue/shared";
 import {UnionToIntersection} from "./helpers/typeUtils";
-import {nextTick, queueJob} from "./scheduler/scheduler";
+import {nextTick, queueJob} from "./scheduler";
 import {instanceWatch, WatchOptions, WatchStopHandle} from "./apiWatch";
 
 export interface ComponentRenderContext {

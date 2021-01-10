@@ -4,6 +4,7 @@ import {Data} from "./component";
 
 
 export type DirectiveModifier = Record<string, boolean>
+export type Directive<T = any, V = any> = ObjectDirective<T, V> | FunctionDirective<T, V>
 
 export interface DirectiveBinding<V = any> {
     instance: ComponentPublicInstance | null
@@ -38,6 +39,6 @@ export interface ObjectDirective<T = any, V = any> {
     getSSRProps?: SSRDirectiveHook
 }
 
-export type Directive<T = any, V = any> =
+export type Directives<T = any, V = any> =
     | ObjectDirective<T, V>
     | FunctionDirective<T, V>

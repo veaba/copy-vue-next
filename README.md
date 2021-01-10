@@ -96,6 +96,10 @@ const instance: ComponentInternalInstance = {
 }
 ```
 
+> 这是有时候 以ts 无法识别的方式初始化属性。使用感叹号，确定分配的断言，关闭 ts 的警告
+
 - ts 中，Record
 
 > 把K 的每个属性都转为T类型
+
+- webstorm 中，似乎存在format 错误，导致 `packages/runtime-core/src/componentOptions.ts` 中的 `ComponentOptions` 报红
