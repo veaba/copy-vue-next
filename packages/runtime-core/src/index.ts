@@ -192,7 +192,7 @@ export {
   RendererElement,
   HydrationRenderer,
   RendererOptions,
-  RootRenderFunction
+  RootRendererFunction
 } from './renderer'
 export { RootHydrateFunction } from './hydration'
 export { Slot, Slots } from './componentSlots'
@@ -212,7 +212,7 @@ export {
   FunctionDirective,
   DirectiveArguments
 } from './directives'
-export { SuspenseBoundray } from './components/Suspense'
+export { SuspenseBoundary } from './components/Suspense'
 export { TransitionState, TransitionHooks } from './components/BaseTransition'
 export { AsyncComponentOptions, AsyncComponentLoader } from './apiAsyncComponent'
 export { HMRRuntime } from './hmr'
@@ -232,6 +232,7 @@ export {
   createBlock,
   setBlockTracking,
   createTextVNode,
+  createCommentVNode,
   createStaticVNode
 } from './vnode'
 export {

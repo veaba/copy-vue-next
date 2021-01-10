@@ -18,6 +18,7 @@ import { WatchCallback, WatchOptions } from './apiWatch'
 import { DebuggerHook, ErrorCapturedHook } from './apiLifecycle'
 import { VNodeChild } from './vnode'
 import { hasOwn } from '@vue/shared'
+import { ComponentObjectPropsOptions } from './componentProps'
 
 /**
  * Interface for declaring custom options.
@@ -170,6 +171,40 @@ export type ComponentOptionsWithArrayProps<PropNames extends string = string,
   Mixin,
   Extends,
   E>>;
+
+export type ComponentOptionsWithObjectProps<PropsOptions = ComponentObjectPropsOptions,
+  RawBindings = {},
+  D = {},
+  C extends ComputedOptions = {},
+  M extends MethodOptions = {},
+  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
+  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
+  E extends EmitsOptions = EmitsOptions,
+  EE extends string = string,
+  Props = Readonly<ExtractPropTypes<PropsOptions>>,
+  Defaults = ExtractDefaultPropTypes<PropsOptions>> = ComponentOptionsBase<Props,
+  RawBindings,
+  D,
+  C,
+  M,
+  Mixin,
+  Extends,
+  E,
+  EE,
+  Defaults> & {
+  props: PropsOptions & ThisType<void>
+} & ThisType<CreateComponentPublicInstance<Props,
+  RawBindings,
+  D,
+  C,
+  M,
+  Mixin,
+  Extends,
+  E,
+  Props,
+  Defaults,
+  false>>
+
 export type ComponentOptions<Props = {},
   RawBindings = any,
   D = any,
