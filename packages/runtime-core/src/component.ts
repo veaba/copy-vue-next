@@ -4,7 +4,7 @@ import {
   ComputedOptions,
   MethodOptions
 } from './componentOptions'
-import { ComponentPropsOptions, NormalizedPropsOptions, normalizePropsOptions } from './componentProps'
+import { ComponentPropsOptions, initProps, NormalizedPropsOptions, normalizePropsOptions } from './componentProps'
 import { emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions } from './componentEmits'
 import { AppContext, createAppContext } from './apiCreateApp'
 import { VNode, VNodeChild } from './vnode'
@@ -14,10 +14,11 @@ import {
   createRenderContext
 } from './componentPublicInstance'
 import { Directives } from './directives'
-import { InternalSlots, Slots } from './componentSlots'
-import { SuspenseBoundary } from './suspense'
+import { initSlots, InternalSlots, Slots } from './componentSlots'
+import { SuspenseBoundary } from './components/Suspense'
 import { EMPTY_OBJ, isFunction } from '@vue/shared'
 import { devtoolsComponentAdded } from './devtools'
+import { ShapeFlags } from './shapeFlags'
 
 const emptyAppContext = createAppContext()
 let uid = 0
@@ -30,6 +31,12 @@ export let isInSSRComponentSetup = false
  * 用于拓展 TSX 中组件上允许的非 declared prop
  * */
 export interface ComponentCustomProps {
+}
+
+export interface ClassComponent {
+  new(...args: any[]): ComponentPublicInstance<any, any, any, any, any>
+
+  __vccOpts: ComponentOptions
 }
 
 /**
@@ -516,4 +523,8 @@ export function setupComponent(
   const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
   initProps(instance, props, isStateful, isSSR)
   initSlots(instance, children)
+}
+
+export function isClassComponent(value: unknown): value is ClassComponent {
+  return isFunction(value) && '__vccOpts' in value
 }

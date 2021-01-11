@@ -1,3 +1,5 @@
+import { makeMap } from './makeMap'
+
 export * from './codeframe.js'
 export * from './toDisplayString'
 let _globalThis: any
@@ -8,6 +10,10 @@ export const NOOP = () => {
 
 // 总是返回 false
 export const NO = () => false
+
+const onRE = /^on[^a-ze]/
+export const isOn = (key: string) => onRE.test(key)
+
 
 export const objectToString = Object.prototype.toString
 export const toTypeString = (value: unknown): string => objectToString.call(value)
@@ -123,3 +129,10 @@ export const getGlobalThis = (): any => {
             : {})
   )
 }
+
+export const isReservedProp = /*#__PURE__*/ makeMap(
+  //
+  ',key,ref,' +
+  'onVnodeBeforeMount,onVnodeMounted,' +
+  'onVnodeBeforeUnmount,onVnodeUnmounted'
+)

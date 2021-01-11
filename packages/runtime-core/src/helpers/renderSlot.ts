@@ -7,6 +7,9 @@ import { Data } from '../component'
 import { warn } from '@vue/runtime-core'
 import { SlotFlags } from '../../../shared/src/slotFlags'
 
+export let isRenderingCompiledSlot = 0
+export const setCompiledSlotRendering = (n: number) => (isRenderingCompiledSlot += n)
+
 export function renderSlot(
   slots: Slots,
   name: string,
@@ -25,9 +28,9 @@ export function renderSlot(
 
   isRenderingCompiledSlot++
   /**
-   * @todo 这种写法似乎始终只返回最后一个
+   * @diff 这种写法似乎始终只返回最后一个
    * called renderSlot()(parma)
-   * */ todo
+   * */
   const rendered = (openBlock(),
     createBlock(
       Fragment,

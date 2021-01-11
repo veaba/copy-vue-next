@@ -1,23 +1,35 @@
-import { SuspenseBoundary, SuspenseProps } from '../suspense'
-import {isArray} from "@vue/shared";
-import {queuePostFlushCb} from "../scheduler";
-import { ComponentInternalInstance, RendererElement, RendererNode, VNode } from '@vue/runtime-core'
+import { isArray, isFunction } from '@vue/shared'
+import { queuePostFlushCb } from '../scheduler'
+import {
+  ComponentInternalInstance,
+  RendererElement,
+  RendererNode,
+  Slots,
+  VNode,
+  VNodeChild, VNodeProps,
+  warn
+} from '@vue/runtime-core'
 import { MoveType, SetupRenderEffectFn } from '../renderer'
+import { ShapeFlags } from '../shapeFlags'
+import { normalizeVNode } from '../vnode'
+import { filterSingleRoot } from '../componentRenderUtils'
 
 export function queueEffectWithSuspense(
-    fn: Function | Function[],
-    suspense: SuspenseBoundary | null
+  fn: Function | Function[],
+  suspense: SuspenseBoundary | null
 ): void {
-    if (suspense && suspense.pendingBranch) {
-        if (isArray(fn)) {
-            suspense.effects.push(...fn)
-        } else {
-            suspense.effects.push(fn)
-        }
+  if (suspense && suspense.pendingBranch) {
+    if (isArray(fn)) {
+      suspense.effects.push(...fn)
     } else {
-        queuePostFlushCb(fn)
+      suspense.effects.push(fn)
     }
+  } else {
+    queuePostFlushCb(fn)
+  }
 }
+
+export const isSuspense = (type: any): boolean => type.__isSuspense
 
 export interface SuspenseProps {
   onResolve?: () => void
@@ -26,6 +38,13 @@ export interface SuspenseProps {
   timeout?: string | number
 }
 
+// Force-casted public typing for h and TSX props inference
+export const Suspense = ((__FEATURE_SUSPENSE__
+  ? SuspenseImpl
+  : null) as any) as {
+  __isSuspense: true
+  new(): { $props: VNodeProps & SuspenseProps }
+}
 
 export interface SuspenseBoundary {
   vnode: VNode<RendererNode, RendererElement, SuspenseProps>
@@ -63,4 +82,41 @@ export interface SuspenseBoundary {
   ): void
 
   unmount(parentSuspense: SuspenseBoundary | null, doRemove?: boolean): void
+}
+
+
+function normalizeSuspenseSlot(s: any) {
+  if (isFunction(s)) {
+    s = s()
+  }
+  if (isArray(s)) {
+    const singleChild = filterSingleRoot(s)
+    if (__DEV__ && !singleChild) {
+      warn(`<Suspense> slots expect a single root node.`)
+    }
+    s = singleChild
+  }
+  return normalizeVNode(s)
+}
+
+export function normalizeSuspenseChildren(
+  vnode: VNode
+): {
+  content: VNode,
+  fallback: VNode
+} {
+  const { shapeFlag, children } = vnode
+  let content: VNode
+  let fallback: VNode
+  if (shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
+    content = normalizeSuspenseSlot((children as Slots).default)
+    fallback = normalizeSuspenseSlot((children as Slots).fallback)
+  } else {
+    content = normalizeSuspenseSlot(children as VNodeChild)
+    fallback = normalizeVNode(null)
+  }
+  return {
+    content,
+    fallback
+  }
 }
