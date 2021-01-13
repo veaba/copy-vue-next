@@ -1,4 +1,4 @@
-import { ReactiveEffect } from '@vue/reactivity'
+import { proxyRefs, ReactiveEffect } from '@vue/reactivity'
 import {
   ComponentOptions,
   ComputedOptions,
@@ -7,7 +7,7 @@ import {
 import { ComponentPropsOptions, initProps, NormalizedPropsOptions, normalizePropsOptions } from './componentProps'
 import { emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions } from './componentEmits'
 import { AppContext, createAppContext } from './apiCreateApp'
-import { VNode, VNodeChild } from './vnode'
+import { isVNode, VNode, VNodeChild } from './vnode'
 import {
   ComponentPublicInstance,
   ComponentPublicInstanceConstructor,
@@ -16,9 +16,10 @@ import {
 import { Directives } from './directives'
 import { initSlots, InternalSlots, Slots } from './componentSlots'
 import { SuspenseBoundary } from './components/Suspense'
-import { EMPTY_OBJ, isFunction } from '@vue/shared'
+import { EMPTY_OBJ, isFunction, isObject, NOOP } from '@vue/shared'
 import { devtoolsComponentAdded } from './devtools'
 import { ShapeFlags } from './shapeFlags'
+import { warn } from './warning'
 
 const emptyAppContext = createAppContext()
 let uid = 0
@@ -26,6 +27,11 @@ let uid = 0
 type LifecycleHook = Function[] | null
 
 export let isInSSRComponentSetup = false
+type CompileFunction = (
+  template: string | object,
+  options?: CompilerOptions
+) => InternalRenderFunction
+let compile: CompileFunction | undefined
 
 /**
  * 用于拓展 TSX 中组件上允许的非 declared prop
@@ -527,4 +533,110 @@ export function setupComponent(
 
 export function isClassComponent(value: unknown): value is ClassComponent {
   return isFunction(value) && '__vccOpts' in value
+}
+
+function finishComponentSetup(
+  instance: ComponentInternalInstance,
+  isSSR: boolean
+) {
+  const Component = instance.type as ComponentOptions
+
+  // template / render  function 规范化
+  if (__NODE_JS__ && isSSR) {
+    if (Component.render) {
+      instance.render = Component.render as InternalRenderFunction
+    }
+  } else if (!instance.render) {
+    // 可以通过setup() 设置
+    if (compile && Component.template && !Component.render) {
+      if (__DEV__) {
+        startMeasure(instance, `compile`)
+      }
+      Component.render = compile(Component.template, {
+        isCustomElement: instance.appContext.config.isCustomElement,
+        delimiters: Component.delimiters
+      })
+      if (__DEV__) {
+        endMeasure(instance, `compile`)
+      }
+    }
+    instance.render = (Component.render || NOOP) as InternalRenderFunction
+    // 对于使用 "with "块的运行时编译渲染函数，渲染
+    // 使用的代理需要一个不同的 "has "处理程序，它的性能更强，而且。
+    // 也只允许白名单的globals落空。
+
+    if (instance.render._rc) {
+      instance.withProxy = new Proxy(
+        instance.ctx,
+        RuntimeCompilePublicInstanceProxyHandlers
+      )
+    }
+  }
+
+  // 支持 2.x  options
+  if (__FEATURE_OPTIONS_API__) {
+    currentInstance = instance
+    applyOptions(instance, Component)
+    currentInstance = null
+  }
+
+  // 警告丢失 template/render
+  if (__DEV__ && !Component.render && instance.render === NOOP) {
+    /* istanbul ignore if */
+    if (!compile && Component.template) {
+      warn(
+        `Component provided template option but ` +
+        `runtime compilation is not supported in this build of Vue.` +
+        (__ESM_BUNDLER__
+          ? ` Configure your bundler to alias "vue" to "vue/dist/vue.esm-bundler.js".`
+          : __ESM_BROWSER__
+            ? ` Use "vue.esm-browser.js" instead.`
+            : __GLOBAL__
+              ? ` Use "vue.global.js" instead.`
+              : ``) /* should not happen */
+      )
+    } else {
+      warn(`Component is missing template or render function.`)
+    }
+  }
+}
+
+export function handleSetupResult(
+  instance: ComponentInternalInstance,
+  setupResult: unknown,
+  isSSR: boolean
+) {
+  if (isFunction(setupResult)) {
+    // setup 返回行内render function
+    if (!__BROWSER__ && (instance.type as ComponentOptions).__ssrInlineRender) {
+      // 当函数名称为`ssrRender`时（由SFC内联模式编译）。
+      // 将其设置为ssrRender。
+      instance.ssrRender = setupResult
+    } else {
+      instance.render = setupResult && InternalRenderFunction
+    }
+  } else if (isObject(setupResult)) {
+    if (__DEV__ && isVNode(setupResult)) {
+      warn(
+        `setup() should not return VNodes directly - ` +
+        `return a render function instead.`
+      )
+    }
+    //设置返回的绑定。
+    // 假设存在一个从模板编译的渲染函数。
+    if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+      instance.devtoolsRawSetupState = setupResult
+    }
+    instance.setupState = proxyRefs(setupResult)
+    if (__DEV__) {
+      exposeSetupStateOnRenderContext(instance)
+    }
+  } else if (__DEV__ && setupResult !== undefined) {
+    warn(
+      `setup() should return an object. Received: ${
+        setupResult === null ? 'null' : typeof setupResult
+      }`
+    )
+  }
+  finishComponentSetup(instance, isSSR)
 }

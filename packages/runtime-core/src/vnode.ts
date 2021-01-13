@@ -1,5 +1,5 @@
 import { isProxy, ReactiveFlags, Ref, toRaw } from '@vue/reactivity'
-import { ClassComponent, ComponentInternalInstance, Data, isClassComponent } from './component'
+import { ClassComponent, ComponentInternalInstance, ConcreteComponent, Data, isClassComponent } from './component'
 import { RendererElement, RendererNode } from './renderer'
 import { DirectiveBinding } from './directives'
 import { TransitionHooks } from './BaseTransition'
@@ -18,6 +18,7 @@ import { EMPTY_ARR, extend, isArray, isOn } from '@vue/shared'
 import { setCompiledSlotRendering } from './helpers/renderSlot'
 import { isTeleport } from './components/Teleport'
 import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
+import { hmrDirtyComponents } from './hmr'
 
 
 type VNodeMountHook = (vnode: VNode) => void
@@ -550,4 +551,14 @@ let vnodeArgsTransformer:
  * */
 export function transformVNodeArgs(transformer?: typeof vnodeArgsTransformer) {
   vnodeArgsTransformer = transformer
+}
+
+export function isSameVNodeType(n1:VNode,n2:VNode):boolean{
+  if(__DEV__&&
+  n2.shapeFlag&ShapeFlags.COMPONENT&&
+  hmrDirtyComponents.has(n2.type as ConcreteComponent)){
+    // HRM only: 如果这个组件已 热更新，则强制reload
+    return false
+  }
+  return n1.type===n2.type&&n1.key===n2.key
 }

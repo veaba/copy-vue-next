@@ -204,3 +204,14 @@ export function filterSingleRoot(children: VNodeArrayChildren): VNode | null {
   })
   return filtered.length === 1 && isVNode(filtered[0]) ? filtered[0] : null
 }
+
+
+export function updateHOCHostEl(
+  { vnode, parent }: ComponentInternalInstance,
+  el: typeof vnode.el // HostNode
+) {
+  while (parent && parent.subTree === vnode) {
+    ;(vnode = parent.vnode).el = el
+    parent = parent.parent
+  }
+}
