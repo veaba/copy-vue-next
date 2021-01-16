@@ -1,9 +1,11 @@
 // 在渲染过程中标记当前渲染实例进行资产解析(如resolveComponent, resolveDirective）
-import { ComponentInternalInstance, FunctionalComponent } from './component'
+import { ComponentInternalInstance, Data, FunctionalComponent } from './component'
 import { ShapeFlags } from './shapeFlags'
-import { Comment, createVNode, isVNode, normalizeVNode, VNode, VNodeArrayChildren } from './vnode'
+import { cloneVNode, Comment, createVNode, Fragment, isVNode, normalizeVNode, VNode, VNodeArrayChildren } from './vnode'
 import { ErrorCodes, handleError } from './errorHanding'
 import { warn } from './warning'
+import { isModelListener, isOn } from '@vue/shared'
+import { NormalizedProps } from './componentProps'
 
 export let currentRenderingInstance: ComponentInternalInstance | null = null
 
@@ -16,6 +18,69 @@ export function setCurrentRenderingInstance(
 // 仅用于跟踪 $attrs 是否是在渲染过程中被使用的开发标志,
 // 如果在渲染过程中使用了$attrs，那么可以抑制 attrs 失败的警告。
 let accessedAttrs: boolean = false
+
+export function markAttrsAccessed() {
+  accessedAttrs = true
+}
+
+const getFunctionalFallthrough = (attrs: Data): Data | undefined => {
+  let res: Data | undefined
+  for (const key in attrs) {
+    if (key === 'class' || key === 'style' || isOn(key)) {
+      ;(res || (res = {}))[key] = attrs[key]
+    }
+  }
+  return res
+}
+const isElementRoot = (vnode: VNode) => {
+  return (
+    vnode.shapeFlag & ShapeFlags.COMPONENT ||
+    vnode.shapeFlag & ShapeFlags.ELEMENT ||
+    vnode.type === Comment // 潜在的V-if分支开关
+  )
+}
+
+/**
+ * dev only
+ * 在开发模式下，模板根级的注释会呈现，这就把模板变成了一个片段根，
+ * 但我们需要定位单元素根来进行 attrs 和 scope id 处理。
+ * */
+const getChildRoot = (
+  vnode: VNode
+): [VNode, ((root: VNode) => void) | undefined] => {
+  if (vnode.type !== Fragment) {
+    return [vnode, undefined]
+  }
+  const rawChildren = vnode.children as VNodeArrayChildren
+  const dynamicChildren = vnode.dynamicChildren
+  const childRoot = filterSingleRoot(rawChildren)
+  if (!childRoot) {
+    return [vnode, undefined]
+  }
+  const index = rawChildren.indexOf(childRoot)
+  const dynamicIndex = dynamicChildren ? dynamicChildren.indexOf(childRoot) : -1
+  const setRoot = (updatedRoot: VNode) => {
+    rawChildren[index] = updatedRoot
+    if (dynamicChildren) {
+      if (dynamicIndex > -1) {
+        dynamicChildren[dynamicIndex] = updatedRoot
+      } else if (updatedRoot.patchFlag > 0) {
+        vnode.dynamicChildren = [...dynamicChildren, updatedRoot]
+      }
+    }
+  }
+  return [normalizeVNode(childRoot), setRoot]
+}
+
+const filterModelListeners = (attrs: Data, props: NormalizedProps): Data => {
+  const res: Data = {}
+  for (const key in attrs) {
+    if (!isModelListener(key) || !(key.slice(9) in props)) {
+      res[key] = attrs[key]
+    }
+  }
+  return res
+}
 
 /**
  * 渲染组件根节点

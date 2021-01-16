@@ -1,17 +1,31 @@
 import { proxyRefs, ReactiveEffect } from '@vue/reactivity'
 import {
+  applyOptions,
   ComponentOptions,
   ComputedOptions,
   MethodOptions
 } from './componentOptions'
-import { ComponentPropsOptions, initProps, NormalizedPropsOptions, normalizePropsOptions } from './componentProps'
-import { emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions } from './componentEmits'
+import {
+  ComponentPropsOptions,
+  initProps,
+  NormalizedPropsOptions,
+  normalizePropsOptions
+} from './componentProps'
+import {
+  emit,
+  EmitFn,
+  EmitsOptions,
+  normalizeEmitsOptions,
+  ObjectEmitsOptions
+} from './componentEmits'
 import { AppContext, createAppContext } from './apiCreateApp'
 import { isVNode, VNode, VNodeChild } from './vnode'
 import {
   ComponentPublicInstance,
   ComponentPublicInstanceConstructor,
-  createRenderContext
+  createRenderContext,
+  exposeSetupStateOnRenderContext,
+  RuntimeCompiledPublicInstanceProxyHandlers
 } from './componentPublicInstance'
 import { Directives } from './directives'
 import { initSlots, InternalSlots, Slots } from './componentSlots'
@@ -20,6 +34,9 @@ import { EMPTY_OBJ, isFunction, isObject, NOOP } from '@vue/shared'
 import { devtoolsComponentAdded } from './devtools'
 import { ShapeFlags } from './shapeFlags'
 import { warn } from './warning'
+import { endMeasure, startMeasure } from './profiling'
+import { CompilerOptions } from '../../compile-core/src/options'
+import { currentRenderingInstance } from './componentRenderUtils'
 
 const emptyAppContext = createAppContext()
 let uid = 0
@@ -27,10 +44,12 @@ let uid = 0
 type LifecycleHook = Function[] | null
 
 export let isInSSRComponentSetup = false
+
 type CompileFunction = (
   template: string | object,
   options?: CompilerOptions
 ) => InternalRenderFunction
+
 let compile: CompileFunction | undefined
 
 /**
@@ -79,9 +98,9 @@ export interface SetupContext<E = EmitsOptions, P = Data> {
 
 export let currentInstance: ComponentInternalInstance | null = null
 
-// export const getCurrentInstance: () => ComponentInternalInstance | null = () => {
-//     currentInstance || currentRenderingInstance
-// }
+export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
+  currentInstance || currentRenderingInstance
+
 export const setCurrentInstance = (
   instance: ComponentInternalInstance | null
 ) => {
@@ -371,7 +390,6 @@ export interface ComponentInternalInstance {
   [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
 }
 
-
 /**
  * 在公共API中使用的一种类型，在这里预期有一个组件类型。
  * 构造函数类型是由 defineComponent() 返回的一个人工类型。
@@ -385,7 +403,6 @@ export type Component<Props = any,
   | ConcreteComponent<Props, RawBindings, D, C, M>
   | ComponentPublicInstanceConstructor<Props>
 
-
 /**
  * 创建组件实例
  * */
@@ -396,7 +413,8 @@ export function createComponentInstance(
 ) {
   const type = vnode.type as ConcreteComponent
   // 继承父级应用上下文, 或者 如果是根级，则从根节点采用
-  const appContext = (parent ? parent.appContext : vnode.appContext) || emptyAppContext
+  const appContext =
+    (parent ? parent.appContext : vnode.appContext) || emptyAppContext
 
   const instance: ComponentInternalInstance = {
     uid: uid++,
@@ -404,7 +422,7 @@ export function createComponentInstance(
     type,
     parent,
     appContext,
-    root: null!,// to be immediately set
+    root: null!, // to be immediately set
     next: null,
     subTree: null!, // 将在创建后同步设置
     update: null!, // 将在创建后同步设置
@@ -479,7 +497,6 @@ export function createComponentInstance(
   return instance
 }
 
-
 export function recordInstanceBoundEffect(effect: ReactiveEffect) {
   if (currentInstance) {
     ;(currentInstance.effects || (currentInstance.effects = [])).push(effect)
@@ -487,7 +504,8 @@ export function recordInstanceBoundEffect(effect: ReactiveEffect) {
 }
 
 const classifyRE = /(?:^|[-_])(\w)/g
-const classify = (str: string): string => str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
+const classify = (str: string): string =>
+  str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
 
 /* istanbul ignore next */
 export function formatComponentName(
@@ -495,7 +513,9 @@ export function formatComponentName(
   Component: ConcreteComponent,
   isRoot = false
 ): string {
-  let name = isFunction(Component) ? Component.displayName || Component.name : Component.name
+  let name = isFunction(Component)
+    ? Component.displayName || Component.name
+    : Component.name
   if (!name && Component.__file) {
     const match = Component.__file.match(/([^/\\]+)\.vue$/)
     if (match) {
@@ -513,9 +533,11 @@ export function formatComponentName(
         }
       }
     }
-    name = inferFormRegistry(
-      instance.components || (instance.parent.type as ComponentOptions).components
-    ) || inferFormRegistry(instance.appContext.components)
+    name =
+      inferFormRegistry(
+        instance.components ||
+        (instance.parent.type as ComponentOptions).components
+      ) || inferFormRegistry(instance.appContext.components)
   }
   return name ? classify(name) : isRoot ? `App` : `Anonymous`
 }
@@ -568,7 +590,7 @@ function finishComponentSetup(
     if (instance.render._rc) {
       instance.withProxy = new Proxy(
         instance.ctx,
-        RuntimeCompilePublicInstanceProxyHandlers
+        RuntimeCompiledPublicInstanceProxyHandlers
       )
     }
   }
@@ -613,7 +635,7 @@ export function handleSetupResult(
       // 将其设置为ssrRender。
       instance.ssrRender = setupResult
     } else {
-      instance.render = setupResult && InternalRenderFunction
+      instance.render = setupResult as InternalRenderFunction
     }
   } else if (isObject(setupResult)) {
     if (__DEV__ && isVNode(setupResult)) {
@@ -639,4 +661,12 @@ export function handleSetupResult(
     )
   }
   finishComponentSetup(instance, isSSR)
+}
+
+/**
+ * runtime-dom 注册 compiler
+ * 注意导出的方法使用任何，以避免 d.ts 依赖编译器类型。
+ * */
+export function registerRuntimeCompiler(_compile: any) {
+  compile = _compile
 }

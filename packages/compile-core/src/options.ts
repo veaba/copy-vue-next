@@ -1,4 +1,8 @@
-import { ElementNode, Namespace } from './ast'
+import { ElementNode, Namespace, ParentNode, TemplateChildNode } from './ast'
+import { TextModes } from './parse'
+import { CompilerError } from './errors'
+import { DirectiveTransforms, NodeTransform, TransformContext } from './transform'
+import { ParserPlugin } from '@babel/parser'
 
 export const enum BindingTypes {
   /**
@@ -70,6 +74,22 @@ interface SharedTransformCodegenOptions {
 
 }
 
+export interface TransformOptions extends SharedTransformCodegenOptions {
+  nodeTransforms?: NodeTransform[]
+  directiveTransforms?: Record<string, DirectiveTransforms | undefined>
+  transformHoist?: HoistTransform | null
+  isBuiltInComponent?: (tag: string) => symbol | void
+  isCustomElement?: (tag: string) => boolean | void
+  prefixIdentifiers?: boolean
+  hoistStatic?: boolean
+  cacheHandler?: boolean
+  expressionPlugin?: ParserPlugin[]
+  scopeId?: string | null
+  ssrCssVars?: string
+  onError?: (error: CompilerError) => void
+
+}
+
 export interface ParserOptions {
   /**
    * @desc 平台原生elements
@@ -114,12 +134,18 @@ export interface ParserOptions {
    * 仅适用于 DOM 编译器
    * */
   decodeEntities?: (rawText: string, asAttr: boolean) => string
-  onError?: (error: CompileError) => void
+  onError?: (error: CompilerError) => void
   /**
    * 在模板中保留注释，即使在生产中也是如此
    * */
   comments?: boolean
 }
+
+export type HoistTransform = (
+  children: TemplateChildNode[],
+  context: TransformContext,
+  parent: ParentNode
+) => void
 
 export interface TransformOptions extends SharedTransformCodegenOptions {
   /**

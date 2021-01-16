@@ -121,3 +121,21 @@ const instance: ComponentInternalInstance = {
 ```ts
 vnode.shapeFlag |= type
 ```
+
+- ts 似乎一个bug？判断空对象
+
+```ts
+if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
+  // todo? 
+}
+```
+尽管对象引用是同一个对象的时候，是可以在做判断的
+```ts
+
+var a = {}
+var b = {}
+
+console.info(a === b); // true
+```
+
+但是为什么，props 、data 都要指向同一个空对象（EMPTY_OBJ）呢？

@@ -553,12 +553,17 @@ export function transformVNodeArgs(transformer?: typeof vnodeArgsTransformer) {
   vnodeArgsTransformer = transformer
 }
 
-export function isSameVNodeType(n1:VNode,n2:VNode):boolean{
-  if(__DEV__&&
-  n2.shapeFlag&ShapeFlags.COMPONENT&&
-  hmrDirtyComponents.has(n2.type as ConcreteComponent)){
+export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
+  if (__DEV__ &&
+    n2.shapeFlag & ShapeFlags.COMPONENT &&
+    hmrDirtyComponents.has(n2.type as ConcreteComponent)) {
     // HRM only: 如果这个组件已 热更新，则强制reload
     return false
   }
-  return n1.type===n2.type&&n1.key===n2.key
+  return n1.type === n2.type && n1.key === n2.key
+}
+
+//
+export function cloneIfMounted(child: VNode): VNode {
+  return child.el === null ? child : cloneVNode(child)
 }

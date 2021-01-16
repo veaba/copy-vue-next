@@ -2,10 +2,11 @@
  * compiler runtime helper 用于rendering `<slot/>`
  * @private
  * */
-import { Slots, VNode, VNodeArrayChildren } from '@vue/runtime-core'
+import { createBlock, Fragment, openBlock, Slots, VNode, VNodeArrayChildren } from '@vue/runtime-core'
 import { Data } from '../component'
 import { warn } from '@vue/runtime-core'
 import { SlotFlags } from '../../../shared/src/slotFlags'
+import { PatchFlags } from '../../../shared/src/patchFalgs'
 
 export let isRenderingCompiledSlot = 0
 export const setCompiledSlotRendering = (n: number) => (isRenderingCompiledSlot += n)
@@ -40,7 +41,7 @@ export function renderSlot(
       slot ? slot(props) : fallback ? fallback() : [],
       (slots as rawSlots)._ === SlotFlags.STABLE ?
         PatchFlags.STABLE_FRAGMENT
-        : patchFlags.BAIL
+        : PatchFlags.BAIL
     ))
   isRenderingCompiledSlot--
   return rendered

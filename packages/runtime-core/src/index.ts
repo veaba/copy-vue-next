@@ -54,7 +54,7 @@ export { defineOptions } from './apiDefineOptions'
 
 // 用于在setup（）中获取内部实例-对于高级
 // plugins (插件)
-export { getCurrentInstance } from './components'
+export { getCurrentInstance } from './component'
 
 // 针对 raw render function 用户
 export { h } from './h'

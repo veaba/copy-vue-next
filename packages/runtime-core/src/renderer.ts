@@ -1,12 +1,14 @@
 import { ComponentInternalInstance } from './component'
-import { SuspenseBoundary } from './suspense'
-import { Comment, VNode } from './vnode'
+import { SuspenseBoundary } from './components/Suspense'
+import { cloneIfMounted, Comment, VNode, VNodeArrayChildren, VNodeHook } from './vnode'
 import { queueEffectWithSuspense } from './components/Suspense'
 import { queuePostFlushCb } from './scheduler'
 import { CreateAppFunction } from './apiCreateApp'
 import { isArray } from '@vue/shared'
 import { ShapeFlags } from './shapeFlags'
 import { PatchFlags } from '../../shared/src/patchFalgs'
+import { RootHydrateFunction } from './hydration'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHanding'
 
 // 渲染器节点在技术上可以是核心渲染器逻辑上下文中的任何对象--它们从来没有被直接操作过，
 // 总是通过选项传递给提供的节点操作函数，所以内部约束实际上只是一个通用对象。
@@ -37,6 +39,15 @@ export interface Renderer<HostElement = RendererElement> {
 export interface HydrationRenderer extends Renderer<Element> {
   hydrate: RootHydrateFunction
 }
+
+type UnmountChildrenFn = (
+  children: VNode[],
+  parentComponent: ComponentInternalInstance | null,
+  parentSuspense: SuspenseBoundary | null,
+  doRemove?: boolean,
+  optimized?: boolean,
+  start?: number
+) => void
 
 export interface RendererOptions<HostNode = RendererNode,
   HostElement = RendererElement> {
@@ -110,6 +121,73 @@ export type RootRendererFunction<HostElement = RendererElement> = (
   container: HostElement
 ) => void
 
+type PatchFn = (
+  n1: VNode | null, // null表示这是一个挂载
+  n2: VNode,
+  container: RendererElement,
+  anchor?: RendererNode | null,
+  parentComponent?: ComponentInternalInstance | null,
+  parentSuspense?: SuspenseBoundary | null,
+  isSVG?: boolean,
+  optimized?: boolean
+) => void
+
+type UnmountFn = (
+  vnode: VNode,
+  parentComponent: ComponentInternalInstance | null,
+  parentSuspense: SuspenseBoundary | null,
+  doRemove?: boolean,
+  optimized?: boolean
+) => void
+
+type RemoveFn = (vnode: VNode) => void
+type MoveFn = (
+  vnode: VNode,
+  container: RendererElement,
+  anchor: RendererNode | null,
+  type: MoveType,
+  parentSuspense?: SuspenseBoundary | null
+) => void
+export type MountComponentFn = (
+  initialVNode: VNode,
+  container: RendererElement,
+  anchor: RendererNode | null,
+  parentComponent: ComponentInternalInstance | null,
+  parentSuspense: SuspenseBoundary | null,
+  isSVG: boolean,
+  optimized: boolean
+) => void
+type MountChildrenFn = (
+  children: VNodeArrayChildren,
+  container: RendererElement,
+  anchor: RendererElement | null,
+  parentComponent: ComponentInternalInstance | null,
+  parentSuspense: SuspenseBoundary | null,
+  isSVG: boolean,
+  optimized: boolean,
+  start?: number
+) => void
+type PatchChildrenFn = (
+  n1: VNode | null,
+  n2: VNode,
+  container: RendererElement,
+  anchor: RendererNode | null,
+  parentComponent: ComponentInternalInstance | null,
+  parentSuspense: SuspenseBoundary | null,
+  isSVG: boolean,
+  optimized?: boolean
+) => void
+
+type PatchBlockChildrenFn = (
+  oldChildren: VNode[],
+  newChildren: VNode[],
+  fallbackContainer: RendererElement,
+  parentComponent: ComponentInternalInstance | null,
+  parentSuspense: SuspenseBoundary | null,
+  isSVG: boolean
+) => void
+type NextFn = (vnode: VNode) => RendererNode | null
+
 // 一个暴露渲染器内部的对象，传递给树形摇动器
 // 特征，以便它们可以与这个文件解耦。键被缩短为
 // 以优化捆绑大小
@@ -118,7 +196,7 @@ export interface RendererInternals<HostNode = RendererNode,
   p: PatchFn
   um: UnmountFn
   r: RemoveFn
-  m: moveFn
+  m: MoveFn
   mt: MountComponentFn
   mc: MountChildrenFn
   pc: PatchChildrenFn
@@ -163,5 +241,17 @@ export function traverseStaticChildren(n1: VNode, n2: VNode, shallow = false) {
       }
     }
   }
-
 }
+
+export function invokeVNodeHook(
+  hook: VNodeHook,
+  instance: ComponentInternalInstance | null,
+  vnode: VNode,
+  prevVNode: VNode | null = null
+) {
+  callWithAsyncErrorHandling(hook, instance, ErrorCodes.VNODE_HOOK, [
+    vnode,
+    prevVNode
+  ])
+}
+

@@ -14,7 +14,7 @@ export const NO = () => false
 const onRE = /^on[^a-ze]/
 export const isOn = (key: string) => onRE.test(key)
 
-
+export const isModelListener = (key: string) => key.startsWith('onUpdate:')
 export const objectToString = Object.prototype.toString
 export const toTypeString = (value: unknown): string => objectToString.call(value)
 
@@ -53,7 +53,11 @@ export const isIntegerKey = (key: unknown) =>
 
 export const hasChanged = (value: any, oldValue: any): boolean =>
   value !== oldValue && (value === value || oldValue === oldValue)
-
+export const invokeArrayFns = (fns: Function[], arg?: any) => {
+  for (let i = 0; i < fns.length; i++) {
+    fns[i](arg)
+  }
+}
 
 export const EMPTY_OBJ: { readonly [key: string]: any } = __DEV__ ? Object.freeze({}) : {}
 

@@ -1,9 +1,10 @@
 // Vue模板是一个与平台无关的HTML超集（仅限语法）。
 // 更多的 namespace（如SVG和MathML）是由特定于平台的编译器声明的。
 import { ForParseResult } from './vFor'
-import { FRAGMENT, RENDER_LIST } from './runtimeHelpers'
-import { DirectiveArguments, VNode } from '@vue/runtime-core'
+import { CREATE_SLOTS, FRAGMENT, RENDER_LIST } from './runtimeHelpers'
+import { DirectiveArguments } from '@vue/runtime-core'
 import { ImportItem } from './transform'
+import { PropsExpression } from './transforms/transformElement'
 
 export type Namespace = number
 
@@ -62,6 +63,37 @@ export interface AttributeNode extends Node {
   value: TextNode | undefined
 }
 
+export interface Position {
+  offset: number // 从文件开始
+  line: number
+  column: number
+}
+
+// 节点的范围，`start` 是包含性，`end` 是排他性的
+// [start,end]
+export interface SourceLocation {
+  start: Position
+  end: Position
+  source: string
+}
+
+export interface ReturnStatement extends Node {
+  type: NodeTypes.JS_RETURN_STATEMENT
+  returns: TemplateChildNode | TemplateChildNode[] | JSChildNode
+}
+
+export interface IfStatement extends Node {
+  type: NodeTypes.JS_IF_STATEMENT
+  test: ExpressionNode
+  consequent: BlockStatement
+  alternate: IfStatement | BlockStatement | ReturnStatement | undefined
+}
+
+export interface BlockStatement extends Node {
+  type: NodeTypes.JS_BLOCK_STATEMENT
+  body: (JSChildNode | IfStatement)[]
+}
+
 export interface RootNode extends Node {
   type: NodeTypes.ROOT
   children: TemplateChildNode[]
@@ -74,6 +106,16 @@ export interface RootNode extends Node {
   temps: number
   sshHelpers?: symbol[]
   codegenNode?: TemplateChildNode | JSChildNode | BlockStatement | undefined
+}
+
+/**
+ *
+ * */
+export const enum ConstantTypes {
+  NOT_CONSTANT,
+  CAN_SKIP_PATCH,
+  CAN_HOIST,
+  CAN_STRINGIFY
 }
 
 export interface SimpleExpressionNode extends Node {
@@ -107,6 +149,35 @@ export interface CompoundExpressionNode extends Node {
 }
 
 export type  ExpressionNode = SimpleExpressionNode | CompoundExpressionNode
+
+export type TemplateTextChildNode =
+  | TextNode
+  | InterpolationNode
+  | CompoundExpressionNode
+
+export interface SlotFunctionExpression extends FunctionExpression {
+  returns: TemplateChildNode[]
+}
+
+export interface SlotsObjectProperty extends Property {
+  value: SlotFunctionExpression
+}
+
+// {foo:()=> [...]}
+export interface SlotsObjectExpression extends ObjectExpression {
+  properties: SlotsObjectProperty[]
+}
+
+// createSlots({...},[)
+// for ? () => [] : undefined
+// renderList(list,i=>()=>[i])
+// ])
+export interface DynamicSlotsExpression extends CallExpression {
+  callee: typeof CREATE_SLOTS
+  arguments: [SlotsObjectExpression, DynamicSlotsExpression]
+}
+
+export type SlotsExpression = SlotsObjectExpression | DynamicSlotsExpression
 
 export interface VNodeCall extends Node {
   type: NodeTypes.VNODE_CALL
@@ -159,6 +230,20 @@ export interface ComponentNode extends BaseElementNode {
   ssrCodegenNode?: CallExpression
 }
 
+// renderSlot(...)
+export interface RenderSlotCall extends CallExpression {
+  callee: typeof RENDER_LIST
+  arguments: // $slots, name ,props, fallback
+    | [string, string | ExpressionNode]
+    | [string, string | ExpressionNode, PropsExpression]
+    | [
+    string,
+      string | ExpressionNode,
+      PropsExpression | '{}',
+    TemplateChildNode[]
+  ]
+}
+
 export interface SlotOutletNode extends BaseElementNode {
   tagType: ElementTypes.SLOT
   codegenNode:
@@ -189,6 +274,21 @@ export interface InterpolationNode extends Node {
   content: ExpressionNode
 }
 
+export type BlockCodegenNode = VNodeCall | RenderSlotCall
+
+export interface ConditionalExpression extends Node {
+  type: NodeTypes.JS_CONDITIONAL_EXPRESSION
+  test: JSChildNode
+  consequent: JSChildNode
+  alternate: JSChildNode
+  newline: boolean
+}
+
+export interface IfConditionalExpression extends ConditionalExpression {
+  consequent: BlockCodegenNode
+  alternate: BlockCodegenNode | IfConditionalExpression
+}
+
 export interface IfNode extends Node {
   type: NodeTypes.IF
   branches: IfBranchNode[]
@@ -211,6 +311,45 @@ export interface TextCallNode extends Node {
 
 // JS Node Types ---------------------------------------------------------------
 
+export interface Property extends Node {
+  type: NodeTypes.JS_PROPERTY
+  properties: Array<Property>
+}
+
+export interface ObjectExpression extends Node {
+  type: NodeTypes.JS_OBJECT_EXPRESSION
+  properties: Array<Property>
+}
+
+export interface ArrayExpression extends Node {
+  type: NodeTypes.JS_ARRAY_EXPRESSION
+  elements: Array<string | JSChildNode>
+}
+
+export interface FunctionExpression extends Node {
+  type: NodeTypes.JS_FUNCTION_EXPRESSION
+  params: ExpressionNode | string | (ExpressionNode | string[]) | undefined
+  returns?: TemplateChildNode | TemplateChildNode[] | JSChildNode
+  body?: BlockStatement | IfStatement
+  newline: boolean
+  /**
+   * 这个标志是让 codegen 决定是否需要生成 withScopeId() 包装器。
+   * */
+  isSlot: boolean
+}
+
+export interface AssignmentExpression extends Node {
+  type: NodeTypes.JS_ASSIGNMENT_EXPRESSION
+  left: SimpleExpressionNode
+  right: JSChildNode
+}
+
+export interface SequenceExpression extends Node {
+  type: NodeTypes.JS_ASSIGNMENT_EXPRESSION
+  left: SimpleExpressionNode
+  right: JSChildNode
+}
+
 // 我们还包括一些JavaScript AST节点用于代码生成。
 // AST是一个故意的最小子集，只是为了满足Vue渲染函数生成的确切需要。
 export type JSChildNode =
@@ -218,7 +357,7 @@ export type JSChildNode =
   | CallExpression
   | ObjectExpression
   | ArrayExpression
-  | EexpressionNode
+  | ExpressionNode
   | FunctionExpression
   | ConditionalExpression
   | AssignmentExpression
@@ -234,9 +373,14 @@ export interface CacheExpression extends Node {
 
 
 // SSR指定 Node Type ------------------------------------------------------------
+export interface TemplateLiteral extends Node {
+  type: NodeTypes.JS_TEMPLATE_LITERAL
+  elements: (string | JSChildNode)[]
+}
+
 export type SSRCodegenNode =
   | BlockStatement
-  | TemplateLiternal
+  | TemplateLiteral
   | IfStatement
   | AssignmentExpression
   | ReturnStatement
