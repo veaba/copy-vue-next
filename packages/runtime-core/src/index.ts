@@ -93,7 +93,12 @@ export {
 } from './helpers/resolveAssets'
 // 用于集成 与运行时编译器
 export { registerRuntimeCompiler } from './component'
-export {} from './components/BaseTransition'
+export {
+  useTransitionState,
+  resolveTransitionHooks,
+  setTransitionHooks,
+  getTransitionRawChildren
+} from './components/BaseTransition'
 export { initCustomFormatter } from './customFormatter'
 
 // 用于 devtools

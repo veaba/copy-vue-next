@@ -129,7 +129,9 @@ if (setupState !== EMPTY_OBJ && hasOwn(setupState, key)) {
   // todo? 
 }
 ```
+
 尽管对象引用是同一个对象的时候，是可以在做判断的
+
 ```ts
 
 var a = {}
@@ -139,3 +141,22 @@ console.info(a === b); // true
 ```
 
 但是为什么，props 、data 都要指向同一个空对象（EMPTY_OBJ）呢？
+
+- ts 中，typeof 字符变量为何作为type
+
+```ts
+const COMPONENTS = 'components'
+
+function resolveAsset(
+  type: typeof COMPONENTS,
+  name: string
+) {
+  // 直接写 `type: string` 不香吗？ 
+}
+```
+
+- 巧妙的使用 解构+set 来实现去重
+
+```ts
+cosole.log([...new Set([11, 1, 1, 1, 1, 1])])
+```

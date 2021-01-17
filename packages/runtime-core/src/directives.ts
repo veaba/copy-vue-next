@@ -1,9 +1,12 @@
 import { VNode } from './vnode'
 import { ComponentPublicInstance } from './componentPublicInstance'
 import { Data } from './component'
+import { currentRenderingInstance } from './componentRenderUtils'
+import { warn } from './warning'
+import { EMPTY_OBJ, isFunction } from '@vue/shared'
 
 
-export type DirectiveModifier = Record<string, boolean>
+export type DirectiveModifiers = Record<string, boolean>
 export type Directive<T = any, V = any> = ObjectDirective<T, V> | FunctionDirective<T, V>
 
 export interface DirectiveBinding<V = any> {
@@ -11,7 +14,7 @@ export interface DirectiveBinding<V = any> {
   value: V
   oldValue: V | null
   arg?: string
-  modifier: DirectiveModifier
+  modifiers: DirectiveModifiers
   dir: ObjectDirective<any, V>
 }
 
@@ -46,4 +49,41 @@ export type Directives<T = any, V = any> =
 export type DirectiveArguments = Array<| [Directive]
   | [Directive, any]
   | [Directive, any, string]
-  | [Directive, any, string, DirectiveModifier]>
+  | [Directive, any, string, DirectiveModifiers]>
+
+/**
+ * 添加 directive 到一个 node
+ * @TODO QA: 这里没有使用 bindings
+ * */
+
+export function withDirectives<T extends VNode>(
+  vnode: T,
+  directives: DirectiveArguments
+): T {
+  const internalInstance = currentRenderingInstance
+  if (internalInstance === null) {
+    // withDirectives 只能在渲染函数中使用。
+    __DEV__ && warn(`withDirectives can only be used inside render functions.`)
+    return vnode
+  }
+  const instance = internalInstance.proxy
+  const bindings: DirectiveBinding[] = vnode.dirs || (vnode.dirs = [])
+  for (let i = 0; i < directives.length; i++) {
+    let [dir, value, arg, modifiers = EMPTY_OBJ] = directives[i]
+    if (isFunction(dir)) {
+      dir = {
+        mounted: dir,
+        updated: dir
+      } as ObjectDirective
+    }
+    bindings.push({
+      dir,
+      instance,
+      value,
+      oldValue: void 0,
+      arg,
+      modifiers
+    })
+  }
+  return vnode
+}
