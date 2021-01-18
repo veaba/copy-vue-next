@@ -59,6 +59,16 @@ export interface NodeOp {
 let nodeId: number = 0
 let recordedNodeOps: NodeOp[] = []
 
+export function resetOps() {
+  recordedNodeOps = []
+}
+
+export function dumpOps(): NodeOp[] {
+  const ops = recordedNodeOps.slice()
+  resetOps()
+  return ops
+}
+
 export function logNodeOp(op: NodeOp) {
   recordedNodeOps.push(op)
 }

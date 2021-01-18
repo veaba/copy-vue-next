@@ -35,7 +35,7 @@ function serializeText(
   const padding = indent ? ` `.repeat(indent).repeat(depth) : ``
   return (
     padding +
-    (node.type === NodeTypes.COMMENT ? `<!-- ${node.text}-->` : node.text)
+    (node.type === NodeTypes.COMMENT ? `<!--${node.text}-->` : node.text)
   )
 }
 
