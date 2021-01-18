@@ -1,6 +1,8 @@
 import { makeMap } from './makeMap'
 
 export * from './codeframe'
+export * from './patchFalgs'
+export * from './shapeFlags'
 export * from './toDisplayString'
 let _globalThis: any
 export const isFunction = (val: unknown): val is Function => typeof val === 'function'

@@ -1,6 +1,6 @@
 // 在渲染过程中标记当前渲染实例进行资产解析(如resolveComponent, resolveDirective）
 import { ComponentInternalInstance, Data, FunctionalComponent } from './component'
-import { ShapeFlags } from './shapeFlags'
+import { ShapeFlags } from '../../shared/src/shapeFlags'
 import { cloneVNode, Comment, createVNode, Fragment, isVNode, normalizeVNode, VNode, VNodeArrayChildren } from './vnode'
 import { ErrorCodes, handleError } from './errorHanding'
 import { warn } from './warning'

@@ -5,7 +5,7 @@ import {
   RendererElement, SetupContext, toRaw,
   VNode, VNodeArrayChildren
 } from '@vue/runtime-core'
-import { ShapeFlags } from '../shapeFlags'
+import { ShapeFlags } from '../../../shared/src/shapeFlags'
 import { isSameVNodeType } from '../vnode'
 import { warn } from '../warning'
 import { PatchFlags } from '../../../shared/src/patchFalgs'

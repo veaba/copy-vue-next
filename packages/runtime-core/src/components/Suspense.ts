@@ -10,7 +10,7 @@ import {
   warn
 } from '@vue/runtime-core'
 import { MoveType, RendererInternals, SetupRenderEffectFn } from '../renderer'
-import { ShapeFlags } from '../shapeFlags'
+import { ShapeFlags } from '../../../shared/src/shapeFlags'
 import { isSameVNodeType, normalizeVNode } from '../vnode'
 import { filterSingleRoot, updateHOCHostEl } from '../componentRenderUtils'
 import { effect } from '@vue/reactivity'

@@ -12,7 +12,7 @@ import { injectHook } from '../apiLifecycle'
 import { invokeArrayFns, isArray, isString, remove } from '@vue/shared'
 import { invokeVNodeHook, MoveType, queuePostRenderEffect, RendererInternals } from '../renderer'
 import { warn } from '../warning'
-import { ShapeFlags } from '../shapeFlags'
+import { ShapeFlags } from '../../../shared/src/shapeFlags'
 import { ComponentRenderContext } from '../componentPublicInstance'
 import { setTransitionHooks } from './BaseTransition'
 

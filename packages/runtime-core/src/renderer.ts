@@ -1,34 +1,55 @@
-import { ComponentInternalInstance, createComponentInstance, Data, setupComponent } from './component'
-import { SuspenseBoundary, SuspenseImpl } from './components/Suspense'
 import {
   cloneIfMounted,
-  Comment, createVNode,
+  Comment,
+  createVNode,
   Fragment,
-  isSameVNodeType, normalizeVNode,
+  isSameVNodeType,
+  normalizeVNode,
   Static,
   VNode,
   VNodeArrayChildren,
-  VNodeHook, VNodeNormalizedRef
+  VNodeHook,
+  VNodeNormalizedRef,
+  VNodeNormalizedRefAtom
 } from './vnode'
-import { queueEffectWithSuspense } from './components/Suspense'
-import { flushPostFlushCbs, flushPreFlushCbs, invalidateJob, queueJob, queuePostFlushCb } from './scheduler'
+import { ComponentInternalInstance, createComponentInstance, Data, setupComponent } from './component'
+import { filterSingleRoot, renderComponentRoot, shouldUpdateComponent, updateHOCHostEl } from './componentRenderUtils'
+import {
+  isString,
+  EMPTY_OBJ,
+  EMPTY_ARR,
+  isArray,
+  isReservedProp,
+  PatchFlags,
+  ShapeFlags,
+  hasOwn,
+  invokeArrayFns,
+  isFunction,
+  NOOP
+} from '@vue/shared'
+import { queueEffectWithSuspense, SuspenseBoundary, SuspenseImpl } from './components/Suspense'
+import {
+  flushPostFlushCbs,
+  flushPreFlushCbs,
+  invalidateJob,
+  queueJob,
+  queuePostFlushCb,
+  SchedulerCb
+} from './scheduler'
+import { effect, isRef, ReactiveEffectOptions, stop } from '@vue/reactivity'
 import { createAppAPI, CreateAppFunction } from './apiCreateApp'
-import { EMPTY_ARR, EMPTY_OBJ, invokeArrayFns, isArray, isReservedProp, NOOP } from '@vue/shared'
-import { initFeatureFlags, ShapeFlags } from './shapeFlags'
-import { PatchFlags } from '../../shared/src/patchFalgs'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
-import { callWithAsyncErrorHandling, ErrorCodes } from './errorHanding'
+import { callWithAsyncErrorHandling, callWithErrorHandling, ErrorCodes } from './errorHanding'
 import { isTeleportDisabled, TeleportImpl, TeleportVNode } from './components/Teleport'
 import { popWarningContext, pushWarningContext, warn } from './warning'
-import { filterSingleRoot, renderComponentRoot, shouldUpdateComponent, updateHOCHostEl } from './componentRenderUtils'
 import { isHmrUpdating, registerHMR, unregisterHMR } from './hmr'
 import { isKeepAlive, KeepAliveContext } from './components/KeepAlive'
 import { endMeasure, startMeasure } from './profiling'
-import { effect, stop, ReactiveEffectOptions } from '@vue/reactivity'
 import { devtoolsComponentRemoved, devtoolsComponentUpdated } from './devtools'
 import { invokeDirectiveHook } from './directives'
 import { updateProps } from './componentProps'
 import { updateSlots } from './componentSlots'
+import { initFeatureFlags } from './featureFlags'
 // 渲染器节点在技术上可以是核心渲染器逻辑上下文中的任何对象--它们从来没有被直接操作过，
 // 总是通过选项传递给提供的节点操作函数，所以内部约束实际上只是一个通用对象。
 export interface RendererNode {
@@ -57,9 +78,8 @@ export type RootRenderFunction<HostElement = RendererElement> = (
 ) => void
 
 export interface Renderer<HostElement = RendererElement> {
+  render: RootRenderFunction<HostElement>,
   createApp: CreateAppFunction<HostElement>
-
-  render(): RootRenderFunction<HostElement>,
 }
 
 export interface HydrationRenderer extends Renderer<Element> {
@@ -94,6 +114,73 @@ export const setRef = (
     )
     return
   }
+  let value: ComponentInternalInstance | RendererNode | Record<string, any> | null
+  if (!vnode) {
+    value = null
+  } else {
+    if (vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) {
+      value = vnode.component!.exposed || vnode.component!.proxy
+    } else {
+      value = vnode.el
+    }
+  }
+  const { i: owner, r: ref } = rawRef
+  if (__DEV__ && !owner) {
+    warn(
+      `Missing ref owner context. ref cannot be used on hoisted vnodes. ` +
+      `A vnode with ref must be created inside the render function.`
+    )
+    return
+  }
+  const oldRef = oldRawRef && (oldRawRef as VNodeNormalizedRefAtom).r
+  const refs = owner.refs === EMPTY_OBJ ? (owner.refs = {}) : owner.refs
+  const setupState = owner.setupState
+
+  // unset old ref
+  if (oldRef != null && oldRef !== ref) {
+    if (isString(oldRef)) {
+      refs[oldRef] = null
+      if (hasOwn(setupState, oldRef)) {
+        setupState[oldRef] = null
+      }
+    } else if (isRef(oldRef)) {
+      oldRef.value = null
+    }
+    if (isString(ref)) {
+      const doSet = () => {
+        refs[ref] = value
+        if (hasOwn(setupState, ref)) {
+          setupState[ref] = value
+        }
+      }
+      // #1789 对于非空值，在渲染空值后设置它们，
+      // 意味着这是unmount，它不应该覆盖另一个相同键的 ref
+      if (value) {
+        ;(doSet as SchedulerCb).id = -1
+        queuePostRenderEffect(doSet, parentSuspense)
+      } else {
+        doSet()
+      }
+    }
+  } else if (isRef(ref)) {
+    const doSet = () => {
+      ref.value = value
+    }
+    if (value) {
+      ;(doSet as SchedulerCb).id = -1
+      queuePostRenderEffect(doSet, parentSuspense)
+    } else {
+      doSet()
+    }
+  } else if (isFunction(ref)) {
+    callWithErrorHandling(ref, parentComponent, ErrorCodes.FUNCTION_REF, [
+      value,
+      refs
+    ])
+  } else if (__DEV__) {
+    warn('Invalid template ref type:', value, `(${typeof value})`)
+  }
+
 }
 
 export interface RendererOptions<HostNode = RendererNode,
@@ -389,6 +476,7 @@ function baseCreateRenderer(
   if (__ESM_BUNDLER__ && !__TEST__) {
     initFeatureFlags()
   }
+
   const {
     insert: hostInsert,
     remove: hostRemove,
@@ -428,6 +516,7 @@ function baseCreateRenderer(
       optimized = false
       n2.dynamicChildren = null
     }
+
     const { type, ref, shapeFlag } = n2
     switch (type) {
       case Text:
@@ -458,11 +547,25 @@ function baseCreateRenderer(
       default:
         if (shapeFlag & ShapeFlags.ELEMENT) {
           processElement(
-            n1, n2, container, anchor, parentComponent, parentSuspense, isSVG, optimized
+            n1,
+            n2,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized
           )
         } else if (shapeFlag & ShapeFlags.COMPONENT) {
           processComponent(
-            n1, n2, container, anchor, parentComponent, parentSuspense, isSVG, optimized
+            n1,
+            n2,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            isSVG,
+            optimized
           )
         } else if (shapeFlag & ShapeFlags.TELEPORT) {
           ;(type as typeof TeleportImpl).process(
@@ -626,7 +729,11 @@ function baseCreateRenderer(
       patchFlag,
       dirs
     } = vnode
-    if (!__DEV__ && vnode.el && hostCloneNode !== undefined && patchFlag === PatchFlags.HOISTED) {
+    if (!__DEV__ &&
+      vnode.el &&
+      hostCloneNode !== undefined &&
+      patchFlag === PatchFlags.HOISTED
+    ) {
       // 如果一个 vnode 有非空的el，说明它被重用了。
       // 只有静态的 vnodes 可以重复使用，所以其挂载的DOM节点应该是一模一样的，
       // 我们在这里可以简单的做一个克隆。

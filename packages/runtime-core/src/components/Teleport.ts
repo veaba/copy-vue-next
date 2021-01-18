@@ -6,7 +6,7 @@ import {
   VNodeProps
 } from '@vue/runtime-core'
 import { warn } from '@vue/runtime-core'
-import { ShapeFlags } from '../shapeFlags'
+import { ShapeFlags } from '../../../shared/src/shapeFlags'
 import { MoveType, RendererInternals, traverseStaticChildren } from '../renderer'
 import { isString } from '@vue/shared'
 

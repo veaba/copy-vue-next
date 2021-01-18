@@ -1,7 +1,7 @@
 import { InternalObjectKey, normalizeVNode, VNode, VNodeChild, VNodeNormalizedChildren } from './vnode'
 import { ComponentInternalInstance, currentInstance } from './component'
 import { SlotFlags } from '../../shared/src/slotFlags'
-import { ShapeFlags } from './shapeFlags'
+import { ShapeFlags } from '../../shared/src/shapeFlags'
 import { def, EMPTY_OBJ, extend, isArray, isFunction, isIntegerKey } from '@vue/shared'
 import { warn } from './warning'
 import { withCtx } from './helpers/withRenderContext'

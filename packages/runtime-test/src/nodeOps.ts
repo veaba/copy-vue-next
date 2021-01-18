@@ -17,8 +17,8 @@ export const enum NodeOpTypes {
 }
 
 export interface TestElement {
-  id: number,
-  type: NodeTypes.ELEMENT,
+  id: number
+  type: NodeTypes.ELEMENT
   parentNode: TestElement | null
   tag: string
   children: TestNode[]

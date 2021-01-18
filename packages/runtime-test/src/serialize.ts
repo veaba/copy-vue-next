@@ -11,8 +11,8 @@ function serializeElement(
     .map(key => {
       const value = node.props[key]
       return isOn(key) || value == null
-        ? ''
-        : value === ''
+        ? ``
+        : value === ``
           ? key
           : `${key}=${JSON.stringify(value)}`
     })
@@ -56,8 +56,10 @@ export function serializeInner(
   indent: number = 0,
   depth: number = 0
 ) {
-  const newLine = indent ? '\n' : ''
+  const newLine = indent ? `\n` : ``
   return node.children.length
-    ? newLine + node.children.map(c => serialize(c, indent, depth + 1)).join(newLine) + newLine
-    : ''
+    ? newLine +
+    node.children.map(c => serialize(c, indent, depth + 1)).join(newLine) +
+    newLine
+    : ``
 }
