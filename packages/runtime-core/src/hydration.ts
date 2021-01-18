@@ -1,5 +1,5 @@
 import { Comment, Fragment, normalizeVNode, Static, VNode, VNodeHook } from './vnode'
-import { invokeVNodeHook, RendererInternals } from './renderer'
+import { invokeVNodeHook, RendererInternals, setRef } from './renderer'
 import { warn } from './warning'
 import { ComponentInternalInstance } from './component'
 import { queueEffectWithSuspense, SuspenseBoundary, SuspenseImpl } from './components/Suspense'
@@ -8,6 +8,8 @@ import { ComponentOptions } from './componentOptions'
 import { TeleportImpl, TeleportVNode } from './components/Teleport'
 import { PatchFlags } from '../../shared/src/patchFalgs'
 import { isOn, isReservedProp } from '@vue/shared'
+import { invokeDirectiveHook } from './directives'
+import { flushPostFlushCbs } from './scheduler'
 
 let hasMismatch = false
 
@@ -68,7 +70,7 @@ export function createHydrationFunctions(
     parentSuspense: SuspenseBoundary | null,
     optimized = false
   ): Node | null => {
-    const isFragmentStart = isCommon(node) && node.data === '['
+    const isFragmentStart = isComment(node) && node.data === '['
     const onMismatch = () =>
       handleMismatch(
         node, vnode, parentComponent, parentSuspense, isFragmentStart
@@ -217,7 +219,7 @@ export function createHydrationFunctions(
       if (props) {
         if (!optimized ||
           (patchFlag & PatchFlags.FULL_PROPS ||
-            patchFlag & patchFlags.HYDRATE_EVENTS
+            patchFlag & PatchFlags.HYDRATE_EVENTS
           )) {
           for (const key in props) {
             if (!isReservedProp(key) && isOn(key)) {
@@ -293,7 +295,7 @@ export function createHydrationFunctions(
     parentSuspense: SuspenseBoundary | null,
     optimized: boolean
   ): Node | null => {
-    optimized = optimized || !!parentNode.dynamicChildren
+    optimized = optimized || !!parentVNode.dynamicChildren
     const children = parentVNode.children as VNode[]
     const l = children.length
     let hasWarned = false
@@ -344,7 +346,7 @@ export function createHydrationFunctions(
       parentSuspense,
       optimized
     )
-    if (next && isComment(text) && next.data === ']') {
+    if (next && isComment(next) && next.data === ']') {
       return nextSibling((vnode.anchor = next))
     } else {
       // 片段没有成功水合，因为我们没有得到一个末端锚。

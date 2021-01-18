@@ -6,6 +6,9 @@ import { ErrorCodes, handleError } from './errorHanding'
 import { warn } from './warning'
 import { isModelListener, isOn } from '@vue/shared'
 import { NormalizedProps } from './componentProps'
+import { isHmrUpdating } from './hmr'
+import { PatchFlags } from '../../shared/src/patchFalgs'
+import { isEmitListener } from './componentEmits'
 
 export let currentRenderingInstance: ComponentInternalInstance | null = null
 
@@ -38,6 +41,91 @@ const isElementRoot = (vnode: VNode) => {
     vnode.shapeFlag & ShapeFlags.ELEMENT ||
     vnode.type === Comment // 潜在的V-if分支开关
   )
+}
+
+function hasPropsChanged(
+  prevProps: Data,
+  nextProps: Data,
+  emitsOptions: ComponentInternalInstance['emitsOptions']
+): boolean {
+  const nextKeys = Object.keys(nextProps)
+  if (nextKeys.length !== Object.keys(prevProps).length) {
+    return true
+  }
+  for (let i = 0; i < nextKeys.length; i++) {
+    const key = nextKeys[i]
+    if (nextProps[key] !== prevProps[key] &&
+      !isEmitListener(emitsOptions, key)
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+export function shouldUpdateComponent(
+  prevVNode: VNode,
+  nextVNode: VNode,
+  optimized?: boolean
+): boolean {
+  const { props: prevProps, children: prevChildren, component } = prevVNode
+  const { props: nextProps, children: nextChildren, patchFlag } = nextVNode
+  const emits = component!.emitsOptions
+  // 父组件的渲染功能被热更新。
+  // 由于这可能导致子组件的 slot 内容发生了变化，
+  // 我们需要强制子组件也进行更新。
+  if (__DEV__ && (prevChildren || nextChildren) && isHmrUpdating) {
+    return true
+  }
+
+  // 强制对组件vnode上的运行时指令或转换进行子更新。
+  if (nextVNode.dirs || nextVNode.transition) {
+    return true
+  }
+  if (optimized && patchFlag >= 0) {
+    if (patchFlag & PatchFlags.DYNAMIC_SLOTS) {
+      // 槽内容，引用可能已经改变的值。
+      // e.g. 在一个v-for
+      return true
+    }
+    if (patchFlag & PatchFlags.FULL_PROPS) {
+      if (!prevProps) {
+        return !!nextProps
+      }
+      // 该标志的存在表明prop始终是非空的。
+      return hasPropsChanged(prevProps, nextProps!, emits)
+    } else if (patchFlag & PatchFlags.PROPS) {
+      const dynamicProps = nextVNode.dynamicProps!
+      for (let i = 0; i < dynamicProps.length; i++) {
+        const key = dynamicProps[i]
+        if (
+          nextProps![key] !== prevProps![key] &&
+          !isEmitListener(emits, key)
+        ) {
+          return true
+        }
+      }
+    }
+  } else {
+    // 这个路径只被手动重写的渲染函数所采用，
+    // 所以任何子函数的出现都会导致强制更新。
+    if (prevChildren || nextChildren) {
+      if (!nextChildren || !(nextChildren as any).$stable) {
+        return true
+      }
+    }
+    if (prevProps === nextProps) {
+      return false
+    }
+    if (!prevProps) {
+      return !!nextProps
+    }
+    if (!nextProps) {
+      return true
+    }
+    return hasPropsChanged(prevProps, nextProps, emits)
+  }
+  return false
 }
 
 /**

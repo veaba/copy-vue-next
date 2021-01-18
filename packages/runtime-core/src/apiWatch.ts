@@ -275,6 +275,41 @@ export function instanceWatch(
   return doWatch(getter, cb.bind(publicThis), options, this)
 }
 
+type MapSources<T, Immediate> = {
+  [K in keyof T]: T[K] extends WatchSource<infer V>
+    ? Immediate extends true ? (V | undefined) : V
+    : T[K] extends object
+      ? Immediate extends true ? (T[K] | undefined) : T[K]
+      : never
+}
+
+// overload #1: array of multiple sources + cb
+// Readonly constraint helps the callback to correctly infer value types based
+// on position in the source array. Otherwise the values will get a union type
+// of all possible value types.
+export function watch<T extends Readonly<Array<WatchSource<unknown> | object>>,
+  Immediate extends Readonly<boolean> = false>
+(
+  source: T,
+  cb: WatchCallback<MapSources<T, false>, MapSources<T, Immediate>>,
+  options?: WatchOptions<Immediate>
+): WatchStopHandle
+
+// overload  #2
+export function watch<T, Immediate extends Readonly<boolean> = false>(
+  source: WatchSource<T>,
+  cb: WatchCallback<T, Immediate extends true ? (T | undefined) : T>,
+  options?: WatchOptions<Immediate>
+): WatchStopHandle
+
+// overload #3
+export function watch<T extends object,
+  Immediate extends Readonly<boolean> = false>(
+  source: T,
+  cb: WatchCallback<T, Immediate extends true ? (T | undefined) : T>,
+  options?: WatchOptions<Immediate>
+): WatchStopHandle
+
 // 实现
 export function watch<T = any, Immediate extends Readonly<boolean> = false>(
   source: T | WatchSource,

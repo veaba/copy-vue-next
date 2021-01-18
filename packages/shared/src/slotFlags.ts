@@ -5,7 +5,7 @@ export const enum SlotFlags {
      * */
     STABLE = 1,
     /**
-     * 引用作用域变量（v-for或外槽道具），或具有条件结构（v-if，v-for）的slot。
+     * 引用作用域变量（v-for或外槽prop），或具有条件结构（v-if，v-for）的slot。
      * 父级需要强制子级更新，因为 slot 没有完全捕获其依赖性。
      * */
     DYNAMIC = 2,

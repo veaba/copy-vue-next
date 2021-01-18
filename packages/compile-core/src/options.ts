@@ -110,7 +110,7 @@ export interface ParserOptions {
    * 平台指定内置组件
    * e.g. `<Transition>`
    * */
-  isBuiltInComponent: (tag: string) => symbol | void
+  isBuiltInComponent?: (tag: string) => symbol | void
   /**
    * 供最终用户扩展原生元素列表的单独选项
    * */
@@ -181,7 +181,7 @@ export interface TransformOptions extends SharedTransformCodegenOptions {
    */
   prefixIndentifiers?: boolean
   /**
-   * 将静态VNodes和道具对象提升到`_hoisted_x`常量。
+   * 将静态VNodes和prop对象提升到`_hoisted_x`常量。
    * @default false
    * */
   hoistStatic?: boolean

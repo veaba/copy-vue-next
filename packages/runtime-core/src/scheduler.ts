@@ -66,6 +66,13 @@ function queueFlush() {
   }
 }
 
+export function invalidateJob(job: SchedulerJob) {
+  const i = queue.indexOf(job)
+  if (i > -1) {
+    queue.slice(i, 1)
+  }
+}
+
 export function queueJob(job: SchedulerJob) {
   // dedupe 搜索使用 `Array.includes()` 的startIndex参数，默认情况下，搜索 index 包括当前正在运行的job，所以它不能再递归地触发自己。
   // 如果 job 是一个 watch() 回调，搜索将从+1索引开始，以允许它递归地触发自己--这是用户自己的责任，以确保它不会最终陷入一个无限循环。
@@ -149,5 +156,34 @@ export function flushPostFlushCbs(seen?: CountMap) {
     }
     activePostFlushCbs = null
     postFlushIndex = 0
+  }
+}
+
+export function flushPreFlushCbs(
+  seen?: CountMap,
+  parentJob: SchedulerJob | null = null
+) {
+  if (pendingPreFlushCbs.length) {
+    currentPreFlushParentJob = parentJob
+    activePreFlushCbs = [...new Set(pendingPreFlushCbs)]
+    pendingPreFlushCbs.length = 0
+    if (__DEV__) {
+      seen = seen || new Map()
+    }
+    for (
+      preFlushIndex = 0;
+      preFlushIndex < activePreFlushCbs.length;
+      preFlushIndex++
+    ) {
+      if (__DEV__) {
+        checkRecursiveUpdates(seen!, activePreFlushCbs[preFlushIndex])
+      }
+      activePreFlushCbs[preFlushIndex]()
+    }
+    activePreFlushCbs = null
+    preFlushIndex = 0
+    currentPreFlushParentJob = null
+    // 递归知道冲洗
+    flushPreFlushCbs(seen, parentJob)
   }
 }

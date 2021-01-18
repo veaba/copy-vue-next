@@ -3,12 +3,18 @@
  * @private
  * */
 import { isArray } from '@vue/shared'
+import { Slot } from '@vue/runtime-core'
+
+interface CompiledSlotDescriptor {
+  name: string
+  fn: Slot
+}
 
 export function createSlots(
   slots: Record<string, Slot>,
   dynamicSlots: (
-    | CompileSlotDescriptor
-    | CompileSlotDescriptor[]
+    | CompiledSlotDescriptor
+    | CompiledSlotDescriptor[]
     | undefined
     )[]
 ): Record<string, Slot> {

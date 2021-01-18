@@ -204,7 +204,7 @@ function createSuspenseBoundary(
         onFallback()
       }
 
-      const anchor = next(activeBranch)
+      const anchor = next(activeBranch!)
       const mountFallback = () => {
         if (!suspense.isInFallback) {
           return
@@ -357,7 +357,7 @@ function mountSuspense(
   // 开始将内容子树挂载到一个非主体容器中
   patch(
     null,
-    (suspense.pendingBranch = vnode.ssContent),
+    (suspense.pendingBranch = vnode.ssContent!),
     hiddenContainer,
     null,
     parentComponent,
@@ -370,7 +370,7 @@ function mountSuspense(
     // 挂载 fallback tree
     patch(
       null,
-      vnode.ssFallback,
+      vnode.ssFallback!,
       container,
       anchor,
       parentComponent,

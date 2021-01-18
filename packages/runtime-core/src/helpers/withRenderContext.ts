@@ -1,5 +1,7 @@
-import { ComponentInternalInstance, Slot } from '@vue/runtime-core'
-import { currentRenderingInstance } from '../componentRenderUtils'
+import { ComponentInternalInstance, openBlock, Slot } from '@vue/runtime-core'
+import { currentRenderingInstance, setCurrentRenderingInstance } from '../componentRenderUtils'
+import { isRenderingCompiledSlot } from './renderSlot'
+import { closeBlock } from '../vnode'
 
 export function withCtx(
   fn: Slot,

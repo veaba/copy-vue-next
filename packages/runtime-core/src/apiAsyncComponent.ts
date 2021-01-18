@@ -106,8 +106,7 @@ export function defineAsyncComponent<T extends Component = { new(): ComponentPub
     __asyncLoader: load,
     name: 'AsyncComponentWrapper',
     setup() {
-      const instance = currentInstance
-
+      const instance = currentInstance!
       // already resolved
       if (resolvedComp) {
         return () => createInnerComp(resolvedComp!, instance)
@@ -186,7 +185,7 @@ export function defineAsyncComponent<T extends Component = { new(): ComponentPub
 
 function createInnerComp(
   comp: ConcreteComponent,
-  { vnode: { props: children } }: ComponentInternalInstance
+  { vnode: { props,children } }: ComponentInternalInstance
 ) {
   return createVNode(comp, props, children)
 }

@@ -1,26 +1,37 @@
 import {
   ComponentOptionsBase,
-  ComponentOptionsMixin, ComponentOptionsWithArrayProps,
-  ComponentOptionsWithObjectProps, ComponentOptionsWithoutProps,
+  ComponentOptionsMixin,
+  ComponentOptionsWithArrayProps,
+  ComponentOptionsWithObjectProps,
+  ComponentOptionsWithoutProps,
   ComputedOptions,
-  MethodOptions, RenderFunction
+  MethodOptions,
+  RenderFunction
 } from './componentOptions'
 import { EmitsOptions } from './componentEmits'
 import {
   ComponentPublicInstanceConstructor,
   CreateComponentPublicInstance
 } from './componentPublicInstance'
-import { ComponentPropsOptions, ExtractDefaultPropTypes, ExtractPropTypes } from './componentProps'
+import {
+  ComponentPropsOptions,
+  ExtractDefaultPropTypes,
+  ExtractPropTypes
+} from './componentProps'
 import { VNodeProps } from './vnode'
-import { AllowedComponentProps, ComponentCustomProps, SetupContext } from './component'
+import {
+  AllowedComponentProps,
+  ComponentCustomProps,
+  SetupContext
+} from './component'
 import { isFunction } from '@vue/shared'
-
 
 export type PublicProps = VNodeProps &
   AllowedComponentProps &
   ComponentCustomProps
 
-export type DefineComponent<PropsOrPropsOptions = {},
+export type DefineComponent<
+  PropsOrPropsOptions = {},
   RawBindings = {},
   D = {},
   C extends ComputedOptions = ComputedOptions,
@@ -31,8 +42,10 @@ export type DefineComponent<PropsOrPropsOptions = {},
   EE extends string = string,
   PP = PublicProps,
   Props = Readonly<ExtractPropTypes<PropsOrPropsOptions>>,
-  Defaults = ExtractDefaultPropTypes<PropsOrPropsOptions>> =
-  ComponentPublicInstanceConstructor<CreateComponentPublicInstance<Props,
+  Defaults = ExtractDefaultPropTypes<PropsOrPropsOptions>
+> = ComponentPublicInstanceConstructor<
+  CreateComponentPublicInstance<
+    Props,
     RawBindings,
     D,
     C,
@@ -42,9 +55,23 @@ export type DefineComponent<PropsOrPropsOptions = {},
     E,
     PP & Props,
     Defaults,
-    true> & Props>
-  & ComponentOptionsBase<Props, RawBindings, D, C, M, Mixin, Extends, E, EE, Defaults>
-  & PP
+    true
+  > &
+    Props
+> &
+  ComponentOptionsBase<
+    Props,
+    RawBindings,
+    D,
+    C,
+    M,
+    Mixin,
+    Extends,
+    E,
+    EE,
+    Defaults
+  > &
+  PP
 
 // defineComponent is a utility that is primarily used for type inference
 // when declaring components. Type inference is provided in the component
@@ -60,11 +87,11 @@ export function defineComponent<Props, RawBindings = object>(
   ) => RawBindings | RenderFunction
 ): DefineComponent<Props, RawBindings>
 
-
 // overload 2: object format with no props
 // (uses user defined props interface)
 // return type is for Vetur and TSX support
-export function defineComponent<Props = {},
+export function defineComponent<
+  Props = {},
   RawBindings = {},
   D = {},
   C extends ComputedOptions = {},
@@ -72,8 +99,10 @@ export function defineComponent<Props = {},
   Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = EmitsOptions,
-  EE extends string = string>(
-  options: ComponentOptionsWithoutProps<Props,
+  EE extends string = string
+>(
+  options: ComponentOptionsWithoutProps<
+    Props,
     RawBindings,
     D,
     C,
@@ -81,13 +110,15 @@ export function defineComponent<Props = {},
     Mixin,
     Extends,
     E,
-    EE>
+    EE
+  >
 ): DefineComponent<Props, RawBindings, D, C, M, Mixin, Extends, E, EE>
 
 // overload 3: object format with array props declaration
 // props inferred as { [key in PropNames]?: any }
 // return type is for Vetur and TSX support
-export function defineComponent<PropNames extends string,
+export function defineComponent<
+  PropNames extends string,
   RawBindings,
   D,
   C extends ComputedOptions = {},
@@ -95,8 +126,10 @@ export function defineComponent<PropNames extends string,
   Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = Record<string, any>,
-  EE extends string = string>(
-  options: ComponentOptionsWithArrayProps<PropNames,
+  EE extends string = string
+>(
+  options: ComponentOptionsWithArrayProps<
+    PropNames,
     RawBindings,
     D,
     C,
@@ -104,8 +137,10 @@ export function defineComponent<PropNames extends string,
     Mixin,
     Extends,
     E,
-    EE>
-): DefineComponent<Readonly<{ [key in PropNames]?: any }>,
+    EE
+  >
+): DefineComponent<
+  Readonly<{ [key in PropNames]?: any }>,
   RawBindings,
   D,
   C,
@@ -113,11 +148,13 @@ export function defineComponent<PropNames extends string,
   Mixin,
   Extends,
   E,
-  EE>
+  EE
+>
 
 // overload 4: object format with object props declaration
 // see `ExtractPropTypes` in ./componentProps.ts
-export function defineComponent<// the Readonly constraint allows TS to treat the type of { required: true }
+export function defineComponent<
+  // the Readonly constraint allows TS to treat the type of { required: true }
   // as constant instead of boolean.
   PropsOptions extends Readonly<ComponentPropsOptions>,
   RawBindings,
@@ -127,8 +164,10 @@ export function defineComponent<// the Readonly constraint allows TS to treat th
   Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = Record<string, any>,
-  EE extends string = string>(
-  options: ComponentOptionsWithObjectProps<PropsOptions,
+  EE extends string = string
+>(
+  options: ComponentOptionsWithObjectProps<
+    PropsOptions,
     RawBindings,
     D,
     C,
@@ -136,7 +175,8 @@ export function defineComponent<// the Readonly constraint allows TS to treat th
     Mixin,
     Extends,
     E,
-    EE>
+    EE
+  >
 ): DefineComponent<PropsOptions, RawBindings, D, C, M, Mixin, Extends, E, EE>
 
 // 实现，接近于无操作

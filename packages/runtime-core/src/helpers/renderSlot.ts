@@ -7,6 +7,7 @@ import { Data } from '../component'
 import { warn } from '@vue/runtime-core'
 import { SlotFlags } from '../../../shared/src/slotFlags'
 import { PatchFlags } from '../../../shared/src/patchFalgs'
+import { RawSlots } from '../componentSlots'
 
 export let isRenderingCompiledSlot = 0
 export const setCompiledSlotRendering = (n: number) => (isRenderingCompiledSlot += n)
@@ -39,7 +40,7 @@ export function renderSlot(
         key: props.key
       },
       slot ? slot(props) : fallback ? fallback() : [],
-      (slots as rawSlots)._ === SlotFlags.STABLE ?
+      (slots as RawSlots)._ === SlotFlags.STABLE ?
         PatchFlags.STABLE_FRAGMENT
         : PatchFlags.BAIL
     ))

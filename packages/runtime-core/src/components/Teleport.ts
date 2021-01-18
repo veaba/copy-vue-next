@@ -235,7 +235,7 @@ export const TeleportImpl = {
           n1.dynamicChildren!,
           n2.dynamicChildren,
           currentContainer,
-          parentSuspense,
+          parentComponent,
           parentSuspense,
           isSVG
         )

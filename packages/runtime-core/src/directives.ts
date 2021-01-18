@@ -1,9 +1,11 @@
 import { VNode } from './vnode'
 import { ComponentPublicInstance } from './componentPublicInstance'
-import { Data } from './component'
+import { ComponentInternalInstance, Data } from './component'
 import { currentRenderingInstance } from './componentRenderUtils'
 import { warn } from './warning'
 import { EMPTY_OBJ, isFunction } from '@vue/shared'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHanding'
+import { makeMap } from '../../shared/src/makeMap'
 
 
 export type DirectiveModifiers = Record<string, boolean>
@@ -16,6 +18,19 @@ export interface DirectiveBinding<V = any> {
   arg?: string
   modifiers: DirectiveModifiers
   dir: ObjectDirective<any, V>
+}
+
+// 一共14个内置指令
+const isBuiltInDirective = /*__PURE__*/ makeMap(
+  'bind,cloak,else-if,else,for,html,if,model,on,once,pre,show,slot,text'
+)
+
+/* 验证指令名称*/
+export function validateDirectiveName(name: string) {
+  // 如果是内置指令
+  if (isBuiltInDirective(name)) {
+    warn('Do not use built-in directive ids as custom directive id: ' + name)
+  }
 }
 
 export type DirectiveHook<T = any, Prev = VNode<any, T> | null, V = any> = (
@@ -86,4 +101,29 @@ export function withDirectives<T extends VNode>(
     })
   }
   return vnode
+}
+
+export function invokeDirectiveHook(
+  vnode: VNode,
+  prevVNode: VNode | null,
+  instance: ComponentInternalInstance | null,
+  name: keyof ObjectDirective
+) {
+  const bindings = vnode.dirs!
+  const oldBindings = prevVNode && prevVNode.dirs!
+  for (let i = 0; i < bindings.length; i++) {
+    const binding = bindings[i]
+    if (oldBindings) {
+      binding.oldValue = oldBindings[i].value
+    }
+    const hook = binding.dir[name] as DirectiveHook | undefined
+    if (hook) {
+      callWithAsyncErrorHandling(hook, instance, ErrorCodes.DIRECTIVE_HOOK, [
+        vnode.el,
+        binding,
+        vnode,
+        prevVNode
+      ])
+    }
+  }
 }

@@ -3,21 +3,26 @@ import { ComponentInternalInstance, ConcreteComponent, Data, setCurrentInstance 
 import { warn } from './warning'
 import { AppContext } from './apiCreateApp'
 import {
-  camelize, capitalize,
+  camelize,
+  capitalize,
   def,
   EMPTY_ARR,
   EMPTY_OBJ,
   extend,
-  hasOwn, hyphenate,
+  hasOwn,
+  hyphenate,
   isArray,
   isFunction,
-  isObject, isReservedProp,
-  isString, toRawType
+  isObject,
+  isReservedProp,
+  isString,
+  toRawType
 } from '@vue/shared'
 import { InternalObjectKey } from './vnode'
-import { shallowReactive, toRaw } from '@vue/reactivity'
+import { shallowReactive, toRaw, trigger, TriggerOpTypes } from '@vue/reactivity'
 import { isEmitListener } from './componentEmits'
 import { makeMap } from '../../shared/src/makeMap'
+import { PatchFlags } from '../../shared/src/patchFalgs'
 
 
 export type ComponentPropsOptions<P = Data> =
@@ -476,5 +481,107 @@ export function initProps(
     }
   }
   instance.attrs = attrs
+}
+
+export function updateProps(
+  instance: ComponentInternalInstance,
+  rawProps: Data | null,
+  rawPrevProps: Data | null,
+  optimized: boolean
+) {
+  const {
+    props,
+    attrs,
+    vnode: { patchFlag }
+  } = instance
+  const rawCurrentProps = toRaw(props)
+  const [options] = instance.propsOptions
+  if (
+    // 在 dev环境中，总是强制 full diff
+    // - #1942 如果使用 sfc 组件则启用 hmr
+    // - vite#872 非sfc component used by sfc component
+    !(__DEV__ &&
+      (instance.type.__hmrId ||
+        (instance.parent && instance.parent.type.__hmrId))) &&
+    (optimized || patchFlag > 0) &&
+    !(patchFlag & PatchFlags.FULL_PROPS)
+  ) {
+    if (patchFlag & PatchFlags.PROPS) {
+      // 编译器生成的 prop &没有键的变化，只要设置更新的 prop 即可。
+      const propToUpdate = instance.vnode.dynamicProps!
+      for (let i = 0; i < propToUpdate.length; i++) {
+        const key = propToUpdate[i]
+        // PROPS标志保证 rawProps 为非空。
+        const value = rawProps![key]
+        if (options) {
+          // attr/props
+          // 分离是在init上完成的，在这个代码路径中会保持一致，所以只要检查attrs是否有就可以了。
+          if (hasOwn(attrs, key)) {
+            attrs[key] = value
+          } else {
+            const camelizedKey = camelize(key)
+            props[camelizedKey] = resolvePropValue(
+              options,
+              rawCurrentProps,
+              camelizedKey,
+              value,
+              instance
+            )
+          }
+        } else {
+          attrs[key] = value
+        }
+      }
+    }
+  } else {
+    // 完整 prop update
+    setFullProps(instance, rawProps, props, attrs)
+    // 在动态 prop 的情况下，检查我们是否需要从 props 对象中删除键。
+    let kebabKey: string
+    for (const key in rawCurrentProps) {
+      if (
+        !rawProps ||
+        // 用于 camelCase
+        (!hasOwn(rawProps, key) &&
+          // 有可能原来的prop是以 kebab-case 的形式传入，然后转换为驼峰(#955)
+          ((kebabKey = hyphenate(key)) === key || !hasOwn(rawProps, kebabKey))
+        )
+      ) {
+        if (options) {
+          if (
+            rawPrevProps &&
+            // 用于驼峰命名
+            (rawPrevProps[key] !== undefined ||
+              // 用于短横线命名
+              rawPrevProps[kebabKey!] !== undefined)
+          ) {
+            props[key] = resolvePropValue(
+              options,
+              rawProps || EMPTY_OBJ,
+              key,
+              undefined,
+              instance
+            )
+          }
+        } else {
+          delete props[key]
+        }
+      }
+    }
+    // 在功能组件没有props声明的情况下，
+    // props和attrs指向同一个对象，所以它应该已经被更新了。
+    if (attrs !== rawCurrentProps) {
+      for (const key in attrs) {
+        if (!rawProps || !hasOwn(rawProps, key)) {
+          delete attrs[key]
+        }
+      }
+    }
+  }
+  //  触发$attrs的更新，以防它被用于组件 slot 槽中。
+  trigger(instance, TriggerOpTypes.SET, '$attrs')
+  if (__DEV__ && rawProps) {
+    validateProps(props, instance)
+  }
 }
 

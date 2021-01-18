@@ -2,7 +2,15 @@
  * @bug webstorm 似乎存在 format 的错误
  * - resolveMergedOptions
  * */
-import { computed, ComputedGetter, proxyRefs, reactive, toRaw, toRef, WritableComputedOptions } from '@vue/reactivity'
+import {
+  computed,
+  ComputedGetter,
+  proxyRefs,
+  reactive,
+  toRaw,
+  toRef,
+  WritableComputedOptions
+} from '@vue/reactivity'
 import {
   Component,
   ComponentInternalInstance,
@@ -14,21 +22,44 @@ import {
   SetupContext
 } from './component'
 import { EmitsOptions } from './componentEmits'
-import { ComponentPublicInstance, CreateComponentPublicInstance } from './componentPublicInstance'
+import {
+  ComponentPublicInstance,
+  CreateComponentPublicInstance
+} from './componentPublicInstance'
 import { Directive } from './directives'
 import { watch, WatchCallback, WatchOptions } from './apiWatch'
 import {
   DebuggerHook,
   ErrorCapturedHook,
   onActivated,
-  onBeforeMount, onBeforeUnmount,
-  onBeforeUpdate, onDeactivated, onErrorCaptured,
-  onMounted, onRenderTracked, onRenderTriggered, onUnmounted,
+  onBeforeMount,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onDeactivated,
+  onErrorCaptured,
+  onMounted,
+  onRenderTracked,
+  onRenderTriggered,
+  onUnmounted,
   onUpdated
 } from './apiLifecycle'
 import { VNodeChild } from './vnode'
-import { EMPTY_OBJ, extend, hasOwn, isArray, isFunction, isObject, isPromise, isString, NOOP } from '@vue/shared'
-import { ComponentObjectPropsOptions, ExtractDefaultPropTypes, ExtractPropTypes } from './componentProps'
+import {
+  EMPTY_OBJ,
+  extend,
+  hasOwn,
+  isArray,
+  isFunction,
+  isObject,
+  isPromise,
+  isString,
+  NOOP
+} from '@vue/shared'
+import {
+  ComponentObjectPropsOptions,
+  ExtractDefaultPropTypes,
+  ExtractPropTypes
+} from './componentProps'
 import { warn } from './warning'
 import { callWithAsyncErrorHandling } from './errorHanding'
 import { inject, provide } from './apiInject'
@@ -49,10 +80,9 @@ import { inject, provide } from './apiInject'
  * }
  * ```
  */
-export interface ComponentCustomOptions {
-}
+export interface ComponentCustomOptions {}
 
-export type RenderFunction = () => VNodeChild;
+export type RenderFunction = () => VNodeChild
 
 const enum OptionTypes {
   PROPS = 'Props',
@@ -62,7 +92,8 @@ const enum OptionTypes {
   INJECT = 'Inject'
 }
 
-export interface ComponentOptionsBase<Props,
+export interface ComponentOptionsBase<
+  Props,
   RawBindings,
   D,
   C extends ComputedOptions,
@@ -71,7 +102,8 @@ export interface ComponentOptionsBase<Props,
   Extends extends ComponentOptionsMixin,
   E extends EmitsOptions,
   EE extends string = string,
-  Defaults = {}>
+  Defaults = {}
+>
   extends LegacyOptions<Props, D, C, M, Mixin, Extends>,
     ComponentInternalOptions,
     ComponentCustomOptions {
@@ -79,23 +111,23 @@ export interface ComponentOptionsBase<Props,
     this: void,
     props: Props,
     ctx: SetupContext<E, Props>
-  ) => Promise<RawBindings> | RawBindings | RenderFunction | void;
-  name?: string;
-  template?: string | object; // 可以是直接 DOM
+  ) => Promise<RawBindings> | RawBindings | RenderFunction | void
+  name?: string
+  template?: string | object // 可以是直接 DOM
   // Note: we are intentionally using the signature-less `Function` type here
   // since any type with signature will cause the whole inference to fail when
   // the return expression contains reference to `this`.
   // Luckily `render()` doesn't need any arguments nor does it care about return
   // type.
-  render?: Function;
-  components: Record<string, Component>;
-  directives?: Record<string, Directive>;
-  inheritAttrs?: boolean;
-  emits?: (E | EE[]) & ThisType<void>;
+  render?: Function
+  components?: Record<string, Component>
+  directives?: Record<string, Directive>
+  inheritAttrs?: boolean
+  emits?: (E | EE[]) & ThisType<void>
   //  TODO: 根据暴露的密钥来推断公共实例类型
-  expose?: string[];
+  expose?: string[]
 
-  serverPrefetch?(): Promise<any>;
+  serverPrefetch?(): Promise<any>
 
   // Internal -----------------------------------------
   /**
@@ -114,37 +146,38 @@ export interface ComponentOptionsBase<Props,
     $setup: ComponentInternalInstance['setupState'],
     $data: ComponentInternalInstance['data'],
     $options: ComponentInternalInstance['ctx']
-  ) => void;
+  ) => void
 
   /**
    * 仅由 compile-sfc生成，用于标记一个内联的 ssr 渲染函数，并从setup()返回。
    * @internal
    * */
-  __ssrInlineRender?: boolean;
+  __ssrInlineRender?: boolean
   /**
    * AsyncComponentWrapper 标记
    * @internal
    * */
-  __asyncLoader?: () => Promise<ConcreteComponent>;
+  __asyncLoader?: () => Promise<ConcreteComponent>
   /**
    * cache for merged $options
    * @internal
    */
-  __merged?: ComponentOptions;
+  __merged?: ComponentOptions
   // Type 声明 -----------------------------------------
   // 请注意，这些都是内部的，但需要在d.ts中暴露出来，以便进行类型推理。
 
   // 纯类型区分符，将 OptionWithoutProps 与 defineComponent() 或 FunctionalComponent 返回的构造函数类型分开。
-  call?: (this: unknown, ...args: unknown[]) => never;
+  call?: (this: unknown, ...args: unknown[]) => never
   // 内建Vnode类型的类型区分器。
-  __isFragment?: never;
-  __isTeleport?: never;
-  __isSuspense?: never;
+  __isFragment?: never
+  __isTeleport?: never
+  __isSuspense?: never
 
-  __defaults?: Defaults;
+  __defaults?: Defaults
 }
 
-export type ComponentOptionsWithoutProps<Props = {},
+export type ComponentOptionsWithoutProps<
+  Props = {},
   RawBindings = {},
   D = {},
   C extends ComputedOptions = {},
@@ -152,7 +185,9 @@ export type ComponentOptionsWithoutProps<Props = {},
   Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = EmitsOptions,
-  EE extends string = string> = ComponentOptionsBase<Props,
+  EE extends string = string
+> = ComponentOptionsBase<
+  Props,
   RawBindings,
   D,
   C,
@@ -161,11 +196,14 @@ export type ComponentOptionsWithoutProps<Props = {},
   Extends,
   E,
   EE,
-  {}> & {
-  props?: undefined;
-} & ThisType<CreateComponentPublicInstance<{}, RawBindings, D, C, M, Mixin, Extends, E>>;
-
-export type ComponentOptionsWithArrayProps<PropNames extends string = string,
+  {}
+> & {
+  props?: undefined
+} & ThisType<
+    CreateComponentPublicInstance<{}, RawBindings, D, C, M, Mixin, Extends, E>
+  >
+export type ComponentOptionsWithArrayProps<
+  PropNames extends string = string,
   RawBindings = {},
   D = {},
   C extends ComputedOptions = {},
@@ -174,7 +212,9 @@ export type ComponentOptionsWithArrayProps<PropNames extends string = string,
   Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
   E extends EmitsOptions = EmitsOptions,
   EE extends string = string,
-  Props = Readonly<{ [key in PropNames]?: any }>> = ComponentOptionsBase<Props,
+  Props = Readonly<{ [key in PropNames]?: any }>
+> = ComponentOptionsBase<
+  Props,
   RawBindings,
   D,
   C,
@@ -183,18 +223,23 @@ export type ComponentOptionsWithArrayProps<PropNames extends string = string,
   Extends,
   E,
   EE,
-  {}> & {
-  props: PropNames[];
-} & ThisType<CreateComponentPublicInstance<Props,
-  RawBindings,
-  D,
-  C,
-  M,
-  Mixin,
-  Extends,
-  E>>;
-
-export type ComponentOptionsWithObjectProps<PropsOptions = ComponentObjectPropsOptions,
+  {}
+> & {
+  props: PropNames[]
+} & ThisType<
+    CreateComponentPublicInstance<
+      Props,
+      RawBindings,
+      D,
+      C,
+      M,
+      Mixin,
+      Extends,
+      E
+    >
+  >
+export type ComponentOptionsWithObjectProps<
+  PropsOptions = ComponentObjectPropsOptions,
   RawBindings = {},
   D = {},
   C extends ComputedOptions = {},
@@ -204,7 +249,9 @@ export type ComponentOptionsWithObjectProps<PropsOptions = ComponentObjectPropsO
   E extends EmitsOptions = EmitsOptions,
   EE extends string = string,
   Props = Readonly<ExtractPropTypes<PropsOptions>>,
-  Defaults = ExtractDefaultPropTypes<PropsOptions>> = ComponentOptionsBase<Props,
+  Defaults = ExtractDefaultPropTypes<PropsOptions>
+> = ComponentOptionsBase<
+  Props,
   RawBindings,
   D,
   C,
@@ -213,38 +260,48 @@ export type ComponentOptionsWithObjectProps<PropsOptions = ComponentObjectPropsO
   Extends,
   E,
   EE,
-  Defaults> & {
+  Defaults
+> & {
   props: PropsOptions & ThisType<void>
-} & ThisType<CreateComponentPublicInstance<Props,
-  RawBindings,
-  D,
-  C,
-  M,
-  Mixin,
-  Extends,
-  E,
-  Props,
-  Defaults,
-  false>>
-
-export type ComponentOptions<Props = {},
+} & ThisType<
+    CreateComponentPublicInstance<
+      Props,
+      RawBindings,
+      D,
+      C,
+      M,
+      Mixin,
+      Extends,
+      E,
+      Props,
+      Defaults,
+      false
+    >
+  >
+export type ComponentOptions<
+  Props = {},
   RawBindings = any,
   D = any,
   C extends ComputedOptions = any,
   M extends MethodOptions = any,
   Mixin extends ComponentOptionsMixin = any,
   Extends extends ComponentOptionsMixin = any,
-  E extends EmitsOptions = any> = ComponentOptionsBase<Props, RawBindings, D, C, M, Mixin, Extends, E> &
-  ThisType<CreateComponentPublicInstance<{},
-    RawBindings,
-    D,
-    C,
-    M,
-    Mixin,
-    Extends,
-    E,
-    Readonly<Props>>>;
-export type ComponentOptionsMixin = ComponentOptionsBase<any,
+  E extends EmitsOptions = any
+> = ComponentOptionsBase<Props, RawBindings, D, C, M, Mixin, Extends, E> &
+  ThisType<
+    CreateComponentPublicInstance<
+      {},
+      RawBindings,
+      D,
+      C,
+      M,
+      Mixin,
+      Extends,
+      E,
+      Readonly<Props>
+    >
+  >
+export type ComponentOptionsMixin = ComponentOptionsBase<
   any,
   any,
   any,
@@ -253,111 +310,119 @@ export type ComponentOptionsMixin = ComponentOptionsBase<any,
   any,
   any,
   any,
-  any>;
+  any,
+  any
+>
 
-export type ComputedOptions = Record<string,
-  ComputedGetter<any> | WritableComputedOptions<any>>;
+export type ComputedOptions = Record<
+  string,
+  ComputedGetter<any> | WritableComputedOptions<any>
+>
 
 export interface MethodOptions {
-  [key: string]: Function;
+  [key: string]: Function
 }
 
 export type ExtractComputedReturns<T extends any> = {
   [key in keyof T]: T[key] extends { get: (...args: any[]) => infer TReturn }
     ? TReturn
-    : T[key] extends (...args: any[]) => infer TReturn
-      ? TReturn
-      : never;
-};
+    : T[key] extends (...args: any[]) => infer TReturn ? TReturn : never
+}
 
 type WatchOptionItem =
   | string
   | WatchCallback
-  | ({ handler: WatchCallback | string } & WatchOptions);
-type ComponentWatchOptionItem = WatchOptionItem | WatchOptionItem[];
-type ComponentWatchOptions = Record<string, ComponentWatchOptionItem>;
+  | ({ handler: WatchCallback | string } & WatchOptions)
+type ComponentWatchOptionItem = WatchOptionItem | WatchOptionItem[]
+type ComponentWatchOptions = Record<string, ComponentWatchOptionItem>
 
 type ComponentInjectOptions =
   | string[]
-  | Record<string | symbol,
-  string | symbol | { from?: string | symbol; default?: unknown }>;
+  | Record<
+      string | symbol,
+      string | symbol | { from?: string | symbol; default?: unknown }
+    >
 
-interface LegacyOptions<Props,
+interface LegacyOptions<
+  Props,
   D,
   C extends ComputedOptions,
   M extends MethodOptions,
   Mixin extends ComponentOptionsMixin,
-  Extends extends ComponentOptionsMixin> {
+  Extends extends ComponentOptionsMixin
+> {
   // 允许任何自定义选项
-  [key: string]: any;
+  [key: string]: any
 
   // state
   // 限制：我们不能在 data 的 `this` 上下文上暴露 RawBindings，因为这会导致某种循环推断，并破坏整个组件的ThisType。
   data?: (
     this: CreateComponentPublicInstance<Props>,
     vm: CreateComponentPublicInstance<Props>
-  ) => D;
-  computed?: C;
-  methods?: M;
-  watch?: ComponentWatchOptions;
-  provide?: Data | Function;
-  inject?: ComponentInjectOptions;
+  ) => D
+  computed?: C
+  methods?: M
+  watch?: ComponentWatchOptions
+  provide?: Data | Function
+  inject?: ComponentInjectOptions
 
   // composition
-  mixins?: Mixin[];
-  extends?: Extends;
+  mixins?: Mixin[]
+  extends?: Extends
 
   // lifecycle
 
-  beforeCreate?(): void;
+  beforeCreate?(): void
 
-  created?(): void;
+  created?(): void
 
-  beforeMount?(): void;
+  beforeMount?(): void
 
-  mounted?(): void;
+  mounted?(): void
 
-  beforeUpdate?(): void;
+  beforeUpdate?(): void
 
-  updated?(): void;
+  updated?(): void
 
-  beforeUnmount?(): void;
+  beforeUnmount?(): void
 
-  unmounted?(): void;
+  unmounted?(): void
 
-  activated?(): void;
+  activated?(): void
 
-  deactivated?(): void;
+  deactivated?(): void
 
   /** @deprecated 使用 `beforeUnmount` 替代，不久的将来移除 */
-  beforeDestroy?(): void;
+  beforeDestroy?(): void
 
   /** @deprecated 使用 `unmounted` 替代，不久的将来移除 */
-  destroyed?(): void;
+  destroyed?(): void
 
-  renderTracked?: DebuggerHook;
-  renderTriggered?: DebuggerHook;
-  errorCaptured?: ErrorCapturedHook;
+  renderTracked?: DebuggerHook
+  renderTriggered?: DebuggerHook
+  errorCaptured?: ErrorCapturedHook
 
   // 仅用于runtime compile
-  delimiters?: ErrorCapturedHook;
+  delimiters?: [string, string]
 }
 
-export type OptionTypesKeys = 'P' | 'B' | 'D' | 'C' | 'M' | 'Defaults';
+export type OptionTypesKeys = 'P' | 'B' | 'D' | 'C' | 'M' | 'Defaults'
 
-export type OptionTypesType<P = {},
+export type OptionTypesType<
+  P = {},
   B = {},
   D = {},
   C extends ComputedOptions = {},
   M extends MethodOptions = {},
-  Defaults = {}> = {
-  P: P;
-  B: B;
-  D: D;
-  C: C;
-  M: M;
-  Defaults: Defaults;
-};
+  Defaults = {}
+> = {
+  P: P
+  B: B
+  D: D
+  C: C
+  M: M
+  Defaults: Defaults
+}
 
 export let isInBeforeCreate = false
 
@@ -370,7 +435,7 @@ export function resolveMergedOptions(
   const globalMixins = instance.appContext.mixins
   if (!globalMixins.length && !mixins && !extendsOptions) return raw
   const options = {}
-  globalMixins.forEach((m) => mergeOptions(options, m, instance))
+  globalMixins.forEach(m => mergeOptions(options, m, instance))
   mergeOptions(options, raw, instance)
   return (raw.__merged = options)
 }
@@ -380,7 +445,7 @@ function mergeOptions(to: any, from: any, instance: ComponentInternalInstance) {
   const { mixins, extends: extendsOptions } = from
   extendsOptions && mergeOptions(to, extendsOptions, instance)
   mixins &&
-  mixins.forEach((m: ComponentOptionsMixin) => mergeOptions(to, m, instance))
+    mixins.forEach((m: ComponentOptionsMixin) => mergeOptions(to, m, instance))
 
   for (const key in from) {
     if (!from.hasOwnProperty(key)) continue
@@ -535,15 +600,15 @@ function resolveData(
   if (__DEV__ && !isFunction(dataFn)) {
     warn(
       `The data option must be a function. ` +
-      `Plain object usage is no longer supported.`
+        `Plain object usage is no longer supported.`
     )
   }
   const data = dataFn.call(publicThis, publicThis)
   if (__DEV__ && isPromise(data)) {
     warn(
       `data() returned a Promise - note data() cannot be async; If you ` +
-      `intend to perform data fetching before component renders, use ` +
-      `async setup() + <Suspense>.`
+        `intend to perform data fetching before component renders, use ` +
+        `async setup() + <Suspense>.`
     )
   }
 
@@ -698,7 +763,7 @@ export function applyOptions(
       } else if (__DEV__) {
         warn(
           `Method "${key}" has type "${typeof methodHandler}" in the component definition. ` +
-          `Did you reference the function correctly?`
+            `Did you reference the function correctly?`
         )
       }
     }
@@ -747,11 +812,12 @@ export function applyOptions(
         !isFunction(opt) && isFunction(opt.set)
           ? opt.set.bind(publicThis)
           : __DEV__
-          ? () => {
-            warn(
-              `Write operation failed: computed property "${key}" is readonly.`
-            )
-          } : NOOP
+            ? () => {
+                warn(
+                  `Write operation failed: computed property "${key}" is readonly.`
+                )
+              }
+            : NOOP
       const c = computed({
         get,
         set
@@ -798,22 +864,21 @@ export function applyOptions(
     if (components) {
       extend(
         instance.components ||
-        (instance.components = extend(
+          ((instance.components = extend(
             {},
             (instance.type as ComponentOptions).components
-          ) as Record<string, ConcreteComponent>,
-            components
-        )
+          ) as Record<string, ConcreteComponent>),
+          components)
       )
     }
 
     if (directives) {
       extend(
         instance.directives ||
-        (instance.directives = extend(
-          {},
-          (instance.type as ComponentOptions).directives
-        )),
+          (instance.directives = extend(
+            {},
+            (instance.type as ComponentOptions).directives
+          )),
         directives
       )
     }
@@ -895,5 +960,3 @@ export function applyOptions(
     }
   }
 }
-
-

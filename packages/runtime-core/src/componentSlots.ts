@@ -2,10 +2,11 @@ import { InternalObjectKey, normalizeVNode, VNode, VNodeChild, VNodeNormalizedCh
 import { ComponentInternalInstance, currentInstance } from './component'
 import { SlotFlags } from '../../shared/src/slotFlags'
 import { ShapeFlags } from './shapeFlags'
-import { def, isArray, isFunction, isIntegerKey } from '@vue/shared'
+import { def, EMPTY_OBJ, extend, isArray, isFunction, isIntegerKey } from '@vue/shared'
 import { warn } from './warning'
 import { withCtx } from './helpers/withRenderContext'
 import { isKeepAlive } from './components/KeepAlive'
+import { isHmrUpdating } from './hmr'
 
 export type Slot = (...args: any[]) => VNode[]
 export type InternalSlots = {
@@ -30,6 +31,7 @@ export type RawSlots = {
    * */
   _?: SlotFlags
 }
+const isInternalKey = (key: string) => key[0] === '_' || key === '$stable'
 
 const normalizeSlotValue = (value: unknown): VNode[] =>
   isArray(value)
@@ -105,4 +107,48 @@ export const initSlots = (
     }
   }
   def(instance.slots, InternalObjectKey, 1)
+}
+
+export const updateSlots = (
+  instance: ComponentInternalInstance,
+  children: VNodeNormalizedChildren
+) => {
+  const { vnode, slots } = instance
+  let needDelectionCheck = true
+  let deletionComparisionTarget = EMPTY_OBJ
+  if (vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
+    const type = (children as RawSlots)._
+    if (type) {
+      // compiled slots
+      if (__DEV__ && isHmrUpdating) {
+        // 父级是HMR更新的，所以slot内容可能有变化。
+        // 强制更新slot，并为hmr标记实例。
+        extend(slots, children as Slots)
+      } else if (type === SlotFlags.STABLE) {
+        // compiled and stable
+        // 不需要更新，跳过陈旧的槽点删除。
+        needDelectionCheck = false
+      } else {
+        // 编译但动态（v-if/v-for on slots）--更新slots，但跳过规范化。
+        extend(slots, children as Slots)
+      }
+    } else {
+      needDelectionCheck = !(children as RawSlots).$stable
+      normalizeObjectSlots(children as RawSlots, slots)
+    }
+    deletionComparisionTarget = children as RawSlots
+  } else if (children) {
+    // 传递给组件的非槽对象子代（直接值）。
+    normalizeVNodeSlots(instance, children)
+    deletionComparisionTarget = { default: 1 }
+  }
+
+  // 删除 stable slots
+  if (needDelectionCheck) {
+    for (const key in slots) {
+      if (!isInternalKey(key) && !(key in deletionComparisionTarget)) {
+        delete slots[key]
+      }
+    }
+  }
 }

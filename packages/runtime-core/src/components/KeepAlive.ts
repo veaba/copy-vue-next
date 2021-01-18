@@ -189,8 +189,8 @@ const KeepAliveImpl = {
     onUpdated(cacheSubtree)
     onBeforeUnmount(() => {
       cache.forEach(cached => {
-        const { subtree, suspense } = instanse
-        const vnode = getInnerChild(subtree)
+        const { subTree, suspense } = instance
+        const vnode = getInnerChild(subTree)
 
         if (cached.type === vnode.type) {
           // 当前实例将被卸载，作为 keep-alive 卸载的一部分。

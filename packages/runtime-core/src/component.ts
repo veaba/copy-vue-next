@@ -18,7 +18,7 @@ import {
   normalizeEmitsOptions,
   ObjectEmitsOptions
 } from './componentEmits'
-import { AppContext, createAppContext } from './apiCreateApp'
+import { AppConfig, AppContext, createAppContext } from './apiCreateApp'
 import { isVNode, VNode, VNodeChild } from './vnode'
 import {
   ComponentPublicInstance,
@@ -27,16 +27,17 @@ import {
   exposeSetupStateOnRenderContext,
   RuntimeCompiledPublicInstanceProxyHandlers
 } from './componentPublicInstance'
-import { Directives } from './directives'
+import { Directive } from './directives'
 import { initSlots, InternalSlots, Slots } from './componentSlots'
 import { SuspenseBoundary } from './components/Suspense'
-import { EMPTY_OBJ, isFunction, isObject, NOOP } from '@vue/shared'
+import { EMPTY_OBJ, isFunction, isObject, NO, NOOP } from '@vue/shared'
 import { devtoolsComponentAdded } from './devtools'
 import { ShapeFlags } from './shapeFlags'
 import { warn } from './warning'
 import { endMeasure, startMeasure } from './profiling'
 import { CompilerOptions } from '../../compile-core/src/options'
 import { currentRenderingInstance } from './componentRenderUtils'
+import { makeMap } from '../../shared/src/makeMap'
 
 const emptyAppContext = createAppContext()
 let uid = 0
@@ -55,11 +56,10 @@ let compile: CompileFunction | undefined
 /**
  * 用于拓展 TSX 中组件上允许的非 declared prop
  * */
-export interface ComponentCustomProps {
-}
+export interface ComponentCustomProps {}
 
 export interface ClassComponent {
-  new(...args: any[]): ComponentPublicInstance<any, any, any, any, any>
+  new (...args: any[]): ComponentPublicInstance<any, any, any, any, any>
 
   __vccOpts: ComponentOptions
 }
@@ -105,6 +105,17 @@ export const setCurrentInstance = (
   instance: ComponentInternalInstance | null
 ) => {
   currentInstance = instance
+}
+// 两个内置组件
+const isBuiltInTag = /*__PURE__*/ makeMap('slot,component')
+
+export function validateComponentName(name: string, config: AppConfig) {
+  const appIsNativeTag = config.isNativeTag || NO // 判断是原生tag
+  if (isBuiltInTag(name) || appIsNativeTag(name)) {
+    warn(
+      'Do not use built-in or reserved HTML elements as component id: ' + name
+    )
+  }
 }
 
 /**
@@ -167,11 +178,13 @@ export interface FunctionalComponent<P = {}, E extends EmitsOptions = {}>
 /**
  *
  * */
-export type ConcreteComponent<Props = {},
+export type ConcreteComponent<
+  Props = {},
   RawBindings = any,
   D = any,
   C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions> =
+  M extends MethodOptions = MethodOptions
+> =
   | ComponentOptions<Props, RawBindings, D, C, M>
   | FunctionalComponent<Props, any>
 
@@ -241,7 +254,7 @@ export interface ComponentInternalInstance {
    * 解决指令注册，仅适用于带有 mixins 或 extends 的组件。
    * @internal
    * */
-  directives: Record<string, Directives> | null
+  directives: Record<string, Directive> | null
   /**
    * 解决 props options
    * */
@@ -395,11 +408,13 @@ export interface ComponentInternalInstance {
  * 构造函数类型是由 defineComponent() 返回的一个人工类型。
  *
  * */
-export type Component<Props = any,
+export type Component<
+  Props = any,
   RawBindings = any,
   D = any,
   C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions> =
+  M extends MethodOptions = MethodOptions
+> =
   | ConcreteComponent<Props, RawBindings, D, C, M>
   | ComponentPublicInstanceConstructor<Props>
 
@@ -536,7 +551,7 @@ export function formatComponentName(
     name =
       inferFormRegistry(
         instance.components ||
-        (instance.parent.type as ComponentOptions).components
+          (instance.parent.type as ComponentOptions).components
       ) || inferFormRegistry(instance.appContext.components)
   }
   return name ? classify(name) : isRoot ? `App` : `Anonymous`
@@ -608,14 +623,14 @@ function finishComponentSetup(
     if (!compile && Component.template) {
       warn(
         `Component provided template option but ` +
-        `runtime compilation is not supported in this build of Vue.` +
-        (__ESM_BUNDLER__
-          ? ` Configure your bundler to alias "vue" to "vue/dist/vue.esm-bundler.js".`
-          : __ESM_BROWSER__
-            ? ` Use "vue.esm-browser.js" instead.`
-            : __GLOBAL__
-              ? ` Use "vue.global.js" instead.`
-              : ``) /* should not happen */
+          `runtime compilation is not supported in this build of Vue.` +
+          (__ESM_BUNDLER__
+            ? ` Configure your bundler to alias "vue" to "vue/dist/vue.esm-bundler.js".`
+            : __ESM_BROWSER__
+              ? ` Use "vue.esm-browser.js" instead.`
+              : __GLOBAL__
+                ? ` Use "vue.global.js" instead.`
+                : ``) /* should not happen */
       )
     } else {
       warn(`Component is missing template or render function.`)
@@ -641,7 +656,7 @@ export function handleSetupResult(
     if (__DEV__ && isVNode(setupResult)) {
       warn(
         `setup() should not return VNodes directly - ` +
-        `return a render function instead.`
+          `return a render function instead.`
       )
     }
     //设置返回的绑定。

@@ -180,7 +180,7 @@ export function emit(
   }
 }
 
-// 检查传入的道具键是否为声明的 emit 事件监听器。
+// 检查传入的prop键是否为声明的 emit 事件监听器。
 // e.g.
 export function isEmitListener(
   options: ObjectEmitsOptions | null,

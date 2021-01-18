@@ -1,5 +1,6 @@
 import { ComponentInternalInstance } from './component'
 import { App } from './apiCreateApp'
+import { Comment, Fragment, Static, Text } from './vnode'
 
 const enum DevtoolsHooks {
   APP_INIT = 'app:init',
@@ -31,8 +32,33 @@ export function setDevtoolsHook(hook: DevtoolsHook) {
   devtools = hook
 }
 
-export const devtoolsComponentAdded = createDevtoolsComponentHook(
+export function devtoolsInitApp(app: App, version: string) {
+  // TODO queue if devtools is undefined
+  if (!devtools) return
+  devtools.emit(DevtoolsHooks.APP_INIT, app, version, {
+    Fragment,
+    Text,
+    Comment,
+    Static
+  })
+}
+
+export function devtoolsUnmountApp(app: App) {
+  if (!devtools) return
+  devtools.emit(DevtoolsHooks.APP_UNMOUNT, app)
+}
+
+
+export const devtoolsComponentAdded = /*__PURE__*/ createDevtoolsComponentHook(
   DevtoolsHooks.COMPONENT_ADDED
+)
+
+export const devtoolsComponentRemoved =  /*__PURE__*/ createDevtoolsComponentHook(
+  DevtoolsHooks.COMPONENT_REMOVED
+)
+
+export const devtoolsComponentUpdated = /*__PURE__*/ createDevtoolsComponentHook(
+  DevtoolsHooks.COMPONENT_REMOVED
 )
 
 function createDevtoolsComponentHook(hook: DevtoolsHooks) {

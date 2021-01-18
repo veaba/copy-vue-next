@@ -19,15 +19,15 @@ export const enum PatchFlags {
   STYLE = 1 << 2,
 
   // Indicates an element that has non-class/style dynamic props.
-  // 指示具有非类/样式动态道具的元素。
+  // 指示具有非类/样式动态prop的元素。
 
   // Can also be on a component that has any dynamic props (includes
   // class/style). when this flag is present, the vnode also has a dynamicProps
-  // 也可以位于具有任何动态道具（包括类/样式）的组件上。当这个标志出现时，vnode也有一个dynamicProps
+  // 也可以位于具有任何动态prop（包括类/样式）的组件上。当这个标志出现时，vnode也有一个dynamicProps
 
   // array that contains the keys of the props that may change so the runtime
   // can diff them faster (without having to worry about removed props)
-  // 该数组包含可能更改的道具键，以便运行时可以更快地对它们进行区分（不必担心移除的道具）
+  // 该数组包含可能更改的prop键，以便运行时可以更快地对它们进行区分（不必担心移除的prop）
   PROPS = 1 << 3,
 
   // Indicates an element with props with dynamic keys. When keys change, a full

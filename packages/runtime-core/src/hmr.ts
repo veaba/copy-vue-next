@@ -16,6 +16,7 @@ type HMRRecord = {
   instance: Set<ComponentInternalInstance>
 }
 const map: Map<string, HMRRecord> = new Map()
+
 function createRecord(
   id: string,
   component: ComputedOptions | ClassComponent
@@ -29,6 +30,20 @@ function createRecord(
     instance: new Set()
   })
   return true
+}
+
+export function registerHMR(instance: ComponentInternalInstance) {
+  const id = instance.type.__hmrId!
+  let record = map.get(id)
+  if (!record) {
+    createRecord(id, instance.type as ComponentOptions)
+    record = map.get(id)!
+  }
+  record.instance.add(instance)
+}
+
+export function unregisterHMR(instance: ComponentInternalInstance) {
+  map.get(instance.type.__hmrId!)!.instance.delete(instance)
 }
 
 function rerender(id: string, newRender?: Function) {
@@ -90,6 +105,7 @@ function reload(id: string, newComp: ComponentOptions | ClassComponent) {
     }
   })
 }
+
 export interface HMRRuntime {
   createRecord: typeof createRecord
   rerender: typeof rerender
