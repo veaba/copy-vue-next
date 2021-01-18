@@ -47,6 +47,7 @@ export {
     trigger,
     track,
     enableTracking,
+    pauseTracking,
     resetTracking,
     ITERATE_KEY,
     ReactiveEffect,

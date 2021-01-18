@@ -16,36 +16,6 @@ const shallowReadonlyGet = createGetter(true, true)
 const arrayInstrumentations: Record<string, Function> = {}
 
 // instrument identity-sensitive Array methods to account for possible reactive values
-// values
-;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
-    const method = Array.prototype[key] as any
-    arrayInstrumentations[key] = function (this: unknown[], ...args: unknown[]) {
-        const arr = toRaw(this)
-        for (let i = 0, l = this.length; i < l; i++) {
-            track(arr, TrackOpTypes.GET, i + '')
-        }
-        // 我们先用原始的 args 来运行方法（可能是反应式的)
-        const res = method.apply(arr, args)
-        if (res === -1 || res === false) {
-            // 如果还不行，就用原始值再运行一遍
-            return method.apply(arr, args.map(toRaw))
-        } else {
-            return res
-        }
-    }
-})
-
-// instrument length-altering 变更 methods ，以免长度被追踪
-;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
-    const method = Array.prototype[key] as any
-    arrayInstrumentations[key] = function (this: unknown[], ...args: unknown[]) {
-        pauseTracking()
-        const res = method.apply(this, args)
-        resetTracking()
-        return res
-    }
-})
-
 const builtInSymbols = new Set(
     Object.getOwnPropertyNames(Symbol)
         .map(key => (Symbol as any)[key])
@@ -121,9 +91,9 @@ function createGetter(isReadonly = false, shallow = false) {
             return res
         }
 
-        // 如果存在
+        // 非只读
         if (!isReadonly) {
-            track(target, TrackOpTypes.GET, key)
+            track(target, TrackOpTypes.GET, key) // 内容发生时，设置新的值
         }
         if (shallow) {
             return res
@@ -162,13 +132,12 @@ function createSetter(shallow = false) {
                 return true
             }
         } else {
-            // TODO
             // 在shallow（浅层） 模式下，无论对象是否被动，都原样设置
         }
         const hadKey = isArray(target) && isIntegerKey(key) ? Number(key) < target.length : hasOwn(target, key)
         const result = Reflect.set(target, key, value, receiver)
 
-        // 如果目标是原生原型链上的东西，则不触发
+        // 如果 target 是原生原型链上的东西，则不触发
         if (target === toRaw(receiver)) {
             if (!hadKey) {
                 trigger(target, TriggerOpTypes.ADD, key, value)
