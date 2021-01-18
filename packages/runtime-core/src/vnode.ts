@@ -8,12 +8,9 @@ import { AppContext } from './apiCreateApp'
 import { RawSlots } from './componentSlots'
 import { normalizeClass, normalizeStyle } from '../../shared/src/normalizeProp'
 import { currentRenderingInstance } from './componentRenderUtils'
-import { PatchFlags } from '../../shared/src/patchFalgs'
 import { warn } from './warning'
-import { isFunction, isObject, isString } from '@vue/shared'
-import { ShapeFlags } from '../../shared/src/shapeFlags'
+import { isFunction, isObject, isString, PatchFlags, ShapeFlags, SlotFlags } from '@vue/shared'
 import { currentScopeId } from './helpers/scopeId'
-import { SlotFlags } from '../../shared/src/slotFlags'
 import { EMPTY_ARR, extend, isArray, isOn } from '@vue/shared'
 import { setCompiledSlotRendering } from './helpers/renderSlot'
 import { isTeleport } from './components/Teleport'
@@ -144,10 +141,11 @@ const createVNodeWithArgsTransform = (
   ...args: Parameters<typeof _createVNode>
 ): VNode => {
   return _createVNode(
-    ...(vnodeArgsTransformer ? vnodeArgsTransformer(args, currentRenderingInstance) : args)
+    ...(vnodeArgsTransformer
+      ? vnodeArgsTransformer(args, currentRenderingInstance)
+      : args)
   )
 }
-
 
 export function mergeProps(...args: (Data & VNodeProps)[]) {
   const ret = extend({}, args[0])
@@ -328,7 +326,8 @@ export function createCommentVNode(
   // 当作为 v-else 分支使用时，注释节点必须作为一个 block 来创建，以确保正确的更新。
   asBlock: boolean = false
 ): VNode {
-  return asBlock ? (openBlock(), createBlock(Comment, null, text))
+  return asBlock
+    ? (openBlock(), createBlock(Comment, null, text))
     : createVNode(Comment, null, text)
 }
 

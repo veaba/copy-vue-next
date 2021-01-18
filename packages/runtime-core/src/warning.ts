@@ -1,5 +1,5 @@
 import {isRef, pauseTracking, resetTracking, toRaw} from '@vue/reactivity'
-import {callWithErrorHandling, ErrorCodes} from "./errorHanding";
+import {callWithErrorHandling, ErrorCodes} from "./errorHandling";
 import {VNode} from "./vnode";
 import {ComponentInternalInstance, ConcreteComponent, Data, formatComponentName} from "./component";
 import {isFunction, isString} from "@vue/shared";

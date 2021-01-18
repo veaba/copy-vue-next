@@ -19,7 +19,7 @@ import {
 } from '@vue/shared'
 import { ComputedRef, effect, isReactive, isRef, ReactiveEffectOptions, Ref, stop } from '@vue/reactivity'
 import { warn } from './warning'
-import { callWithAsyncErrorHandling, callWithErrorHandling, ErrorCodes } from './errorHanding'
+import { callWithAsyncErrorHandling, callWithErrorHandling, ErrorCodes } from './errorHandling'
 import { queuePreFlushCb, SchedulerJob } from './scheduler'
 import { queuePostRenderEffect } from './renderer'
 

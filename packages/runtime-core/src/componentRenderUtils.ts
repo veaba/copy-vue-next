@@ -2,7 +2,7 @@
 import { ComponentInternalInstance, Data, FunctionalComponent } from './component'
 import { ShapeFlags } from '../../shared/src/shapeFlags'
 import { cloneVNode, Comment, createVNode, Fragment, isVNode, normalizeVNode, VNode, VNodeArrayChildren } from './vnode'
-import { ErrorCodes, handleError } from './errorHanding'
+import { ErrorCodes, handleError } from './errorHandling'
 import { warn } from './warning'
 import { isModelListener, isOn } from '@vue/shared'
 import { NormalizedProps } from './componentProps'

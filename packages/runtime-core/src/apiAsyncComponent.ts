@@ -9,10 +9,10 @@ import { ComponentPublicInstance } from './componentPublicInstance'
 import { isFunction, isObject } from '@vue/shared'
 import { warn } from './warning'
 import { defineComponent } from './apiDefineComponent'
-import { ErrorCodes } from './errorHanding'
+import { ErrorCodes } from './errorHandling'
 import { createVNode } from './vnode'
 import { ref } from '@vue/reactivity'
-import { handleError } from './errorHanding'
+import { handleError } from './errorHandling'
 
 export type AsyncComponentResolveResult<T = Component> = T | { default: T }// es module
 export type AsyncComponentLoader<T = any> = () => Promise<AsyncComponentResolveResult<T>>

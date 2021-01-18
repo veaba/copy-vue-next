@@ -84,7 +84,7 @@ export {
   callWithErrorHandling,
   callWithAsyncErrorHandling,
   ErrorCodes
-} from './errorHanding'
+} from './errorHandling'
 
 export {
   resolveComponent,

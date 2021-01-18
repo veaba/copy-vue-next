@@ -18,13 +18,12 @@ import {
   TrackOpTypes
 } from '@vue/reactivity'
 import { Slots } from './componentSlots'
-import { EMPTY_OBJ, extend, hasOwn, isString, NOOP } from '@vue/shared'
+import { isGloballyWhitelisted, EMPTY_OBJ, extend, hasOwn, isString, NOOP } from '@vue/shared'
 import { UnionToIntersection } from './helpers/typeUtils'
 import { nextTick, queueJob } from './scheduler'
 import { instanceWatch, WatchOptions, WatchStopHandle } from './apiWatch'
 import { warn } from './warning'
 import { currentRenderingInstance, markAttrsAccessed } from './componentRenderUtils'
-import { isGloballyWhitelisted } from '../../shared/src/globalsWhitelist'
 
 export interface ComponentRenderContext {
   [key: string]: any
@@ -182,6 +181,26 @@ export type ComponentPublicInstanceConstructor<T extends ComponentPublicInstance
   __isSuspense?: never
   new(...args: any[]): T
 }
+
+/**
+ * @dev only
+ * */
+export function exposePropsOnRenderContext(
+  instance: ComponentInternalInstance
+) {
+  const { ctx, propsOptions: [propsOptions] } = instance
+  if (propsOptions) {
+    Object.keys(propsOptions).forEach(key => {
+      Object.defineProperty(ctx, key, {
+        enumerable: true,
+        configurable: true,
+        get: () => instance.props[key],
+        set: NOOP
+      })
+    })
+  }
+}
+
 
 /**
  * @dev only

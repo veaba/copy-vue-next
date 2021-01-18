@@ -3,7 +3,10 @@ import { makeMap } from './makeMap'
 export * from './codeframe'
 export * from './patchFalgs'
 export * from './shapeFlags'
+export * from './slotFlags'
 export * from './toDisplayString'
+export * from './globalsWhitelist'
+export * from './normalizeProp'
 let _globalThis: any
 export const isFunction = (val: unknown): val is Function => typeof val === 'function'
 

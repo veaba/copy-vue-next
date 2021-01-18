@@ -39,7 +39,7 @@ import {
 import { effect, isRef, ReactiveEffectOptions, stop } from '@vue/reactivity'
 import { createAppAPI, CreateAppFunction } from './apiCreateApp'
 import { createHydrationFunctions, RootHydrateFunction } from './hydration'
-import { callWithAsyncErrorHandling, callWithErrorHandling, ErrorCodes } from './errorHanding'
+import { callWithAsyncErrorHandling, callWithErrorHandling, ErrorCodes } from './errorHandling'
 import { isTeleportDisabled, TeleportImpl, TeleportVNode } from './components/Teleport'
 import { popWarningContext, pushWarningContext, warn } from './warning'
 import { isHmrUpdating, registerHMR, unregisterHMR } from './hmr'

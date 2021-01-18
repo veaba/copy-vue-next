@@ -6,7 +6,7 @@ import {
   LifecycleHooks,
   setCurrentInstance
 } from './component'
-import { callWithAsyncErrorHandling, ErrorTypeStrings } from './errorHanding'
+import { callWithAsyncErrorHandling, ErrorTypeStrings } from './errorHandling'
 import { warn } from './warning'
 import { toHandlerKey } from '@vue/shared'
 import { ComponentPublicInstance } from './componentPublicInstance'

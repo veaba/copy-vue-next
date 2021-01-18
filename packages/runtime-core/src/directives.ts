@@ -4,7 +4,7 @@ import { ComponentInternalInstance, Data } from './component'
 import { currentRenderingInstance } from './componentRenderUtils'
 import { warn } from './warning'
 import { EMPTY_OBJ, isFunction } from '@vue/shared'
-import { callWithAsyncErrorHandling, ErrorCodes } from './errorHanding'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 import { makeMap } from '../../shared/src/makeMap'
 
 

@@ -16,7 +16,7 @@ import { warn } from './warning'
 import { ComponentOptions } from './componentOptions'
 import { UnionToIntersection } from './helpers/typeUtils'
 import { devtoolsComponentEmit } from './devtools'
-import { callWithAsyncErrorHandling, ErrorCodes } from './errorHanding'
+import { callWithAsyncErrorHandling, ErrorCodes } from './errorHandling'
 
 export type ObjectEmitsOptions = Record<string, ((...args: any[]) => any) | null>
 

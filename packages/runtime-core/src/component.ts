@@ -1,43 +1,28 @@
-import { proxyRefs, ReactiveEffect } from '@vue/reactivity'
-import {
-  applyOptions,
-  ComponentOptions,
-  ComputedOptions,
-  MethodOptions
-} from './componentOptions'
-import {
-  ComponentPropsOptions,
-  initProps,
-  NormalizedPropsOptions,
-  normalizePropsOptions
-} from './componentProps'
-import {
-  emit,
-  EmitFn,
-  EmitsOptions,
-  normalizeEmitsOptions,
-  ObjectEmitsOptions
-} from './componentEmits'
+import { pauseTracking, proxyRefs, ReactiveEffect, resetTracking, shallowReadonly } from '@vue/reactivity'
+import { applyOptions, ComponentOptions, ComputedOptions, MethodOptions } from './componentOptions'
+import { ComponentPropsOptions, initProps, NormalizedPropsOptions, normalizePropsOptions } from './componentProps'
+import { emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions } from './componentEmits'
 import { AppConfig, AppContext, createAppContext } from './apiCreateApp'
 import { isVNode, VNode, VNodeChild } from './vnode'
 import {
   ComponentPublicInstance,
   ComponentPublicInstanceConstructor,
-  createRenderContext,
+  createRenderContext, exposePropsOnRenderContext,
   exposeSetupStateOnRenderContext,
+  PublicInstanceProxyHandlers,
   RuntimeCompiledPublicInstanceProxyHandlers
 } from './componentPublicInstance'
-import { Directive } from './directives'
+import { Directive, validateDirectiveName } from './directives'
 import { initSlots, InternalSlots, Slots } from './componentSlots'
 import { SuspenseBoundary } from './components/Suspense'
-import { EMPTY_OBJ, isFunction, isObject, NO, NOOP } from '@vue/shared'
+import { EMPTY_OBJ, isFunction, isObject, isPromise, NO, NOOP, ShapeFlags } from '@vue/shared'
 import { devtoolsComponentAdded } from './devtools'
-import { ShapeFlags } from '../../shared/src/shapeFlags'
 import { warn } from './warning'
 import { endMeasure, startMeasure } from './profiling'
 import { CompilerOptions } from '../../compile-core/src/options'
-import { currentRenderingInstance } from './componentRenderUtils'
+import { currentRenderingInstance, markAttrsAccessed } from './componentRenderUtils'
 import { makeMap } from '../../shared/src/makeMap'
+import { callWithErrorHandling, ErrorCodes } from './errorHandling'
 
 const emptyAppContext = createAppContext()
 let uid = 0
@@ -56,10 +41,11 @@ let compile: CompileFunction | undefined
 /**
  * 用于拓展 TSX 中组件上允许的非 declared prop
  * */
-export interface ComponentCustomProps {}
+export interface ComponentCustomProps {
+}
 
 export interface ClassComponent {
-  new (...args: any[]): ComponentPublicInstance<any, any, any, any, any>
+  new(...args: any[]): ComponentPublicInstance<any, any, any, any, any>
 
   __vccOpts: ComponentOptions
 }
@@ -178,13 +164,11 @@ export interface FunctionalComponent<P = {}, E extends EmitsOptions = {}>
 /**
  *
  * */
-export type ConcreteComponent<
-  Props = {},
+export type ConcreteComponent<Props = {},
   RawBindings = any,
   D = any,
   C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions
-> =
+  M extends MethodOptions = MethodOptions> =
   | ComponentOptions<Props, RawBindings, D, C, M>
   | FunctionalComponent<Props, any>
 
@@ -408,15 +392,15 @@ export interface ComponentInternalInstance {
  * 构造函数类型是由 defineComponent() 返回的一个人工类型。
  *
  * */
-export type Component<
-  Props = any,
+export type Component<Props = any,
   RawBindings = any,
   D = any,
   C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions
-> =
+  M extends MethodOptions = MethodOptions> =
   | ConcreteComponent<Props, RawBindings, D, C, M>
   | ComponentPublicInstanceConstructor<Props>
+
+export { ComponentOptions }
 
 /**
  * 创建组件实例
@@ -551,10 +535,134 @@ export function formatComponentName(
     name =
       inferFormRegistry(
         instance.components ||
-          (instance.parent.type as ComponentOptions).components
+        (instance.parent.type as ComponentOptions).components
       ) || inferFormRegistry(instance.appContext.components)
   }
   return name ? classify(name) : isRoot ? `App` : `Anonymous`
+}
+
+const attrHandlers: ProxyHandler<Data> = {
+  get: (target, key: string) => {
+    if (__DEV__) {
+      markAttrsAccessed()
+    }
+    return target[key]
+  },
+  set: () => {
+    warn(`setupContext.attrs is readonly.`)
+    return false
+  },
+  deleteProperty: () => {
+    warn(`setupContext.attrs is readonly.`)
+    return false
+  }
+}
+
+function createSetupContext(
+  instance: ComponentInternalInstance
+): SetupContext {
+  const expose: SetupContext['expose'] = exposed => {
+    if (__DEV__ && instance.exposed) {
+      warn(`expose() should be called only once per setup().`)
+    }
+    instance.exposed = proxyRefs(exposed)
+  }
+  if (__DEV__) {
+    // 我们在dev中使用getter，以防像 test-utils 这样的类库覆盖实例属性（覆盖不应该在prod中进行）。
+    return Object.freeze({
+      get props() {
+        return instance.props
+      },
+      get attrs() {
+        return new Proxy(instance.attrs, attrHandlers)
+      },
+      get slots() {
+        return shallowReadonly(instance.slots)
+      },
+      get emit() {
+        return (event: string, ...args: any[]) => instance.emit(event, ...args)
+      },
+      expose
+    })
+  } else {
+    return {
+      props: instance.props,
+      attrs: instance.attrs,
+      slots: instance.slots,
+      emit: instance.emit,
+      expose
+    }
+  }
+}
+
+function setupStatefulComponent(
+  instance: ComponentInternalInstance,
+  isSSR: boolean
+) {
+  const Component = instance.type as ComponentOptions
+  if (__DEV__) {
+    if (Component.name) {
+      validateComponentName(Component.name, instance.appContext.config)
+    }
+    if (Component.components) {
+      const names = Object.keys(Component.components)
+      for (let i = 0; i < names.length; i++) {
+        validateComponentName(names[i], instance.appContext.config)
+      }
+    }
+    if (Component.directives) {
+      const names = Object.keys(Component.directives)
+      for (let i = 0; i < names.length; i++) {
+        validateDirectiveName(names[i])
+      }
+    }
+  }
+  // 0. 创建渲染代理属性访问缓存
+  instance.accessCache = Object.create(null)
+  // 1. 创建公开实例 /render proxy
+  // 也要标明是 raw 的，以免被观测
+  instance.proxy = new Proxy(instance.ctx, PublicInstanceProxyHandlers)
+  if (__DEV__) {
+    exposePropsOnRenderContext(instance)
+  }
+  // 2. call setup()
+  const { setup } = Component
+  if (setup) {
+    const setupContext = (instance.setupContext =
+      setup.length > 1 ? createSetupContext(instance) : null)
+    currentInstance = instance
+    pauseTracking()
+    const setupResult = callWithErrorHandling(
+      setup,
+      instance,
+      ErrorCodes.SETUP_FUNCTION,
+      [__DEV__ ? shallowReadonly(instance.props) : instance.props, setupContext]
+    )
+    resetTracking()
+    currentInstance = null
+
+    if (isPromise(setupResult)) {
+      if (isSSR) {
+        // 返回promise诺，以便 SSR 可以等待它
+        return setupResult.then((resolveResult: unknown) => {
+          handleSetupResult(instance, resolveResult, isSSR)
+        })
+      } else if (__FEATURE_SUSPENSE__) {
+        // 异步 setup 返回 Promise
+        // 在这里离开，等待重新进入。
+        instance.asyncDep = setupResult
+      } else if (__DEV__) {
+        warn(
+          `setup() returned a Promise, but the version of Vue you are using ` +
+          `does not support it yet.`
+        )
+      }
+    } else {
+      handleSetupResult(instance, setupResult, isSSR)
+    }
+  } else {
+    finishComponentSetup(instance, isSSR)
+  }
 }
 
 export function setupComponent(
@@ -566,6 +674,11 @@ export function setupComponent(
   const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
   initProps(instance, props, isStateful, isSSR)
   initSlots(instance, children)
+  const setupResult = isStateful
+    ? setupStatefulComponent(instance, isSSR)
+    : undefined
+  isInSSRComponentSetup = false
+  return setupResult
 }
 
 export function isClassComponent(value: unknown): value is ClassComponent {
@@ -623,14 +736,14 @@ function finishComponentSetup(
     if (!compile && Component.template) {
       warn(
         `Component provided template option but ` +
-          `runtime compilation is not supported in this build of Vue.` +
-          (__ESM_BUNDLER__
-            ? ` Configure your bundler to alias "vue" to "vue/dist/vue.esm-bundler.js".`
-            : __ESM_BROWSER__
-              ? ` Use "vue.esm-browser.js" instead.`
-              : __GLOBAL__
-                ? ` Use "vue.global.js" instead.`
-                : ``) /* should not happen */
+        `runtime compilation is not supported in this build of Vue.` +
+        (__ESM_BUNDLER__
+          ? ` Configure your bundler to alias "vue" to "vue/dist/vue.esm-bundler.js".`
+          : __ESM_BROWSER__
+            ? ` Use "vue.esm-browser.js" instead.`
+            : __GLOBAL__
+              ? ` Use "vue.global.js" instead.`
+              : ``) /* should not happen */
       )
     } else {
       warn(`Component is missing template or render function.`)
@@ -656,7 +769,7 @@ export function handleSetupResult(
     if (__DEV__ && isVNode(setupResult)) {
       warn(
         `setup() should not return VNodes directly - ` +
-          `return a render function instead.`
+        `return a render function instead.`
       )
     }
     //设置返回的绑定。
