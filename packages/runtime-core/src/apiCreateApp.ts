@@ -55,7 +55,7 @@ export interface App<HostElement = any> {
 
   mount(
     rootContainer: HostElement | string,
-    isHydrate: boolean // true 是  SSR
+    isHydrate?: boolean // true 是  SSR
   ): ComponentPublicInstance
 
   unmount(rootContainer: HostElement | string): void

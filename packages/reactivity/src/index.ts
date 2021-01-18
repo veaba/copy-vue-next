@@ -55,4 +55,4 @@ export {
     DebuggerEvent
 } from "./effect"
 
-export { TrackOpTypes, TriggerOpTypes } from './operations.js'
+export { TrackOpTypes, TriggerOpTypes } from './operations'
