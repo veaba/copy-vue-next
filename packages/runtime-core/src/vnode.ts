@@ -1,19 +1,37 @@
 import { isProxy, ReactiveFlags, Ref, toRaw } from '@vue/reactivity'
-import { ClassComponent, ComponentInternalInstance, ConcreteComponent, Data, isClassComponent } from './component'
+import {
+  ClassComponent,
+  Component,
+  ComponentInternalInstance,
+  ConcreteComponent,
+  Data,
+  isClassComponent
+} from './component'
 import { RendererElement, RendererNode } from './renderer'
 import { DirectiveBinding } from './directives'
 import { TransitionHooks } from './components/BaseTransition'
-import { isSuspense, normalizeSuspenseChildren, SuspenseBoundary } from './components/Suspense'
+import { isSuspense, normalizeSuspenseChildren, SuspenseBoundary, SuspenseImpl } from './components/Suspense'
 import { AppContext } from './apiCreateApp'
 import { RawSlots } from './componentSlots'
-import { normalizeClass, normalizeStyle } from '../../shared/src/normalizeProp'
 import { currentRenderingInstance } from './componentRenderUtils'
 import { warn } from './warning'
-import { isFunction, isObject, isString, PatchFlags, ShapeFlags, SlotFlags } from '@vue/shared'
+import {
+  EMPTY_ARR,
+  extend,
+  isArray,
+  isFunction,
+  isObject,
+  isString,
+  isOn,
+  normalizeClass,
+  normalizeStyle,
+  PatchFlags,
+  ShapeFlags,
+  SlotFlags
+} from '@vue/shared'
 import { currentScopeId } from './helpers/scopeId'
-import { EMPTY_ARR, extend, isArray, isOn } from '@vue/shared'
 import { setCompiledSlotRendering } from './helpers/renderSlot'
-import { isTeleport } from './components/Teleport'
+import { isTeleport, TeleportImpl } from './components/Teleport'
 import { NULL_DYNAMIC_COMPONENT } from './helpers/resolveAssets'
 import { hmrDirtyComponents } from './hmr'
 
@@ -27,11 +45,30 @@ export const Text = Symbol(__DEV__ ? 'Text' : undefined)
 export const Comment = Symbol(__DEV__ ? 'Comment' : undefined)
 export const Static = Symbol(__DEV__ ? 'Static' : undefined)
 
-export type VNodeTypes = {}
-export type VNodeHook = | VNodeMountHook | VNodeUpdateHook | VNodeMountHook[] | VNodeUpdateHook[]
+export type VNodeTypes =
+  | string
+  | VNode
+  | Component
+  | typeof Text
+  | typeof Static
+  | typeof Comment
+  | typeof Fragment
+  | typeof TeleportImpl
+  | typeof SuspenseImpl
+
+export type VNodeHook =
+  | VNodeMountHook
+  | VNodeUpdateHook
+  | VNodeMountHook[]
+  | VNodeUpdateHook[]
 export type VNodeArrayChildren = Array<VNodeArrayChildren | VNodeChildAtom>
 export type VNodeChild = VNodeChildAtom | VNodeArrayChildren
-export type VNodeRef = | string | Ref | ((ref: object | null, refs: Record<string, any>) => void)
+export type VNodeRef =
+  | string
+  | Ref
+  | ((ref: object | null, refs: Record<string, any>) => void)
+
+// https://github.com/microsoft/TypeScript/issues/33099
 export type VNodeProps = {
   key?: string | number
   ref?: VNodeRef
@@ -49,8 +86,14 @@ export type VNodeNormalizedRefAtom = {
   i: ComponentInternalInstance,
   r: VNodeRef
 }
-export type VNodeNormalizedRef = | VNodeNormalizedRefAtom | (VNodeNormalizedRefAtom)[]
-export type VNodeNormalizedChildren = string | VNodeArrayChildren | RawSlots | null
+export type VNodeNormalizedRef =
+  | VNodeNormalizedRefAtom
+  | (VNodeNormalizedRefAtom)[]
+export type VNodeNormalizedChildren =
+  | string
+  | VNodeArrayChildren
+  | RawSlots
+  | null
 
 export interface VNode<HostNode = RendererNode,
   HostElement = RendererElement,
@@ -178,7 +221,10 @@ const normalizeKey = ({ key }: VNodeProps): VNode['key'] => key != null ? key : 
 
 const normalizeRef = ({ ref }: VNodeProps): VNodeNormalizedRefAtom | null => {
   return (ref != null
-    ? isArray(ref) ? ref : { i: currentRenderingInstance, r: ref } : null) as any
+    ? isArray(ref)
+      ? ref
+      : { i: currentRenderingInstance, r: ref }
+    : null) as any
 }
 export const Fragment = (Symbol(__DEV__ ? 'Fragment' : undefined) as any) as {
   __isFragment: true
@@ -291,7 +337,7 @@ export function createBlock(
 }
 
 export function isVNode(value: any): value is VNode {
-  return value ? value.__is_isVNode === true : false
+  return value ? value.__v_isVNode === true : false
 }
 
 export function normalizeVNode(child: VNodeChild): VNode {
@@ -403,7 +449,7 @@ export const createVNode = (__DEV__ ? createVNodeWithArgsTransform : _createVNod
 
 function _createVNode(
   type: VNodeTypes | ClassComponent | typeof NULL_DYNAMIC_COMPONENT,
-  props: (Data & VNodeTypes) | null = null,
+  props: (Data & VNodeProps) | null = null,
   children: unknown = null,
   patchFlag: number = 0,
   dynamicProps: string[] | null = null,
@@ -553,7 +599,8 @@ export function transformVNodeArgs(transformer?: typeof vnodeArgsTransformer) {
 }
 
 export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
-  if (__DEV__ &&
+  if (
+    __DEV__ &&
     n2.shapeFlag & ShapeFlags.COMPONENT &&
     hmrDirtyComponents.has(n2.type as ConcreteComponent)) {
     // HRM only: 如果这个组件已 热更新，则强制reload
