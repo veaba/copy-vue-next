@@ -1,5 +1,5 @@
 /** 处理器**/
-import { ITERATE_KEY, track, trigger } from './effect'
+import { ITERATE_KEY, pauseTracking, resetTracking, track, trigger } from './effect'
 import { TrackOpTypes, TriggerOpTypes } from './operations'
 import { extend, hasChanged, hasOwn, isArray, isIntegerKey, isObject, isSymbol } from '@vue/shared'
 import { reactive, ReactiveFlags, reactiveMap, readonly, readonlyMap, Target, toRaw } from './reactive'
@@ -14,7 +14,35 @@ const shallowSet = createSetter(true)
 const shallowReadonlyGet = createGetter(true, true)
 
 const arrayInstrumentations: Record<string, Function> = {}
-
+// instrument identity-sensitive的数组方法方法，以说明可能的响应式值。
+;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
+  const method = Array.prototype[key] as any
+  arrayInstrumentations[key] = function(this: unknown[], ...args: unknown[]) {
+    const arr = toRaw(this)
+    for (let i = 0, l = this.length; i < l; i++) {
+      track(arr, TrackOpTypes.GET, i + '')
+    }
+    // we run the method using the original args first (which may be reactive)
+    const res = method.apply(arr, args)
+    if (res === -1 || res === false) {
+      // if that didn't work, run it again using raw values.
+      return method.apply(arr, args.map(toRaw))
+    } else {
+      return res
+    }
+  }
+})
+// instrument length-altering mutation methods to avoid length being tracked
+// which leads to infinite loops in some cases (#2137)
+;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
+  const method = Array.prototype[key] as any
+  arrayInstrumentations[key] = function(this: unknown[], ...args: unknown[]) {
+    pauseTracking()
+    const res = method.apply(this, args)
+    resetTracking()
+    return res
+  }
+})
 // instrument identity-sensitive Array methods to account for possible reactive values
 const builtInSymbols = new Set(
   Object.getOwnPropertyNames(Symbol)
