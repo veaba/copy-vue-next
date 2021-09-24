@@ -164,3 +164,9 @@ cosole.log([...new Set([11, 1, 1, 1, 1, 1])])
 - 设置数组的 length=0 的意义
 
 在于还是初始化一开始的内存地址，如果赋值 `arr=[]` 则是新的内存地址
+
+
+## test
+
+测试 reactivity
+> jest packages/reactivity

@@ -339,11 +339,11 @@ function checkIdentityKeys(
     if (rawKey !== key && has.call(target, rawKey)) {
         const type = toRawType(target)
         console.warn(
-            `响应式 ${type} 包含 raw 和 reactive ` +
-            `同一个对象的版本${type === `Map` ? ` as keys` : ``}, ` +
-            `这可能导致不一致的情况. ` +
-            `它可以避免区分对象的原始版本和响应式版本的不一致，` +
-            `如果可以的话，只使用响应式版本`
+          `Reactive ${type} contains both the raw and reactive ` +
+          `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
+          `which can lead to inconsistencies. ` +
+          `Avoid differentiating between the raw and reactive versions ` +
+          `of an object and only use the reactive version if possible.`
         )
     }
 }

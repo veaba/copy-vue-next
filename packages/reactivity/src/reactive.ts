@@ -1,18 +1,33 @@
-import { Ref, UnwrapRef } from './ref'
 import { isObject, toRawType, def } from '@vue/shared'
-import { mutableHandlers, readonlyHandlers, shallowReactiveHandlers, shallowReadonlyHandlers } from './baseHandlers'
+import {
+  mutableHandlers,
+  readonlyHandlers,
+  shallowReactiveHandlers,
+  shallowReadonlyHandlers
+} from './baseHandlers'
 import {
   mutableCollectionHandlers,
   readonlyCollectionHandlers,
   shallowCollectionHandlers
 } from './collectionHandlers'
+import { UnwrapRef, Ref } from './ref'
 
 export const enum ReactiveFlags {
   SKIP = '__v_skip',
-  IS_READONLY = '__v_isReadonly',
   IS_REACTIVE = '__v_isReactive',
+  IS_READONLY = '__v_isReadonly',
   RAW = '__v_raw'
 }
+
+export interface Target {
+  [ReactiveFlags.SKIP]?: boolean
+  [ReactiveFlags.IS_REACTIVE]?: boolean
+  [ReactiveFlags.IS_READONLY]?: boolean
+  [ReactiveFlags.RAW]?: any
+}
+
+export const reactiveMap = new WeakMap<Target, any>()
+export const readonlyMap = new WeakMap<Target, any>()
 
 const enum TargetType {
   INVALID = 0,
@@ -32,23 +47,69 @@ function targetTypeMap(rawType: string) {
       return TargetType.COLLECTION
     default:
       return TargetType.INVALID
-
   }
 }
 
-export interface Target {
-  [ReactiveFlags.SKIP]?: boolean
-  [ReactiveFlags.IS_REACTIVE]?: boolean
-  [ReactiveFlags.IS_READONLY]?: boolean
-  [ReactiveFlags.RAW]?: any
+function getTargetType(value: Target) {
+  return value[ReactiveFlags.SKIP] || !Object.isExtensible(value)
+    ? TargetType.INVALID
+    : targetTypeMap(toRawType(value))
 }
 
-export const reactiveMap = new WeakMap<Target, any>()
-export const readonlyMap = new WeakMap<Target, any>()
-
-// 仅解构嵌套的 ref
+// only unwrap nested ref
 type UnwrapNestedRefs<T> = T extends Ref ? T : UnwrapRef<T>
-type Primitive = string | number | boolean | bigint | symbol | undefined | null  // TODO: bigint
+
+/**
+ * Creates a reactive copy of the original object.
+ *
+ * The reactive conversion is "deep"—it affects all nested properties. In the
+ * ES2015 Proxy based implementation, the returned proxy is **not** equal to the
+ * original object. It is recommended to work exclusively with the reactive
+ * proxy and avoid relying on the original object.
+ *
+ * A reactive object also automatically unwraps refs contained in it, so you
+ * don't need to use `.value` when accessing and mutating their value:
+ *
+ * ```js
+ * const count = ref(0)
+ * const obj = reactive({
+ *   count
+ * })
+ *
+ * obj.count++
+ * obj.count // -> 1
+ * count.value // -> 1
+ * ```
+ */
+export function reactive<T extends object>(target: T): UnwrapNestedRefs<T>
+export function reactive(target: object) {
+  // if trying to observe a readonly proxy, return the readonly version.
+  if (target && (target as Target)[ReactiveFlags.IS_READONLY]) {
+    return target
+  }
+  return createReactiveObject(
+    target,
+    false,
+    mutableHandlers,
+    mutableCollectionHandlers
+  )
+}
+
+/**
+ * Return a shallowly-reactive copy of the original object, where only the root
+ * level properties are reactive. It also does not auto-unwrap refs (even at the
+ * root level).
+ */
+export function shallowReactive<T extends object>(target: T): T {
+  return createReactiveObject(
+    target,
+    false,
+    shallowReactiveHandlers,
+    shallowCollectionHandlers
+  )
+}
+
+type Primitive = string | number | boolean | bigint | symbol | undefined | null
 type Builtin = Primitive | Function | Date | Error | RegExp
 export type DeepReadonly<T> = T extends Builtin
   ? T
@@ -70,6 +131,77 @@ export type DeepReadonly<T> = T extends Builtin
                   ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
                   : Readonly<T>
 
+/**
+ * Creates a readonly copy of the original object. Note the returned copy is not
+ * made reactive, but `readonly` can be called on an already reactive object.
+ */
+export function readonly<T extends object>(
+  target: T
+): DeepReadonly<UnwrapNestedRefs<T>> {
+  return createReactiveObject(
+    target,
+    true,
+    readonlyHandlers,
+    readonlyCollectionHandlers
+  )
+}
+
+/**
+ * Returns a reactive-copy of the original object, where only the root level
+ * properties are readonly, and does NOT unwrap refs nor recursively convert
+ * returned properties.
+ * This is used for creating the props proxy object for stateful components.
+ */
+export function shallowReadonly<T extends object>(
+  target: T
+): Readonly<{ [K in keyof T]: UnwrapNestedRefs<T[K]> }> {
+  return createReactiveObject(
+    target,
+    true,
+    shallowReadonlyHandlers,
+    readonlyCollectionHandlers
+  )
+}
+
+function createReactiveObject(
+  target: Target,
+  isReadonly: boolean,
+  baseHandlers: ProxyHandler<any>,
+  collectionHandlers: ProxyHandler<any>
+) {
+  if (!isObject(target)) {
+    if (__DEV__) {
+      console.warn(`value cannot be made reactive: ${String(target)}`)
+    }
+    return target
+  }
+  // target is already a Proxy, return it.
+  // exception: calling readonly() on a reactive object
+  if (
+    target[ReactiveFlags.RAW] &&
+    !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
+  ) {
+    return target
+  }
+  // target already has corresponding Proxy
+  const proxyMap = isReadonly ? readonlyMap : reactiveMap
+  const existingProxy = proxyMap.get(target)
+  if (existingProxy) {
+    return existingProxy
+  }
+  // only a whitelist of value types can be observed.
+  const targetType = getTargetType(target)
+  if (targetType === TargetType.INVALID) {
+    return target
+  }
+  const proxy = new Proxy(
+    target,
+    targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
+  )
+  proxyMap.set(target, proxy)
+  return proxy
+}
+
 export function isReactive(value: unknown): boolean {
   if (isReadonly(value)) {
     return isReactive((value as Target)[ReactiveFlags.RAW])
@@ -85,141 +217,12 @@ export function isProxy(value: unknown): boolean {
   return isReactive(value) || isReadonly(value)
 }
 
-/**
- * @desc 创建一个原始对象的 readonly 副本，返回的副本并不是响应式的，但 `readonly` 可以在一个响应式化的对象上调用
- * */
-export function readonly<T extends object>(
-  target: T
-): DeepReadonly<UnwrapNestedRefs<T>> {
-  return createReactiveObject(
-    target,
-    true,
-    readonlyHandlers,
-    readonlyCollectionHandlers
-  )
-}
-
-function getTargetType(value: Target) {
-  return value[ReactiveFlags.SKIP] || !Object.isExtensible(value) // 判断是否允许新增 property
-    ? TargetType.INVALID : targetTypeMap(toRawType(value))
-}
-
-// core
-function createReactiveObject(
-  target: Target,
-  isReadonly: boolean,
-  baseHandlers: ProxyHandler<any>,
-  collectionHandlers: ProxyHandler<any>) {
-  // 如果 target 不是一个对象
-  if (!isObject(target)) {
-    if (__DEV__) {
-      console.warn(`value 无法被响应式化: ${String(target)}`)
-    }
-    return target
-  }
-  // 如果 target 已是一个 Proxy，则返回它
-  // 例外：在响应式对象上调用 readonly()
-  if (target[ReactiveFlags.RAW] && !(isReadonly && target[ReactiveFlags.IS_REACTIVE])) {
-    return target
-  }
-
-  // target 已有相应的 Proxy
-  const proxyMap = isReadonly ? readonlyMap : reactiveMap
-  const existingProxy = proxyMap.get(target) // 现有的 Proxy
-  if (existingProxy) {
-    return existingProxy
-  }
-
-  // 只有观测到 value 类型的白名单
-  const targetType = getTargetType(target)
-  if (targetType === TargetType.INVALID) {
-    return target
-  }
-  const proxy = new Proxy(
-    target,
-    targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers // TODO: collectionHandler 与 baseHandler 区别
-  )
-  proxyMap.set(target, proxy)
-  return proxy
-}
-
-/**
- * 创建一个原始对象的响应式副本 {reactive:响应式,reactivity:响应性}
- * 1. 响应式转换是 `深层的`，它影响所有的嵌套 property。
- * 2. 在基于ES5实现中，返回的 proxy 是不**等**于原始对象的。
- * 3. 建议只是用响应式 proxy，避免依赖原始对象
- *
- * 响应式对象会自动解构其中包含的 refs，所以在访问和变更它们的值时，不需要使用 `.value`
- *
- * ```js
- * const count = ref(0)
- * const obj =reactive({
- *     count
- * })
- * obj.count++
- * obj.count   // ->1
- * count.value // ->1
- * ```
- * */
-
-export function reactive<T extends object>(target: T): UnwrapNestedRefs<T>
-
-export function reactive(target: object) {
-  // 如果尝试观察一个只读的 proxy，则返回只读版本
-  if (target && (target as Target)[ReactiveFlags.IS_READONLY]) {
-    return target
-  }
-  // 开始创建响应式对象
-  return createReactiveObject(
-    target,
-    false,
-    mutableHandlers, // 可变的处理器？
-    mutableCollectionHandlers // 可变的收集处理器？
-  )
-}
-
-/**
- * @desc 返回原始对象浅层响应式副本，其中只有根 property 是响应式
- * 它也不会自动解构 refs (即便是 根级)
- * */
-export function shallowReactive<T extends object>(target: T): T {
-  return createReactiveObject(
-    target,
-    false,
-    shallowReactiveHandlers,
-    shallowCollectionHandlers
-  )
-}
-
-
-/**
- * @desc 浅层只读
- * 返回的原始对象的响应式副本，其中只有根级 property 是只读的。
- * 并且不解构 refs 也不递归转换返回的 property
- * */
-export function shallowReadonly<T extends object>(
-  target: T
-): Readonly<{ [K in keyof T]: UnwrapNestedRefs<T[K]> }> {
-  return createReactiveObject(
-    target,
-    true,
-    shallowReadonlyHandlers,
-    readonlyCollectionHandlers
-  )
-}
-
-/**
- * 返回 `reactive` 或 `readonly` proxy 的原始对象
- * */
 export function toRaw<T>(observed: T): T {
   return (
     (observed && toRaw((observed as Target)[ReactiveFlags.RAW])) || observed
   )
 }
 
-/**
- * @desc 标记一个对象，使其永远不会被转为 proxy，返回对象本身
- * */
 export function markRaw<T extends object>(value: T): T {
   def(value, ReactiveFlags.SKIP, true)
   return value
