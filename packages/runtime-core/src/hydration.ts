@@ -1,129 +1,163 @@
-import { Comment, Fragment, normalizeVNode, Static, VNode, VNodeHook } from './vnode'
-import { invokeVNodeHook, RendererInternals, setRef } from './renderer'
-import { warn } from './warning'
-import { ComponentInternalInstance } from './component'
-import { queueEffectWithSuspense, SuspenseBoundary, SuspenseImpl } from './components/Suspense'
-import { ShapeFlags } from '../../shared/src/shapeFlags'
-import { ComponentOptions } from './componentOptions'
-import { TeleportImpl, TeleportVNode } from './components/Teleport'
-import { PatchFlags } from '../../shared/src/patchFalgs'
-import { isOn, isReservedProp } from '@vue/shared'
-import { invokeDirectiveHook } from './directives'
-import { flushPostFlushCbs } from './scheduler'
-
-let hasMismatch = false
-
-export type  RootHydrateFunction = (
+export type RootHydrateFunction = (
   vnode: VNode<Node, Element>,
-  container: Element
+  container: (Element | ShadowRoot) & { _vnode?: VNode },
 ) => void
 
-const enum DOMNodeTypes {
-  ELEMENT = 1,
-  TEXT = 3,
-  COMMENT = 8
-}
-
-const isSVGContainer = (container: Element) =>
-  /svg/.test(container.namespaceURI!) && container.tagName !== 'foreignObject'
-
-const isComment = (node: Node): node is Comment =>
-  node.nodeType === DOMNodeTypes.COMMENT
-
-/**
- * 注：水合是DOM特有的
- * 但由于与核心的紧密耦合，我们必须把它放在核心中--把它拆分出来会造成一大堆不必要的复杂性。
- * 水合也依赖于一些渲染器的内部逻辑，需要通过参数传递进来。
- * */
+// Note: hydration is DOM-specific
+// But we have to place it in core due to tight coupling with core - splitting
+// it out creates a ton of unnecessary complexity.
+// Hydration also depends on some renderer internal logic which needs to be
+// passed in via arguments.
 export function createHydrationFunctions(
-  rendererInternals: RendererInternals<Node, Element>
-) {
+  rendererInternals: RendererInternals<Node, Element>,
+): [
+  RootHydrateFunction,
+  (
+    node: Node,
+    vnode: VNode,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    slotScopeIds: string[] | null,
+    optimized?: boolean,
+  ) => Node | null,
+] {
   const {
     mt: mountComponent,
     p: patch,
     o: {
-      patchProp, nextSibling, parentNode, remove, insert, createComment
-    }
+      patchProp,
+      createText,
+      nextSibling,
+      parentNode,
+      remove,
+      insert,
+      createComment,
+    },
   } = rendererInternals
 
   const hydrate: RootHydrateFunction = (vnode, container) => {
-    if (__DEV__ && !container.hasChildNodes()) {
-      warn(
-        `Attempting to hydrate existing markup but container is empty. ` +
-        `Performing full mount instead.`
-      )
+    if (!container.hasChildNodes()) {
+      ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+        warn(
+          `Attempting to hydrate existing markup but container is empty. ` +
+            `Performing full mount instead.`,
+        )
       patch(null, vnode, container)
+      flushPostFlushCbs()
+      container._vnode = vnode
       return
     }
-    hasMismatch = false
-    hydrateNode(container.firstChild!, vnode, null, null)
+
+    hydrateNode(container.firstChild!, vnode, null, null, null)
     flushPostFlushCbs()
-    if (hasMismatch && !__TEST__) {
-      // 这个错误应该在生产中出现
-      console.error(`Hydration completed but contains mismatches.`)
-    }
+    container._vnode = vnode
   }
+
   const hydrateNode = (
     node: Node,
     vnode: VNode,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    optimized = false
+    slotScopeIds: string[] | null,
+    optimized = false,
   ): Node | null => {
+    optimized = optimized || !!vnode.dynamicChildren
     const isFragmentStart = isComment(node) && node.data === '['
     const onMismatch = () =>
       handleMismatch(
-        node, vnode, parentComponent, parentSuspense, isFragmentStart
+        node,
+        vnode,
+        parentComponent,
+        parentSuspense,
+        slotScopeIds,
+        isFragmentStart,
       )
-    const { type, ref, shapeFlag } = vnode
-    const domType = node.nodeType
+
+    const { type, ref, shapeFlag, patchFlag } = vnode
+    let domType = node.nodeType
     vnode.el = node
+
+    if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+      def(node, '__vnode', vnode, true)
+      def(node, '__vueParentComponent', parentComponent, true)
+    }
+
+    if (patchFlag === PatchFlags.BAIL) {
+      optimized = false
+      vnode.dynamicChildren = null
+    }
 
     let nextNode: Node | null = null
     switch (type) {
       case Text:
         if (domType !== DOMNodeTypes.TEXT) {
-          nextNode = onMismatch()
+          // #5728 empty text node inside a slot can cause hydration failure
+          // because the server rendered HTML won't contain a text node
+          if (vnode.children === '') {
+            insert((vnode.el = createText('')), parentNode(node)!, node)
+            nextNode = node
+          } else {
+            nextNode = onMismatch()
+          }
         } else {
           if ((node as Text).data !== vnode.children) {
-            hasMismatch = true
-            __DEV__ &&
-            warn(
-              `Hydration text mismatch:` +
-              `\n- Client: ${JSON.stringify((node as Text).data)}` +
-              `\n- Server: ${JSON.stringify(vnode.children)}`
-            )
+            ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+              warn(
+                `Hydration text mismatch in`,
+                node.parentNode,
+                `\n  - rendered on server: ${JSON.stringify(
+                  (node as Text).data,
+                )}` +
+                  `\n  - expected on client: ${JSON.stringify(vnode.children)}`,
+              )
+            logMismatchError()
             ;(node as Text).data = vnode.children as string
           }
           nextNode = nextSibling(node)
         }
         break
-      case Comment:
-        if (domType !== DOMNodeTypes.COMMENT || isFragmentStart) {
+      case VComment:
+        if (isTemplateNode(node)) {
+          nextNode = nextSibling(node)
+          // wrapped <transition appear>
+          // replace <template> node with inner child
+          replaceNode(
+            (vnode.el = node.content.firstChild!),
+            node,
+            parentComponent,
+          )
+        } else if (domType !== DOMNodeTypes.COMMENT || isFragmentStart) {
           nextNode = onMismatch()
         } else {
           nextNode = nextSibling(node)
         }
         break
       case Static:
-        if (domType !== DOMNodeTypes.ELEMENT) {
-          nextNode = onMismatch()
-        } else {
-          // 确定 anchor，采用内容
+        if (isFragmentStart) {
+          // entire template is static but SSRed as a fragment
+          node = nextSibling(node)!
+          domType = node.nodeType
+        }
+        if (domType === DOMNodeTypes.ELEMENT || domType === DOMNodeTypes.TEXT) {
+          // determine anchor, adopt content
           nextNode = node
-          // 如果静态 vnode 的内容在构建过程中被剥离，
-          // 则从服务器渲染的 HTML 中采用它。
+          // if the static vnode has its content stripped during build,
+          // adopt it from the server-rendered HTML.
           const needToAdoptContent = !(vnode.children as string).length
-          for (let i = 0; i < vnode.staticCount; i++) {
-            if (needToAdoptContent) {
-              vnode.children += (nextNode as Element).outerHTML
-            }
-            if (i === vnode.staticCount - 1) {
+          for (let i = 0; i < vnode.staticCount!; i++) {
+            if (needToAdoptContent)
+              vnode.children +=
+                nextNode.nodeType === DOMNodeTypes.ELEMENT
+                  ? (nextNode as Element).outerHTML
+                  : (nextNode as Text).data
+            if (i === vnode.staticCount! - 1) {
               vnode.anchor = nextNode
             }
             nextNode = nextSibling(nextNode)!
           }
-          return nextNode
+          return isFragmentStart ? nextSibling(nextNode) : nextNode
+        } else {
+          onMismatch()
         }
         break
       case Fragment:
@@ -135,14 +169,18 @@ export function createHydrationFunctions(
             vnode,
             parentComponent,
             parentSuspense,
-            optimized
+            slotScopeIds,
+            optimized,
           )
         }
         break
       default:
         if (shapeFlag & ShapeFlags.ELEMENT) {
-          if (domType !== DOMNodeTypes.ELEMENT ||
-            vnode.type !== (node as Element).tagName.toLowerCase()
+          if (
+            (domType !== DOMNodeTypes.ELEMENT ||
+              (vnode.type as string).toLowerCase() !==
+                (node as Element).tagName.toLowerCase()) &&
+            !isTemplateNode(node)
           ) {
             nextNode = onMismatch()
           } else {
@@ -151,53 +189,98 @@ export function createHydrationFunctions(
               vnode,
               parentComponent,
               parentSuspense,
-              optimized
+              slotScopeIds,
+              optimized,
             )
           }
         } else if (shapeFlag & ShapeFlags.COMPONENT) {
-          // 在设置渲染效果时，如果初始vnode已经设置了.el，
-          // 组件将在其子树上执行水化而不是挂载。
+          // when setting up the render effect, if the initial vnode already
+          // has .el set, the component will perform hydration instead of mount
+          // on its sub-tree.
+          vnode.slotScopeIds = slotScopeIds
           const container = parentNode(node)!
-          const hydrateComponent = () => {
-            mountComponent(
-              vnode, container, null, parentComponent, parentSuspense, isSVGContainer(container), optimized
-            )
+
+          // Locate the next node.
+          if (isFragmentStart) {
+            // If it's a fragment: since components may be async, we cannot rely
+            // on component's rendered output to determine the end of the
+            // fragment. Instead, we do a lookahead to find the end anchor node.
+            nextNode = locateClosingAnchor(node)
+          } else if (isComment(node) && node.data === 'teleport start') {
+            // #4293 #6152
+            // If a teleport is at component root, look ahead for teleport end.
+            nextNode = locateClosingAnchor(node, node.data, 'teleport end')
+          } else {
+            nextNode = nextSibling(node)
           }
-          // 异步组件
-          const loadAsync = (vnode.type as ComponentOptions).__asyncLoader
-          if (loadAsync) {
-            loadAsync().then(hydrateComponent)
-            hydrateComponent()
+
+          mountComponent(
+            vnode,
+            container,
+            null,
+            parentComponent,
+            parentSuspense,
+            getContainerType(container),
+            optimized,
+          )
+
+          // #3787
+          // if component is async, it may get moved / unmounted before its
+          // inner component is loaded, so we need to give it a placeholder
+          // vnode that matches its adopted DOM.
+          if (
+            isAsyncWrapper(vnode) &&
+            !(vnode.type as ComponentOptions).__asyncResolved
+          ) {
+            let subTree
+            if (isFragmentStart) {
+              subTree = createVNode(Fragment)
+              subTree.anchor = nextNode
+                ? nextNode.previousSibling
+                : container.lastChild
+            } else {
+              subTree =
+                node.nodeType === 3 ? createTextVNode('') : createVNode('div')
+            }
+            subTree.el = node
+            vnode.component!.subTree = subTree
           }
-          // 组件可能是异步的，所以在片段的情况下，
-          // 我们不能依靠组件的渲染输出来确定片段的结束，
-          // 而是要做一个lookahead来寻找结束锚节点。
-          nextNode = isFragmentStart ? locateClosingAsyncAnchor(node)
-            : nextSibling(node)
         } else if (shapeFlag & ShapeFlags.TELEPORT) {
           if (domType !== DOMNodeTypes.COMMENT) {
             nextNode = onMismatch()
           } else {
             nextNode = (vnode.type as typeof TeleportImpl).hydrate(
-              node, vnode as TeleportVNode, parentComponent, parentSuspense,
-              optimized, rendererInternals, hydrateChildren
+              node,
+              vnode as TeleportVNode,
+              parentComponent,
+              parentSuspense,
+              slotScopeIds,
+              optimized,
+              rendererInternals,
+              hydrateChildren,
             )
           }
         } else if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
           nextNode = (vnode.type as typeof SuspenseImpl).hydrate(
-            node, vnode, parentComponent, parentSuspense, isSVGContainer(parentNode(node)!),
-            optimized, rendererInternals, hydrateNode
+            node,
+            vnode,
+            parentComponent,
+            parentSuspense,
+            getContainerType(parentNode(node)!),
+            slotScopeIds,
+            optimized,
+            rendererInternals,
+            hydrateNode,
           )
-        } else if (__DEV__) {
-
+        } else if (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) {
+          warn('Invalid HostVNode type:', type, `(${typeof type})`)
         }
-        warn('Invalid HostVNode type:', type, `(${typeof type})`)
     }
-    // switch end
 
-    if (ref != null && parentComponent) {
-      setRef(ref, null, parentComponent, parentSuspense, vnode)
+    if (ref != null) {
+      setRef(ref, null, parentSuspense, vnode)
     }
+
     return nextNode
   }
 
@@ -206,31 +289,163 @@ export function createHydrationFunctions(
     vnode: VNode,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    optimized: boolean
+    slotScopeIds: string[] | null,
+    optimized: boolean,
   ) => {
     optimized = optimized || !!vnode.dynamicChildren
-    const { props, patchFlag, shapeFlag, dirs } = vnode
-    // 如果是被吊起的静态节点则跳过 props & children
-    if (patchFlag !== PatchFlags.HOISTED) {
+    const { type, props, patchFlag, shapeFlag, dirs, transition } = vnode
+    // #4006 for form elements with non-string v-model value bindings
+    // e.g. <option :value="obj">, <input type="checkbox" :true-value="1">
+    // #7476 <input indeterminate>
+    const forcePatch = type === 'input' || type === 'option'
+    // skip props & children if this is hoisted static nodes
+    // #5405 in dev, always hydrate children for HMR
+    if (__DEV__ || forcePatch || patchFlag !== PatchFlags.CACHED) {
       if (dirs) {
         invokeDirectiveHook(vnode, null, parentComponent, 'created')
       }
+
+      // handle appear transition
+      let needCallTransitionHooks = false
+      if (isTemplateNode(el)) {
+        needCallTransitionHooks =
+          needTransition(
+            null, // no need check parentSuspense in hydration
+            transition,
+          ) &&
+          parentComponent &&
+          parentComponent.vnode.props &&
+          parentComponent.vnode.props.appear
+
+        const content = (el as HTMLTemplateElement).content
+          .firstChild as Element & { $cls?: string }
+
+        if (needCallTransitionHooks) {
+          const cls = content.getAttribute('class')
+          if (cls) content.$cls = cls
+          transition!.beforeEnter(content)
+        }
+
+        // replace <template> node with inner children
+        replaceNode(content, el, parentComponent)
+        vnode.el = el = content
+      }
+
+      // children
+      if (
+        shapeFlag & ShapeFlags.ARRAY_CHILDREN &&
+        // skip if element has innerHTML / textContent
+        !(props && (props.innerHTML || props.textContent))
+      ) {
+        let next = hydrateChildren(
+          el.firstChild,
+          vnode,
+          el,
+          parentComponent,
+          parentSuspense,
+          slotScopeIds,
+          optimized,
+        )
+        let hasWarned = false
+        while (next) {
+          if (!isMismatchAllowed(el, MismatchTypes.CHILDREN)) {
+            if (
+              (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+              !hasWarned
+            ) {
+              warn(
+                `Hydration children mismatch on`,
+                el,
+                `\nServer rendered element contains more child nodes than client vdom.`,
+              )
+              hasWarned = true
+            }
+            logMismatchError()
+          }
+
+          // The SSRed DOM contains more nodes than it should. Remove them.
+          const cur = next
+          next = next.nextSibling
+          remove(cur)
+        }
+      } else if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
+        // #11873 the HTML parser will "eat" the first newline when parsing
+        // <pre> and <textarea>, so if the client value starts with a newline,
+        // we need to remove it before comparing
+        let clientText = vnode.children as string
+        if (
+          clientText[0] === '\n' &&
+          (el.tagName === 'PRE' || el.tagName === 'TEXTAREA')
+        ) {
+          clientText = clientText.slice(1)
+        }
+        if (el.textContent !== clientText) {
+          if (!isMismatchAllowed(el, MismatchTypes.TEXT)) {
+            ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+              warn(
+                `Hydration text content mismatch on`,
+                el,
+                `\n  - rendered on server: ${el.textContent}` +
+                  `\n  - expected on client: ${vnode.children as string}`,
+              )
+            logMismatchError()
+          }
+
+          el.textContent = vnode.children as string
+        }
+      }
+
       // props
       if (props) {
-        if (!optimized ||
-          (patchFlag & PatchFlags.FULL_PROPS ||
-            patchFlag & PatchFlags.HYDRATE_EVENTS
-          )) {
+        if (
+          __DEV__ ||
+          __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__ ||
+          forcePatch ||
+          !optimized ||
+          patchFlag & (PatchFlags.FULL_PROPS | PatchFlags.NEED_HYDRATION)
+        ) {
+          const isCustomElement = el.tagName.includes('-')
           for (const key in props) {
-            if (!isReservedProp(key) && isOn(key)) {
-              patchProp(el, key, null, props[key])
+            // check hydration mismatch
+            if (
+              (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+              // #11189 skip if this node has directives that have created hooks
+              // as it could have mutated the DOM in any possible way
+              !(dirs && dirs.some(d => d.dir.created)) &&
+              propHasMismatch(el, key, props[key], vnode, parentComponent)
+            ) {
+              logMismatchError()
+            }
+            if (
+              (forcePatch &&
+                (key.endsWith('value') || key === 'indeterminate')) ||
+              (isOn(key) && !isReservedProp(key)) ||
+              // force hydrate v-bind with .prop modifiers
+              key[0] === '.' ||
+              isCustomElement
+            ) {
+              patchProp(el, key, null, props[key], undefined, parentComponent)
             }
           }
         } else if (props.onClick) {
-          // click listener 的快速路径（这是最常见的），以避免通过props迭代。
-          patchProp(el, 'onClick', null, props.onClick)
+          // Fast path for click listeners (which is most often) to avoid
+          // iterating through props.
+          patchProp(
+            el,
+            'onClick',
+            null,
+            props.onClick,
+            undefined,
+            parentComponent,
+          )
+        } else if (patchFlag & PatchFlags.STYLE && isReactive(props.style)) {
+          // #11372: object style values are iterated during patch instead of
+          // render/normalization phase, but style patch is skipped during
+          // hydration, so we need to force iterate the object to track deps
+          for (const key in props.style) props.style[key]
         }
       }
+
       // vnode / directive hooks
       let vnodeHooks: VNodeHook | null | undefined
       if ((vnodeHooks = props && props.onVnodeBeforeMount)) {
@@ -239,61 +454,30 @@ export function createHydrationFunctions(
       if (dirs) {
         invokeDirectiveHook(vnode, null, parentComponent, 'beforeMount')
       }
-      if ((vnodeHooks = props && props.onVnodeMounted) || dirs) {
+      if (
+        (vnodeHooks = props && props.onVnodeMounted) ||
+        dirs ||
+        needCallTransitionHooks
+      ) {
         queueEffectWithSuspense(() => {
           vnodeHooks && invokeVNodeHook(vnodeHooks, parentComponent, vnode)
+          needCallTransitionHooks && transition!.enter(el)
           dirs && invokeDirectiveHook(vnode, null, parentComponent, 'mounted')
         }, parentSuspense)
       }
-      // children
-      if (shapeFlag & ShapeFlags.ARRAY_CHILDREN &&
-        // 如果element 有 innerHTML / textContent 则跳过
-        !(props && (props.innerHTML || props.textContext))
-      ) {
-        let next = hydrateChildren(
-          el.firstChild,
-          vnode,
-          el,
-          parentComponent,
-          parentSuspense,
-          optimized
-        )
-        let hasWarned = false
-        while (next) {
-          hasMismatch = true
-          if (__DEV__ && !hasWarned) {
-            warn(
-              `Hydration children mismatch in <${vnode.type as string}>: ` +
-              `server rendered element contains more child nodes than client vdom.`
-            )
-            hasWarned = true
-          }
-          // SSRed DOM包含了更多的节点。移除它们。
-          const cur = next
-          next = next.nextSibling
-          remove(cur)
-        }
-      } else if (shapeFlag & ShapeFlags.TEXT_CHILDREN) {
-        if (el.textContent !== vnode.children) {
-          hasMismatch = true
-          __DEV__ && warn(
-            `Hydration text content mismatch in <${vnode.type as string}>:\n` +
-            `- Client: ${el.textContent}\n` +
-            `- Server: ${vnode.children as string}`
-          )
-          el.textContent = vnode.children as string
-        }
-      }
     }
+
     return el.nextSibling
   }
+
   const hydrateChildren = (
     node: Node | null,
     parentVNode: VNode,
     container: Element,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    optimized: boolean
+    slotScopeIds: string[] | null,
+    optimized: boolean,
   ): Node | null => {
     optimized = optimized || !!parentVNode.dynamicChildren
     const children = parentVNode.children as VNode[]
@@ -303,20 +487,55 @@ export function createHydrationFunctions(
       const vnode = optimized
         ? children[i]
         : (children[i] = normalizeVNode(children[i]))
+      const isText = vnode.type === Text
       if (node) {
-        node = hydrateNode(
-          node, vnode, parentComponent, parentSuspense, optimized
-        )
-      } else {
-        hasWarned = true
-        if (__DEV__ && !hasWarned) {
-          warn(
-            `Hydration children mismatch in <${container.tagName.toLowerCase()}>: ` +
-            `server rendered element contains fewer child nodes than client vdom.`
-          )
-          hasWarned = true
+        if (isText && !optimized) {
+          // #7285 possible consecutive text vnodes from manual render fns or
+          // JSX-compiled fns, but on the client the browser parses only 1 text
+          // node.
+          // look ahead for next possible text vnode
+          if (i + 1 < l && normalizeVNode(children[i + 1]).type === Text) {
+            // create an extra TextNode on the client for the next vnode to
+            // adopt
+            insert(
+              createText(
+                (node as Text).data.slice((vnode.children as string).length),
+              ),
+              container,
+              nextSibling(node),
+            )
+            ;(node as Text).data = vnode.children as string
+          }
         }
-        // SSRed DOM没有包含足够的节点。挂载缺少的节点。
+        node = hydrateNode(
+          node,
+          vnode,
+          parentComponent,
+          parentSuspense,
+          slotScopeIds,
+          optimized,
+        )
+      } else if (isText && !vnode.children) {
+        // #7215 create a TextNode for empty text node
+        // because server rendered HTML won't contain a text node
+        insert((vnode.el = createText('')), container)
+      } else {
+        if (!isMismatchAllowed(container, MismatchTypes.CHILDREN)) {
+          if (
+            (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+            !hasWarned
+          ) {
+            warn(
+              `Hydration children mismatch on`,
+              container,
+              `\nServer rendered element contains fewer child nodes than client vdom.`,
+            )
+            hasWarned = true
+          }
+          logMismatchError()
+        }
+
+        // the SSRed DOM didn't contain enough nodes. Mount the missing ones.
         patch(
           null,
           vnode,
@@ -324,19 +543,29 @@ export function createHydrationFunctions(
           null,
           parentComponent,
           parentSuspense,
-          isSVGContainer(container)
+          getContainerType(container),
+          slotScopeIds,
         )
       }
     }
     return node
   }
+
   const hydrateFragment = (
     node: Comment,
     vnode: VNode,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    optimized: boolean
+    slotScopeIds: string[] | null,
+    optimized: boolean,
   ) => {
+    const { slotScopeIds: fragmentSlotScopeIds } = vnode
+    if (fragmentSlotScopeIds) {
+      slotScopeIds = slotScopeIds
+        ? slotScopeIds.concat(fragmentSlotScopeIds)
+        : fragmentSlotScopeIds
+    }
+
     const container = parentNode(node)!
     const next = hydrateChildren(
       nextSibling(node)!,
@@ -344,44 +573,51 @@ export function createHydrationFunctions(
       container,
       parentComponent,
       parentSuspense,
-      optimized
+      slotScopeIds,
+      optimized,
     )
     if (next && isComment(next) && next.data === ']') {
       return nextSibling((vnode.anchor = next))
     } else {
-      // 片段没有成功水合，因为我们没有得到一个末端锚。
-      // 这本应导致节点/子代不匹配的警告。
-      hasMismatch = true
-      // 由于没有锚，我们需要创建一个锚，并将其插入
-      insert((vnode.anchor = createComment(']')), container, next)
+      // fragment didn't hydrate successfully, since we didn't get a end anchor
+      // back. This should have led to node/children mismatch warnings.
+      logMismatchError()
+
+      // since the anchor is missing, we need to create one and insert it
+      insert((vnode.anchor = createComment(`]`)), container, next)
       return next
     }
   }
+
   const handleMismatch = (
     node: Node,
     vnode: VNode,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    isFragment: boolean
+    slotScopeIds: string[] | null,
+    isFragment: boolean,
   ): Node | null => {
-    hasMismatch = true
-    __DEV__ &&
-    warn(
-      `Hydration node mismatch:\n- Client vnode:`,
-      vnode.type,
-      `\n- Server rendered DOM:`,
-      node,
-      node.nodeType === DOMNodeTypes.TEXT
-        ? `(text)`
-        : isComment(node) && node.data === '['
-        ? `(start of fragment)`
-        : ``
-    )
+    if (!isMismatchAllowed(node.parentElement!, MismatchTypes.CHILDREN)) {
+      ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+        warn(
+          `Hydration node mismatch:\n- rendered on server:`,
+          node,
+          node.nodeType === DOMNodeTypes.TEXT
+            ? `(text)`
+            : isComment(node) && node.data === '['
+              ? `(start of fragment)`
+              : ``,
+          `\n- expected on client:`,
+          vnode.type,
+        )
+      logMismatchError()
+    }
+
     vnode.el = null
 
     if (isFragment) {
-      // 移除多余的 fragment 节点
-      const end = locateClosingAsyncAnchor(node)
+      // remove excessive fragment nodes
+      const end = locateClosingAnchor(node)
       while (true) {
         const next = nextSibling(node)
         if (next && next !== end) {
@@ -391,9 +627,11 @@ export function createHydrationFunctions(
         }
       }
     }
+
     const next = nextSibling(node)
     const container = parentNode(node)!
     remove(node)
+
     patch(
       null,
       vnode,
@@ -401,17 +639,29 @@ export function createHydrationFunctions(
       next,
       parentComponent,
       parentSuspense,
-      isSVGContainer(container)
+      getContainerType(container),
+      slotScopeIds,
     )
+    // the component vnode's el should be updated when a mismatch occurs.
+    if (parentComponent) {
+      parentComponent.vnode.el = vnode.el
+      updateHOCHostEl(parentComponent, vnode.el)
+    }
     return next
   }
-  const locateClosingAsyncAnchor = (node: Node | null): Node | null => {
+
+  // looks ahead for a start and closing comment node
+  const locateClosingAnchor = (
+    node: Node | null,
+    open = '[',
+    close = ']',
+  ): Node | null => {
     let match = 0
     while (node) {
       node = nextSibling(node)
       if (node && isComment(node)) {
-        if (node.data === '[') match++
-        if (node.data === ']') {
+        if (node.data === open) match++
+        if (node.data === close) {
           if (match === 0) {
             return nextSibling(node)
           } else {
@@ -422,5 +672,34 @@ export function createHydrationFunctions(
     }
     return node
   }
-  return [hydrate, hydrateNode] as const
+
+  const replaceNode = (
+    newNode: Node,
+    oldNode: Node,
+    parentComponent: ComponentInternalInstance | null,
+  ): void => {
+    // replace node
+    const parentNode = oldNode.parentNode
+    if (parentNode) {
+      parentNode.replaceChild(newNode, oldNode)
+    }
+
+    // update vnode
+    let parent = parentComponent
+    while (parent) {
+      if (parent.vnode.el === oldNode) {
+        parent.vnode.el = parent.subTree.el = newNode
+      }
+      parent = parent.parent
+    }
+  }
+
+  const isTemplateNode = (node: Node): node is HTMLTemplateElement => {
+    return (
+      node.nodeType === DOMNodeTypes.ELEMENT &&
+      (node as Element).tagName === 'TEMPLATE'
+    )
+  }
+
+  return [hydrate, hydrateNode]
 }

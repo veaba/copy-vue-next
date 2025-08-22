@@ -1,180 +1,125 @@
-import { pauseTracking, proxyRefs, ReactiveEffect, resetTracking, shallowReadonly } from '@vue/reactivity'
-import { applyOptions, ComponentOptions, ComputedOptions, MethodOptions } from './componentOptions'
-import { ComponentPropsOptions, initProps, NormalizedPropsOptions, normalizePropsOptions } from './componentProps'
-import { emit, EmitFn, EmitsOptions, normalizeEmitsOptions, ObjectEmitsOptions } from './componentEmits'
-import { AppConfig, AppContext, createAppContext } from './apiCreateApp'
-import { isVNode, VNode, VNodeChild } from './vnode'
+import { type VNode, type VNodeChild, isVNode } from './vnode'
 import {
-  ComponentPublicInstance,
-  ComponentPublicInstanceConstructor,
-  createRenderContext, exposePropsOnRenderContext,
-  exposeSetupStateOnRenderContext,
+  EffectScope,
+  type ReactiveEffect,
+  TrackOpTypes,
+  isRef,
+  markRaw,
+  pauseTracking,
+  proxyRefs,
+  resetTracking,
+  shallowReadonly,
+  track,
+} from '@vue/reactivity'
+import {
+  type ComponentPublicInstance,
+  type ComponentPublicInstanceConstructor,
   PublicInstanceProxyHandlers,
-  RuntimeCompiledPublicInstanceProxyHandlers
+  RuntimeCompiledPublicInstanceProxyHandlers,
+  createDevRenderContext,
+  exposePropsOnRenderContext,
+  exposeSetupStateOnRenderContext,
+  publicPropertiesMap,
 } from './componentPublicInstance'
-import { Directive, validateDirectiveName } from './directives'
-import { initSlots, InternalSlots, Slots } from './componentSlots'
-import { SuspenseBoundary } from './components/Suspense'
-import { EMPTY_OBJ, isFunction, isObject, isPromise, NO, NOOP, ShapeFlags } from '@vue/shared'
-import { devtoolsComponentAdded } from './devtools'
+import {
+  type ComponentPropsOptions,
+  type NormalizedPropsOptions,
+  initProps,
+  normalizePropsOptions,
+} from './componentProps'
+import {
+  type InternalSlots,
+  type Slots,
+  type SlotsType,
+  type UnwrapSlotsType,
+  initSlots,
+} from './componentSlots'
 import { warn } from './warning'
+import { ErrorCodes, callWithErrorHandling, handleError } from './errorHandling'
+import {
+  type AppConfig,
+  type AppContext,
+  createAppContext,
+} from './apiCreateApp'
+import { type Directive, validateDirectiveName } from './directives'
+import {
+  type ComponentOptions,
+  type ComputedOptions,
+  type MergedComponentOptions,
+  type MethodOptions,
+  applyOptions,
+  resolveMergedOptions,
+} from './componentOptions'
+import {
+  type EmitFn,
+  type EmitsOptions,
+  type EmitsToProps,
+  type ObjectEmitsOptions,
+  type ShortEmitsToObject,
+  emit,
+  normalizeEmitsOptions,
+} from './componentEmits'
+import {
+  EMPTY_OBJ,
+  type IfAny,
+  NOOP,
+  ShapeFlags,
+  extend,
+  getGlobalThis,
+  isArray,
+  isFunction,
+  isObject,
+  isPromise,
+  makeMap,
+} from '@vue/shared'
+import type { SuspenseBoundary } from './components/Suspense'
+import type { CompilerOptions } from '@vue/compiler-core'
+import { markAttrsAccessed } from './componentRenderUtils'
+import { currentRenderingInstance } from './componentRenderContext'
 import { endMeasure, startMeasure } from './profiling'
-import { CompilerOptions } from '../../compile-core/src/options'
-import { currentRenderingInstance, markAttrsAccessed } from './componentRenderUtils'
-import { makeMap } from '../../shared/src/makeMap'
-import { callWithErrorHandling, ErrorCodes } from './errorHandling'
+import { convertLegacyRenderFn } from './compat/renderFn'
+import {
+  type CompatConfig,
+  globalCompatConfig,
+  validateCompatConfig,
+} from './compat/compatConfig'
+import type { SchedulerJob } from './scheduler'
+import type { LifecycleHooks } from './enums'
 
-const emptyAppContext = createAppContext()
-let uid = 0
-
-type LifecycleHook = Function[] | null
-
-export let isInSSRComponentSetup = false
-
-type CompileFunction = (
-  template: string | object,
-  options?: CompilerOptions
-) => InternalRenderFunction
-
-let compile: CompileFunction | undefined
-
-/**
- * 用于拓展 TSX 中组件上允许的非 declared prop
- * */
-export interface ComponentCustomProps {
-}
-
-export interface ClassComponent {
-  new(...args: any[]): ComponentPublicInstance<any, any, any, any, any>
-
-  __vccOpts: ComponentOptions
-}
-
-/**
- * TSX 中组件上默认允许 非 declared prop
- * */
-export interface AllowedComponentProps {
-  class?: unknown
-  style?: unknown
-}
-
-export const enum LifecycleHooks {
-  BEFORE_CREATE = 'bc',
-  CREATED = 'c',
-  BEFORE_MOUNT = 'bm',
-  MOUNTED = 'm',
-  BEFORE_UPDATE = 'bu',
-  UPDATED = 'u',
-  BEFORE_UNMOUNT = 'bum',
-  UNMOUNTED = 'um',
-  DEACTIVATED = 'da',
-  ACTIVATED = 'a',
-  RENDER_TRIGGERED = 'rtg',
-  RENDER_TRACKED = 'rtc',
-  ERROR_CAPTURED = 'ec'
-}
-
-export interface SetupContext<E = EmitsOptions, P = Data> {
-  props: P
-  attrs: Data
-  slots: Slots
-  emit: EmitFn<E>
-  expose: (exposed: Record<string, any>) => void
-}
-
-export let currentInstance: ComponentInternalInstance | null = null
-
-export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
-  currentInstance || currentRenderingInstance
-
-export const setCurrentInstance = (
-  instance: ComponentInternalInstance | null
-) => {
-  currentInstance = instance
-}
-// 两个内置组件
-const isBuiltInTag = /*__PURE__*/ makeMap('slot,component')
-
-export function validateComponentName(name: string, config: AppConfig) {
-  const appIsNativeTag = config.isNativeTag || NO // 判断是原生tag
-  if (isBuiltInTag(name) || appIsNativeTag(name)) {
-    warn(
-      'Do not use built-in or reserved HTML elements as component id: ' + name
-    )
-  }
-}
-
-/**
- * @internal
- * */
-export type InternalRenderFunction = {
-  (
-    ctx: ComponentPublicInstance,
-    cache: ComponentInternalInstance['renderCache'],
-    // 对于 compiler-optimized bindings
-    $props: ComponentInternalInstance['props'],
-    $setup: ComponentInternalInstance['setupState'],
-    $data: ComponentInternalInstance['data'],
-    $options: ComponentInternalInstance['ctx']
-  ): VNodeChild
-  _rc?: boolean // isRuntimeCompiled
-}
+// Augment GlobalComponents
+import type { TeleportProps } from './components/Teleport'
+import type { SuspenseProps } from './components/Suspense'
+import type { KeepAliveProps } from './components/KeepAlive'
+import type { BaseTransitionProps } from './components/BaseTransition'
+import type { DefineComponent } from './apiDefineComponent'
+import { markAsyncBoundary } from './helpers/useId'
+import { isAsyncWrapper } from './apiAsyncComponent'
+import type { RendererElement } from './renderer'
 
 export type Data = Record<string, unknown>
 
-// 提示：不能将这整个接口标记为内部接口，因为一些公共接口扩展了它。
-export interface ComponentInternalOptions {
-  /**
-   * @internal
-   * */
-  __props?: NormalizedPropsOptions
-  /**
-   * @internal
-   * */
-  __emits?: ObjectEmitsOptions | null
-  /**
-   * @internal
-   * */
-  __scopeId?: string
-  /**
-   * @internal
-   * */
-  __cssModules?: Data
-  /**
-   * @internal
-   * */
-  __hmrId?: string
-  /**
-   * 这个应该公开，以便devtools可以使用它
-   * */
-  __file?: string
-}
-
-export interface FunctionalComponent<P = {}, E extends EmitsOptions = {}>
-  extends ComponentInternalOptions {
-  // 这里使用 `any` 是有目的的，所以它可以成为有效的 JSX element 构造函数
-  (props: P, ctx: Omit<SetupContext<E, P>, 'expose'>): any
-
-  props?: ComponentPropsOptions<P>
-  emits?: E | (keyof E)[]
-  inheritAttrs?: boolean
-  displayName?: string
-}
-
 /**
- *
- * */
-export type ConcreteComponent<Props = {},
+ * A type used in public APIs where a component type is expected.
+ * The constructor type is an artificial type returned by defineComponent().
+ */
+export type Component<
+  PropsOrInstance = any,
   RawBindings = any,
   D = any,
   C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions> =
-  | ComponentOptions<Props, RawBindings, D, C, M>
-  | FunctionalComponent<Props, any>
+  M extends MethodOptions = MethodOptions,
+  E extends EmitsOptions | Record<string, any[]> = {},
+  S extends Record<string, any> = any,
+> =
+  | ConcreteComponent<PropsOrInstance, RawBindings, D, C, M, E, S>
+  | ComponentPublicInstanceConstructor<PropsOrInstance>
+
+export type LifecycleHook<TFn = Function> = (TFn & SchedulerJob)[] | null
 
 /**
- * 我们暴露了内部实例上的一个 property 子集，因为它们对高阶外部库和工具很有用
- * */
+ * We expose a subset of properties on the internal instance as they are
+ * useful for advanced external libraries and tools.
+ */
 export interface ComponentInternalInstance {
   uid: number
   type: ConcreteComponent
@@ -182,90 +127,137 @@ export interface ComponentInternalInstance {
   root: ComponentInternalInstance
   appContext: AppContext
   /**
-   * vNode: 表示该组件在其父级 vDom 树中的位置
-   * */
+   * Vnode representing this component in its parent's vdom tree
+   */
   vnode: VNode
-
   /**
-   * 等待新的 vNode 从父级中更新
+   * The pending new vnode from parent updates
    * @internal
-   * */
+   */
   next: VNode | null
   /**
-   * 该组件子集的vdom树的 根 vnode
-   * */
+   * Root vnode of this component's own vdom tree
+   */
   subTree: VNode
   /**
-   * 用于渲染和修补组件的响应式 effect。可调用。
-   * */
-  update: ReactiveEffect
+   * Render effect instance
+   */
+  effect: ReactiveEffect
   /**
-   * 返回 vdom 树的渲染函数
+   * Force update render effect
+   */
+  update: () => void
+  /**
+   * Render effect job to be passed to scheduler (checks if dirty)
+   */
+  job: SchedulerJob
+  /**
+   * The render function that returns vdom tree.
    * @internal
-   * */
+   */
   render: InternalRenderFunction | null
   /**
    * SSR render function
    * @internal
-   * */
+   */
   ssrRender?: Function | null
   /**
-   * 包含该组件为其子代提供的值得对象
+   * Object containing values this component provides for its descendants
    * @internal
-   * */
+   */
   provides: Data
   /**
-   * 追踪与该组件相关的响应式 effect (如：watchers)，以便在组件 unmount 时自动停止
+   * for tracking useId()
+   * first element is the current boundary prefix
+   * second number is the index of the useId call within that boundary
    * @internal
-   * */
-  effects: ReactiveEffect[] | null
+   */
+  ids: [string, number, number]
   /**
-   * proxy 访问类型的缓存，以避免调用 hasOwnProperty
+   * Tracking reactive effects (e.g. watchers) associated with this component
+   * so that they can be automatically stopped on component unmount
    * @internal
-   * */
+   */
+  scope: EffectScope
+  /**
+   * cache for proxy access type to avoid hasOwnProperty calls
+   * @internal
+   */
   accessCache: Data | null
   /**
-   * 缓存依赖在 `_ctx` 的渲染函数值，但在出世后不需要更新(例如：内联的 handlers)
+   * cache for render function values that rely on _ctx but won't need updates
+   * after initialized (e.g. inline handlers)
    * @internal
-   * */
-  renderCache: (Function | VNode)[]
+   */
+  renderCache: (Function | VNode | undefined)[]
+
   /**
-   * 解决组件注册，仅适用于带有 mixins 或 extends 的组件。
+   * Resolved component registry, only for components with mixins or extends
    * @internal
-   * */
+   */
   components: Record<string, ConcreteComponent> | null
   /**
-   * 解决指令注册，仅适用于带有 mixins 或 extends 的组件。
+   * Resolved directive registry, only for components with mixins or extends
    * @internal
-   * */
+   */
   directives: Record<string, Directive> | null
   /**
-   * 解决 props options
-   * */
+   * Resolved filters registry, v2 compat only
+   * @internal
+   */
+  filters?: Record<string, Function>
+  /**
+   * resolved props options
+   * @internal
+   */
   propsOptions: NormalizedPropsOptions
   /**
-   * 解决 emits options
-   * */
+   * resolved emits options
+   * @internal
+   */
   emitsOptions: ObjectEmitsOptions | null
+  /**
+   * resolved inheritAttrs options
+   * @internal
+   */
+  inheritAttrs?: boolean
+  /**
+   * Custom Element instance (if component is created by defineCustomElement)
+   * @internal
+   */
+  ce?: ComponentCustomElementInterface
+  /**
+   * is custom element? (kept only for compatibility)
+   * @internal
+   */
+  isCE?: boolean
+  /**
+   * custom element specific HMR method
+   * @internal
+   */
+  ceReload?: (newStyles?: string[]) => void
 
-  // 其他的只针对有状态的组件 ------------------------------
+  // the rest are only for stateful components ---------------------------------
 
-  // 作为公共实例上的主proxy (`this`)
+  // main proxy that serves as the public instance (`this`)
   proxy: ComponentPublicInstance | null
 
-  // 通过 expose() 暴露属性
+  // exposed properties via expose()
   exposed: Record<string, any> | null
+  exposeProxy: Record<string, any> | null
 
   /**
-   * 替代 proxy, 仅用于使用 `with` 块的运行时编译的渲染函数
+   * alternative proxy used only for runtime-compiled render functions using
+   * `with` block
    * @internal
-   * */
+   */
   withProxy: ComponentPublicInstance | null
-
   /**
-   * 这是公共实例 proxy 的目标，它还持有由用户选项(计算属性，method 等等)注入的property和用户附加的自定义property(通过 `this.x= ...`)
+   * This is the target for the public instance proxy. It also holds properties
+   * injected by user options (computed, methods etc.) and user-attached
+   * custom properties (via `this.x = ...`)
    * @internal
-   * */
+   */
   ctx: Data
 
   // state
@@ -275,143 +267,207 @@ export interface ComponentInternalInstance {
   slots: InternalSlots
   refs: Data
   emit: EmitFn
+
   /**
-   * 用于跟踪组件上的 `.once` 事件 handlers
+   * used for keeping track of .once event handlers on components
    * @internal
-   * */
+   */
   emitted: Record<string, boolean> | null
   /**
-   * setup 相关
+   * used for caching the value returned from props default factory functions to
+   * avoid unnecessary watcher trigger
    * @internal
-   * */
+   */
+  propsDefaults: Data
+  /**
+   * setup related
+   * @internal
+   */
   setupState: Data
   /**
-   * devtools 访问其他信息
+   * devtools access to additional info
    * @internal
-   * */
+   */
   devtoolsRawSetupState?: any
   /**
    * @internal
-   * */
+   */
   setupContext: SetupContext | null
 
   /**
-   * suspense 相关
-   * */
+   * suspense related
+   * @internal
+   */
   suspense: SuspenseBoundary | null
   /**
-   * suspense 等待 batch id
+   * suspense pending batch id
    * @internal
-   * */
+   */
   suspenseId: number
   /**
    * @internal
-   * */
+   */
   asyncDep: Promise<any> | null
-
   /**
    * @internal
-   * */
+   */
   asyncResolved: boolean
 
   // lifecycle
   isMounted: boolean
   isUnmounted: boolean
   isDeactivated: boolean
-
-  // 生命周期 ------------------------------
   /**
-   * lifecycle: before create
    * @internal
-   * */
+   */
   [LifecycleHooks.BEFORE_CREATE]: LifecycleHook
   /**
-   * lifecycle: created
    * @internal
-   * */
+   */
   [LifecycleHooks.CREATED]: LifecycleHook
   /**
-   * lifecycle: before mount
    * @internal
-   * */
+   */
   [LifecycleHooks.BEFORE_MOUNT]: LifecycleHook
   /**
-   * lifecycle: mounted
    * @internal
-   * */
+   */
   [LifecycleHooks.MOUNTED]: LifecycleHook
   /**
-   * lifecycle: before update
    * @internal
-   * */
+   */
   [LifecycleHooks.BEFORE_UPDATE]: LifecycleHook
   /**
-   * lifecycle: updated
    * @internal
-   * */
+   */
   [LifecycleHooks.UPDATED]: LifecycleHook
   /**
-   * lifecycle: before unmount
    * @internal
-   * */
+   */
   [LifecycleHooks.BEFORE_UNMOUNT]: LifecycleHook
   /**
-   * lifecycle: unmounted
    * @internal
-   * */
+   */
   [LifecycleHooks.UNMOUNTED]: LifecycleHook
   /**
-   * lifecycle: render tracked
    * @internal
-   * */
+   */
   [LifecycleHooks.RENDER_TRACKED]: LifecycleHook
   /**
-   * lifecycle: render triggered
    * @internal
-   * */
+   */
   [LifecycleHooks.RENDER_TRIGGERED]: LifecycleHook
   /**
-   * lifecycle: ACTIVATED
    * @internal
-   * */
+   */
   [LifecycleHooks.ACTIVATED]: LifecycleHook
   /**
-   * lifecycle: Deactivated
    * @internal
-   * */
+   */
   [LifecycleHooks.DEACTIVATED]: LifecycleHook
   /**
-   * lifecycle: error Captured
    * @internal
-   * */
+   */
   [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
+  /**
+   * @internal
+   */
+  [LifecycleHooks.SERVER_PREFETCH]: LifecycleHook<() => Promise<unknown>>
+
+  /**
+   * For caching bound $forceUpdate on public proxy access
+   * @internal
+   */
+  f?: () => void
+  /**
+   * For caching bound $nextTick on public proxy access
+   * @internal
+   */
+  n?: () => Promise<void>
+  /**
+   * `updateTeleportCssVars`
+   * For updating css vars on contained teleports
+   * @internal
+   */
+  ut?: (vars?: Record<string, unknown>) => void
+
+  /**
+   * dev only. For style v-bind hydration mismatch checks
+   * @internal
+   */
+  getCssVars?: () => Record<string, unknown>
+
+  /**
+   * v2 compat only, for caching mutated $options
+   * @internal
+   */
+  resolvedOptions?: MergedComponentOptions
 }
 
-/**
- * 在公共API中使用的一种类型，在这里预期有一个组件类型。
- * 构造函数类型是由 defineComponent() 返回的一个人工类型。
- *
- * */
-export type Component<Props = any,
+export type ComponentOptions<
+  Props = {},
   RawBindings = any,
   D = any,
-  C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions> =
-  | ConcreteComponent<Props, RawBindings, D, C, M>
-  | ComponentPublicInstanceConstructor<Props>
+  C extends ComputedOptions = any,
+  M extends MethodOptions = any,
+  Mixin extends ComponentOptionsMixin = any,
+  Extends extends ComponentOptionsMixin = any,
+  E extends EmitsOptions = any,
+  EE extends string = string,
+  Defaults = {},
+  I extends ComponentInjectOptions = {},
+  II extends string = string,
+  S extends SlotsType = {},
+  LC extends Record<string, Component> = {},
+  Directives extends Record<string, Directive> = {},
+  Exposed extends string = string,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions,
+> = ComponentOptionsBase<
+  Props,
+  RawBindings,
+  D,
+  C,
+  M,
+  Mixin,
+  Extends,
+  E,
+  EE,
+  Defaults,
+  I,
+  II,
+  S,
+  LC,
+  Directives,
+  Exposed,
+  Provide
+> &
+  ThisType<
+    CreateComponentPublicInstanceWithMixins<
+      {},
+      RawBindings,
+      D,
+      C,
+      M,
+      Mixin,
+      Extends,
+      E,
+      Readonly<Props>,
+      Defaults,
+      false,
+      I,
+      S,
+      LC,
+      Directives
+    >
+  >
 
-export { ComponentOptions }
-
-/**
- * 创建组件实例
- * */
-export function createComponentInstance(
+  export function createComponentInstance(
   vnode: VNode,
   parent: ComponentInternalInstance | null,
-  suspense: SuspenseBoundary | null
-) {
+  suspense: SuspenseBoundary | null,
+): ComponentInternalInstance {
   const type = vnode.type as ConcreteComponent
-  // 继承父级应用上下文, 或者 如果是根级，则从根节点采用
+  // inherit parent app context - or - if root, adopt from root vnode
   const appContext =
     (parent ? parent.appContext : vnode.appContext) || emptyAppContext
 
@@ -423,14 +479,19 @@ export function createComponentInstance(
     appContext,
     root: null!, // to be immediately set
     next: null,
-    subTree: null!, // 将在创建后同步设置
-    update: null!, // 将在创建后同步设置
+    subTree: null!, // will be set synchronously right after creation
+    effect: null!,
+    update: null!, // will be set synchronously right after creation
+    job: null!,
+    scope: new EffectScope(true /* detached */),
     render: null,
     proxy: null,
     exposed: null,
+    exposeProxy: null,
     withProxy: null,
-    effects: null,
+
     provides: parent ? parent.provides : Object.create(appContext.provides),
+    ids: parent ? parent.ids : ['', 0, 0],
     accessCache: null!,
     renderCache: [],
 
@@ -443,8 +504,14 @@ export function createComponentInstance(
     emitsOptions: normalizeEmitsOptions(type, appContext),
 
     // emit
-    emit: null as any, // 将立即设置
+    emit: null!, // to be set immediately
     emitted: null,
+
+    // props default value
+    propsDefaults: EMPTY_OBJ,
+
+    // inheritAttrs
+    inheritAttrs: type.inheritAttrs,
 
     // state
     ctx: EMPTY_OBJ,
@@ -463,7 +530,7 @@ export function createComponentInstance(
     asyncResolved: false,
 
     // lifecycle hooks
-    // 在这里不使用枚举，因为它会影响计算属性结果
+    // not using enums here because it results in computed properties
     isMounted: false,
     isUnmounted: false,
     isDeactivated: false,
@@ -479,322 +546,41 @@ export function createComponentInstance(
     a: null,
     rtg: null,
     rtc: null,
-    ec: null
+    ec: null,
+    sp: null,
   }
-
   if (__DEV__) {
-    instance.ctx = createRenderContext(instance)
+    instance.ctx = createDevRenderContext(instance)
   } else {
     instance.ctx = { _: instance }
   }
   instance.root = parent ? parent.root : instance
   instance.emit = emit.bind(null, instance)
-  if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
-    devtoolsComponentAdded(instance)
+
+  // apply custom element special handling
+  if (vnode.ce) {
+    vnode.ce(instance)
   }
 
   return instance
 }
 
-export function recordInstanceBoundEffect(effect: ReactiveEffect) {
-  if (currentInstance) {
-    ;(currentInstance.effects || (currentInstance.effects = [])).push(effect)
-  }
-}
-
-const classifyRE = /(?:^|[-_])(\w)/g
-const classify = (str: string): string =>
-  str.replace(classifyRE, c => c.toUpperCase()).replace(/[-_]/g, '')
-
-/* istanbul ignore next */
-export function formatComponentName(
-  instance: ComponentInternalInstance | null,
-  Component: ConcreteComponent,
-  isRoot = false
-): string {
-  let name = isFunction(Component)
-    ? Component.displayName || Component.name
-    : Component.name
-  if (!name && Component.__file) {
-    const match = Component.__file.match(/([^/\\]+)\.vue$/)
-    if (match) {
-      name = match[1]
-    }
-  }
-
-  if (!name && instance && instance.parent) {
-    // 尝试根据反向解析推断名称
-    const inferFormRegistry = (registry: Record<string, any> | undefined) => {
-      for (const key in registry) {
-        if (!registry.hasOwnProperty(key)) continue
-        if (registry[key] === Component) {
-          return key
-        }
-      }
-    }
-    name =
-      inferFormRegistry(
-        instance.components ||
-        (instance.parent.type as ComponentOptions).components
-      ) || inferFormRegistry(instance.appContext.components)
-  }
-  return name ? classify(name) : isRoot ? `App` : `Anonymous`
-}
-
-const attrHandlers: ProxyHandler<Data> = {
-  get: (target, key: string) => {
-    if (__DEV__) {
-      markAttrsAccessed()
-    }
-    return target[key]
-  },
-  set: () => {
-    warn(`setupContext.attrs is readonly.`)
-    return false
-  },
-  deleteProperty: () => {
-    warn(`setupContext.attrs is readonly.`)
-    return false
-  }
-}
-
-function createSetupContext(
-  instance: ComponentInternalInstance
-): SetupContext {
-  const expose: SetupContext['expose'] = exposed => {
-    if (__DEV__ && instance.exposed) {
-      warn(`expose() should be called only once per setup().`)
-    }
-    instance.exposed = proxyRefs(exposed)
-  }
-  if (__DEV__) {
-    // 我们在dev中使用getter，以防像 test-utils 这样的类库覆盖实例属性（覆盖不应该在prod中进行）。
-    return Object.freeze({
-      get props() {
-        return instance.props
-      },
-      get attrs() {
-        return new Proxy(instance.attrs, attrHandlers)
-      },
-      get slots() {
-        return shallowReadonly(instance.slots)
-      },
-      get emit() {
-        return (event: string, ...args: any[]) => instance.emit(event, ...args)
-      },
-      expose
-    })
-  } else {
-    return {
-      props: instance.props,
-      attrs: instance.attrs,
-      slots: instance.slots,
-      emit: instance.emit,
-      expose
-    }
-  }
-}
-
-function setupStatefulComponent(
-  instance: ComponentInternalInstance,
-  isSSR: boolean
-) {
-  const Component = instance.type as ComponentOptions
-  if (__DEV__) {
-    if (Component.name) {
-      validateComponentName(Component.name, instance.appContext.config)
-    }
-    if (Component.components) {
-      const names = Object.keys(Component.components)
-      for (let i = 0; i < names.length; i++) {
-        validateComponentName(names[i], instance.appContext.config)
-      }
-    }
-    if (Component.directives) {
-      const names = Object.keys(Component.directives)
-      for (let i = 0; i < names.length; i++) {
-        validateDirectiveName(names[i])
-      }
-    }
-  }
-  // 0. 创建渲染代理属性访问缓存
-  instance.accessCache = Object.create(null)
-  // 1. 创建公开实例 /render proxy
-  // 也要标明是 raw 的，以免被观测
-  instance.proxy = new Proxy(instance.ctx, PublicInstanceProxyHandlers)
-  if (__DEV__) {
-    exposePropsOnRenderContext(instance)
-  }
-  // 2. call setup()
-  const { setup } = Component
-  if (setup) {
-    const setupContext = (instance.setupContext =
-      setup.length > 1 ? createSetupContext(instance) : null)
-    currentInstance = instance
-    pauseTracking()
-    const setupResult = callWithErrorHandling(
-      setup,
-      instance,
-      ErrorCodes.SETUP_FUNCTION,
-      [__DEV__ ? shallowReadonly(instance.props) : instance.props, setupContext]
-    )
-    resetTracking()
-    currentInstance = null
-
-    if (isPromise(setupResult)) {
-      if (isSSR) {
-        // 返回promise诺，以便 SSR 可以等待它
-        return setupResult.then((resolveResult: unknown) => {
-          handleSetupResult(instance, resolveResult, isSSR)
-        })
-      } else if (__FEATURE_SUSPENSE__) {
-        // 异步 setup 返回 Promise
-        // 在这里离开，等待重新进入。
-        instance.asyncDep = setupResult
-      } else if (__DEV__) {
-        warn(
-          `setup() returned a Promise, but the version of Vue you are using ` +
-          `does not support it yet.`
-        )
-      }
-    } else {
-      handleSetupResult(instance, setupResult, isSSR)
-    }
-  } else {
-    finishComponentSetup(instance, isSSR)
-  }
-}
-
 export function setupComponent(
   instance: ComponentInternalInstance,
-  isSSR = false
-) {
-  isInSSRComponentSetup = isSSR
-  const { props, children, shapeFlag } = instance.vnode
-  const isStateful = shapeFlag & ShapeFlags.STATEFUL_COMPONENT
+  isSSR = false,
+  optimized = false,
+): Promise<void> | undefined {
+  isSSR && setInSSRSetupState(isSSR)
+
+  const { props, children } = instance.vnode
+  const isStateful = isStatefulComponent(instance)
   initProps(instance, props, isStateful, isSSR)
-  initSlots(instance, children)
+  initSlots(instance, children, optimized || isSSR)
+
   const setupResult = isStateful
     ? setupStatefulComponent(instance, isSSR)
     : undefined
-  isInSSRComponentSetup = false
+
+  isSSR && setInSSRSetupState(false)
   return setupResult
-}
-
-export function isClassComponent(value: unknown): value is ClassComponent {
-  return isFunction(value) && '__vccOpts' in value
-}
-
-function finishComponentSetup(
-  instance: ComponentInternalInstance,
-  isSSR: boolean
-) {
-  const Component = instance.type as ComponentOptions
-
-  // template / render  function 规范化
-  if (__NODE_JS__ && isSSR) {
-    if (Component.render) {
-      instance.render = Component.render as InternalRenderFunction
-    }
-  } else if (!instance.render) {
-    // 可以通过setup() 设置
-    if (compile && Component.template && !Component.render) {
-      if (__DEV__) {
-        startMeasure(instance, `compile`)
-      }
-      Component.render = compile(Component.template, {
-        isCustomElement: instance.appContext.config.isCustomElement,
-        delimiters: Component.delimiters
-      })
-      if (__DEV__) {
-        endMeasure(instance, `compile`)
-      }
-    }
-    instance.render = (Component.render || NOOP) as InternalRenderFunction
-    // 对于使用 "with "块的运行时编译渲染函数，渲染
-    // 使用的代理需要一个不同的 "has "处理程序，它的性能更强，而且。
-    // 也只允许白名单的globals落空。
-
-    if (instance.render._rc) {
-      instance.withProxy = new Proxy(
-        instance.ctx,
-        RuntimeCompiledPublicInstanceProxyHandlers
-      )
-    }
-  }
-
-  // 支持 2.x  options
-  if (__FEATURE_OPTIONS_API__) {
-    currentInstance = instance
-    applyOptions(instance, Component)
-    currentInstance = null
-  }
-
-  // 警告丢失 template/render
-  if (__DEV__ && !Component.render && instance.render === NOOP) {
-    /* istanbul ignore if */
-    if (!compile && Component.template) {
-      warn(
-        `Component provided template option but ` +
-        `runtime compilation is not supported in this build of Vue.` +
-        (__ESM_BUNDLER__
-          ? ` Configure your bundler to alias "vue" to "vue/dist/vue.esm-bundler.js".`
-          : __ESM_BROWSER__
-            ? ` Use "vue.esm-browser.js" instead.`
-            : __GLOBAL__
-              ? ` Use "vue.global.js" instead.`
-              : ``) /* should not happen */
-      )
-    } else {
-      warn(`Component is missing template or render function.`)
-    }
-  }
-}
-
-export function handleSetupResult(
-  instance: ComponentInternalInstance,
-  setupResult: unknown,
-  isSSR: boolean
-) {
-  if (isFunction(setupResult)) {
-    // setup 返回行内render function
-    if (!__BROWSER__ && (instance.type as ComponentOptions).__ssrInlineRender) {
-      // 当函数名称为`ssrRender`时（由SFC内联模式编译）。
-      // 将其设置为ssrRender。
-      instance.ssrRender = setupResult
-    } else {
-      instance.render = setupResult as InternalRenderFunction
-    }
-  } else if (isObject(setupResult)) {
-    if (__DEV__ && isVNode(setupResult)) {
-      warn(
-        `setup() should not return VNodes directly - ` +
-        `return a render function instead.`
-      )
-    }
-    //设置返回的绑定。
-    // 假设存在一个从模板编译的渲染函数。
-    if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
-      instance.devtoolsRawSetupState = setupResult
-    }
-    instance.setupState = proxyRefs(setupResult)
-    if (__DEV__) {
-      exposeSetupStateOnRenderContext(instance)
-    }
-  } else if (__DEV__ && setupResult !== undefined) {
-    warn(
-      `setup() should return an object. Received: ${
-        setupResult === null ? 'null' : typeof setupResult
-      }`
-    )
-  }
-  finishComponentSetup(instance, isSSR)
-}
-
-/**
- * runtime-dom 注册 compiler
- * 注意导出的方法使用任何，以避免 d.ts 依赖编译器类型。
- * */
-export function registerRuntimeCompiler(_compile: any) {
-  compile = _compile
 }

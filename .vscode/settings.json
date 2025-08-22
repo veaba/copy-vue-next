@@ -13,5 +13,12 @@
   },
   "[json]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+  "cSpell.words": [
+    "mathml",
+    "memleaks",
+    "minifiers",
+    "UNKEYED",
+    "vnodes"
+  ]
 }

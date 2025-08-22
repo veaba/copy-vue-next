@@ -1,168 +1,26 @@
+import type { ComponentInternalInstance } from '../component'
+import type { SuspenseBoundary } from './Suspense'
 import {
-  ComponentInternalInstance,
-  RendererElement,
-  RendererNode, RendererOptions,
-  SuspenseBoundary, VNode, VNodeArrayChildren,
-  VNodeProps
-} from '@vue/runtime-core'
-import { warn } from '@vue/runtime-core'
-import { ShapeFlags } from '../../../shared/src/shapeFlags'
-import { MoveType, RendererInternals, traverseStaticChildren } from '../renderer'
-import { isString } from '@vue/shared'
-
-export const isTeleport = (type: any): boolean => type.__isTeleport
-
-export interface TeleportProps {
-  to: string | RendererElement | null | undefined
-  disabled?: boolean
-}
+  type ElementNamespace,
+  MoveType,
+  type RendererElement,
+  type RendererInternals,
+  type RendererNode,
+  type RendererOptions,
+  queuePostRenderEffect,
+  traverseStaticChildren,
+} from '../renderer'
+import type { VNode, VNodeArrayChildren, VNodeProps } from '../vnode'
+import { ShapeFlags, isString } from '@vue/shared'
+import { warn } from '../warning'
+import { isHmrUpdating } from '../hmr'
 
 export type TeleportVNode = VNode<RendererNode, RendererElement, TeleportProps>
 
-export const enum TeleportMoveTypes {
-  TARGET_CHANGE,
-  TOGGLE, // enable / disable
-  REORDER // moved in the main view
-}
-
-export const isTeleportDisabled = (props: VNode['props']): boolean =>
-  props && (props.disabled || props.disabled === '')
-
-const resolveTarget = <T = RendererElement>(
-  props: TeleportProps | null,
-  select: RendererOptions['querySelector']
-): T | null => {
-  const targetSelector = props && props.to
-  if (isString(targetSelector)) {
-    if (!select) {
-      __DEV__ &&
-      warn(
-        `Current renderer does not support string target for Teleports. ` +
-        `(missing querySelector renderer option)`
-      )
-      return null
-    } else {
-      const target = select(targetSelector)
-      if (!target) {
-        __DEV__ &&
-        warn(
-          `Failed to locate Teleport target with selector "${targetSelector}". ` +
-          `Note the target element must exist before the component is mounted - ` +
-          `i.e. the target cannot be rendered by the component itself, and ` +
-          `ideally should be outside of the entire Vue component tree.`
-        )
-      }
-      return target as any
-    }
-  } else {
-    if (__DEV__ && !targetSelector && !isTeleportDisabled(props)) {
-      warn(`Invalid Teleport target: ${targetSelector}`)
-    }
-    return targetSelector as any
-  }
-}
-
-interface TeleportTargetElement extends Element {
-  // last teleport target
-  _lpa?: Node | null
-}
-
-function moveTeleport(
-  vnode: VNode,
-  container: RendererElement,
-  parentAnchor: RendererNode | null,
-  { o: { insert }, m: move }: RendererInternals,
-  moveType: TeleportMoveTypes = TeleportMoveTypes.REORDER
-) {
-  // move target anchor if this is a target change
-  if (moveType === TeleportMoveTypes.TARGET_CHANGE) {
-    insert(vnode.targetAnchor!, container, parentAnchor)
-  }
-  const { el, anchor, shapeFlag, children, props } = vnode
-  const isRecorder = moveType === TeleportMoveTypes.REORDER
-  // 如果重新排序，则移动主视图 anchor
-  if (isRecorder) {
-    insert(el!, container, parentAnchor)
-  }
-
-  // 如果这是一次重新排序，并且启用了传送功能（内容在目标中）。
-  // 不要移动孩子。因此，相反的是：只有当这个
-  // 不是重新排序，或者禁止 teleport。
-  if (!isRecorder || isTeleportDisabled(props)) {
-    // Teleport要么有Array children，要么没有 children。
-    if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-      for (let i = 0; i < (children as VNode[]).length; i++) {
-        move(
-          (children as VNode[])[i],
-          container,
-          parentAnchor,
-          MoveType.REORDER
-        )
-      }
-    }
-  }
-
-  // 如果重新排序，则移动主视图 anchor
-  if (isRecorder) {
-    insert(anchor!, container, parentAnchor)
-  }
-}
-
-function hydrateTeleport(
-  node: Node,
-  vnode: TeleportVNode,
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  optimized: boolean,
-  {
-    o: { nextSibling, parentNode, querySelector }
-  }: RendererInternals<Node, Element>,
-  hydrateChildren: (
-    node: Node | null,
-    vnode: VNode,
-    container: Element,
-    parentComponent: ComponentInternalInstance | null,
-    parentSuspense: SuspenseBoundary | null,
-    optimized: boolean
-  ) => Node | null
-): Node | null {
-  const target = (vnode.target = resolveTarget<Element>(
-    vnode.props,
-    querySelector
-  ))
-  if (target) {
-    // 如果多个远距传输呈现在同一个目标元素上，我们就需要
-    // 从最后一次传送完成的地方接上，而不是从第一个节点接上。
-    const targetNode = (target as TeleportTargetElement)._lpa || target.firstChild
-    if (vnode.shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
-      if (isTeleportDisabled(vnode.props)) {
-        vnode.anchor = hydrateChildren(
-          nextSibling(node),
-          vnode,
-          parentNode(node)!,
-          parentComponent,
-          parentSuspense,
-          optimized
-        )
-        vnode.targetAnchor = targetNode
-      } else {
-        vnode.anchor = nextSibling(node)
-        vnode.targetAnchor = hydrateChildren(
-          targetNode,
-          vnode,
-          target,
-          parentComponent,
-          parentSuspense,
-          optimized
-        )
-      }
-      ;(target as TeleportTargetElement)._lpa = vnode.targetAnchor && nextSibling(vnode.targetAnchor as Node)
-    }
-  }
-  return vnode.anchor && nextSibling(vnode.anchor as Node)
-}
+export const TeleportEndKey: unique symbol = Symbol('_vte')
 
 export const TeleportImpl = {
+  name: 'Teleport',
   __isTeleport: true,
   process(
     n1: TeleportVNode | null,
@@ -171,57 +29,117 @@ export const TeleportImpl = {
     anchor: RendererNode | null,
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
-    isSVG: boolean,
+    namespace: ElementNamespace,
+    slotScopeIds: string[] | null,
     optimized: boolean,
-    internals: RendererInternals
-  ) {
+    internals: RendererInternals,
+  ): void {
     const {
       mc: mountChildren,
       pc: patchChildren,
       pbc: patchBlockChildren,
-      o: { insert, querySelector, createText, createComment }
+      o: { insert, querySelector, createText, createComment },
     } = internals
 
     const disabled = isTeleportDisabled(n2.props)
-    const { shapeFlag, children } = n2
+    let { shapeFlag, children, dynamicChildren } = n2
+
+    // #3302
+    // HMR updated, force full diff
+    if (__DEV__ && isHmrUpdating) {
+      optimized = false
+      dynamicChildren = null
+    }
+
     if (n1 == null) {
-      // insert anchors 在 主 view
-      const placeholder = (n2.el = __DEV__ ? createComment('teleport start') : createText(''))
-      const mainAnchor = (n2.anchor = __DEV__ ? createComment('teleport end') : createText(''))
+      // insert anchors in the main view
+      const placeholder = (n2.el = __DEV__
+        ? createComment('teleport start')
+        : createText(''))
+      const mainAnchor = (n2.anchor = __DEV__
+        ? createComment('teleport end')
+        : createText(''))
       insert(placeholder, container, anchor)
       insert(mainAnchor, container, anchor)
 
-      const target = (n2.target = resolveTarget(n2.props, querySelector))
-      const targetAnchor = (n2.targetAnchor = createText(''))
-      if (target) {
-        insert(targetAnchor, target)
-      } else if (__DEV__ && !disabled) {
-        warn(`Invalid Teleport target on mount:`, target, `(${typeof target})`)
-      }
       const mount = (container: RendererElement, anchor: RendererNode) => {
-        // Teleport 总是有数组children,这一点在一下两个方法面都得到加强
-        // compile 和 vnode children 规范化
+        // Teleport *always* has Array children. This is enforced in both the
+        // compiler and vnode children normalization.
         if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+          if (parentComponent && parentComponent.isCE) {
+            parentComponent.ce!._teleportTarget = container
+          }
           mountChildren(
             children as VNodeArrayChildren,
             container,
             anchor,
             parentComponent,
             parentSuspense,
-            isSVG,
-            optimized
+            namespace,
+            slotScopeIds,
+            optimized,
+          )
+        }
+      }
+
+      const mountToTarget = () => {
+        const target = (n2.target = resolveTarget(n2.props, querySelector))
+        const targetAnchor = prepareAnchor(target, n2, createText, insert)
+        if (target) {
+          // #2652 we could be teleporting from a non-SVG tree into an SVG tree
+          if (namespace !== 'svg' && isTargetSVG(target)) {
+            namespace = 'svg'
+          } else if (namespace !== 'mathml' && isTargetMathML(target)) {
+            namespace = 'mathml'
+          }
+          if (!disabled) {
+            mount(target, targetAnchor)
+            updateCssVars(n2, false)
+          }
+        } else if (__DEV__ && !disabled) {
+          warn(
+            'Invalid Teleport target on mount:',
+            target,
+            `(${typeof target})`,
           )
         }
       }
 
       if (disabled) {
         mount(container, mainAnchor)
-      } else if (target) {
-        mount(target, targetAnchor)
+        updateCssVars(n2, true)
+      }
+
+      if (isTeleportDeferred(n2.props)) {
+        n2.el!.__isMounted = false
+        queuePostRenderEffect(() => {
+          mountToTarget()
+          delete n2.el!.__isMounted
+        }, parentSuspense)
+      } else {
+        mountToTarget()
       }
     } else {
-      // 更新 content
+      if (isTeleportDeferred(n2.props) && n1.el!.__isMounted === false) {
+        queuePostRenderEffect(() => {
+          TeleportImpl.process(
+            n1,
+            n2,
+            container,
+            anchor,
+            parentComponent,
+            parentSuspense,
+            namespace,
+            slotScopeIds,
+            optimized,
+            internals,
+          )
+        }, parentSuspense)
+        return
+      }
+      // update content
       n2.el = n1.el
+      n2.targetStart = n1.targetStart
       const mainAnchor = (n2.anchor = n1.anchor)!
       const target = (n2.target = n1.target)!
       const targetAnchor = (n2.targetAnchor = n1.targetAnchor)!
@@ -229,20 +147,28 @@ export const TeleportImpl = {
       const currentContainer = wasDisabled ? container : target
       const currentAnchor = wasDisabled ? mainAnchor : targetAnchor
 
-      if (n2.dynamicChildren) {
+      if (namespace === 'svg' || isTargetSVG(target)) {
+        namespace = 'svg'
+      } else if (namespace === 'mathml' || isTargetMathML(target)) {
+        namespace = 'mathml'
+      }
+
+      if (dynamicChildren) {
         // fast path when the teleport happens to be a block root
         patchBlockChildren(
           n1.dynamicChildren!,
-          n2.dynamicChildren,
+          dynamicChildren,
           currentContainer,
           parentComponent,
           parentSuspense,
-          isSVG
+          namespace,
+          slotScopeIds,
         )
-        // 即使在块树模式下，我们也需要确保所有的根级节点
-        // 在远距 teleport 中继承以前的DOM引用，这样他们可以
-        // 在未来的补丁中被移动。
-        traverseStaticChildren(n1, n2, true)
+        // even in block tree mode we need to make sure all root-level nodes
+        // in the teleport inherit previous DOM references so that they can
+        // be moved in future patches.
+        // in dev mode, deep traversal is necessary for HMR
+        traverseStaticChildren(n1, n2, !__DEV__)
       } else if (!optimized) {
         patchChildren(
           n1,
@@ -251,27 +177,37 @@ export const TeleportImpl = {
           currentAnchor,
           parentComponent,
           parentSuspense,
-          isSVG
+          namespace,
+          slotScopeIds,
+          false,
         )
       }
+
       if (disabled) {
         if (!wasDisabled) {
           // enabled -> disabled
-          // 移到主容器中
+          // move into main container
           moveTeleport(
             n2,
             container,
             mainAnchor,
             internals,
-            TeleportMoveTypes.TOGGLE
+            TeleportMoveTypes.TOGGLE,
           )
+        } else {
+          // #7835
+          // When `teleport` is disabled, `to` may change, making it always old,
+          // to ensure the correct `to` when enabled
+          if (n2.props && n1.props && n2.props.to !== n1.props.to) {
+            n2.props.to = n1.props.to
+          }
         }
       } else {
-        // 目标改变
+        // target changed
         if ((n2.props && n2.props.to) !== (n1.props && n1.props.to)) {
           const nextTarget = (n2.target = resolveTarget(
             n2.props,
-            querySelector
+            querySelector,
           ))
           if (nextTarget) {
             moveTeleport(
@@ -279,48 +215,70 @@ export const TeleportImpl = {
               nextTarget,
               null,
               internals,
-              TeleportMoveTypes.TARGET_CHANGE
+              TeleportMoveTypes.TARGET_CHANGE,
             )
           } else if (__DEV__) {
             warn(
-              `Invalid Teleport target on update:`,
+              'Invalid Teleport target on update:',
               target,
-              `(${typeof target})`
+              `(${typeof target})`,
             )
           }
         } else if (wasDisabled) {
           // disabled -> enabled
-          // move 到 teleport target
+          // move into teleport target
           moveTeleport(
             n2,
             target,
             targetAnchor,
             internals,
-            TeleportMoveTypes.TOGGLE
+            TeleportMoveTypes.TOGGLE,
           )
         }
       }
+      updateCssVars(n2, disabled)
     }
   },
-  remove(vnode: VNode, {
-    r: remove, o: {
-      remove: hostRemove
+
+  remove(
+    vnode: VNode,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    { um: unmount, o: { remove: hostRemove } }: RendererInternals,
+    doRemove: boolean,
+  ): void {
+    const {
+      shapeFlag,
+      children,
+      anchor,
+      targetStart,
+      targetAnchor,
+      target,
+      props,
+    } = vnode
+
+    if (target) {
+      hostRemove(targetStart!)
+      hostRemove(targetAnchor!)
     }
-  }: RendererInternals) {
-    const { shapeFlag, children, anchor } = vnode
-    hostRemove(anchor!)
+
+    // an unmounted teleport should always unmount its children whether it's disabled or not
+    doRemove && hostRemove(anchor!)
     if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+      const shouldRemove = doRemove || !isTeleportDisabled(props)
       for (let i = 0; i < (children as VNode[]).length; i++) {
-        remove((children as VNode[])[i])
+        const child = (children as VNode[])[i]
+        unmount(
+          child,
+          parentComponent,
+          parentSuspense,
+          shouldRemove,
+          !!child.dynamicChildren,
+        )
       }
     }
   },
-  move: moveTeleport,
-  hydrate: hydrateTeleport
-}
 
-// 强制casted h 和 TSX props 推理的公共拼写。
-export const Teleport = (TeleportImpl as any) as {
-  __isTeleport: true,
-  new(): { $props: VNodeProps & TeleportProps }
+  move: moveTeleport as typeof moveTeleport,
+  hydrate: hydrateTeleport as typeof hydrateTeleport,
 }

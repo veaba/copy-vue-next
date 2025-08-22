@@ -1,8 +1,8 @@
 import {
-  createRenderer,
-  VNode,
-  RootRendererFunction,
-  CreateAppFunction
+  type CreateAppFunction,
+  type RootRendererFunction,
+  type VNode,
+  createRenderer
 } from '@vue/runtime-core'
 
 import { nodeOps, TestElement } from './nodeOps'
@@ -17,7 +17,7 @@ export const render = baseRender as RootRendererFunction
 export const createApp = baseCreateApp as CreateAppFunction<TestElement>
 
 // 方便一次性渲染验证
-export function renderToString(vnode: VNode) {
+export function renderToString(vnode: VNode): string {
   const root = nodeOps.createElement('div')
   render(vnode, root)
   return serializeInner(root)

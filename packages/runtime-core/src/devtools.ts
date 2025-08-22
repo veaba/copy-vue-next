@@ -1,89 +1,59 @@
-import { ComponentInternalInstance } from './component'
-import { App } from './apiCreateApp'
-import { Comment, Fragment, Static, Text } from './vnode'
 
-const enum DevtoolsHooks {
-  APP_INIT = 'app:init',
-  APP_UNMOUNT = 'app:unmount',
-  COMPONENT_UPDATED = 'component:updated',
-  COMPONENT_ADDED = 'component:added',
-  COMPONENT_REMOVED = 'component:removed',
-  COMPONENT_EMIT = 'component:emit'
-}
 
-interface AppRecord {
-  id: number,
-  app: App,
-  version: string
-  types: Record<string, string | Symbol>
-}
-
-interface DevtoolsHook {
-  emit: (event: string, ...payload: any[]) => void
-  on: (event: string, handler: Function) => void
-  once: (event: string, handler: Function) => void
-  off: (event: string, handler: Function) => void
-  appRecords: AppRecord[]
-}
-
-export let devtools: DevtoolsHook
-
-export function setDevtoolsHook(hook: DevtoolsHook) {
+export function setDevtoolsHook(hook: DevtoolsHook, target: any): void {
   devtools = hook
-}
-
-export function devtoolsInitApp(app: App, version: string) {
-  // TODO queue if devtools is undefined
-  if (!devtools) return
-  devtools.emit(DevtoolsHooks.APP_INIT, app, version, {
-    Fragment,
-    Text,
-    Comment,
-    Static
-  })
-}
-
-export function devtoolsUnmountApp(app: App) {
-  if (!devtools) return
-  devtools.emit(DevtoolsHooks.APP_UNMOUNT, app)
-}
-
-
-export const devtoolsComponentAdded = /*__PURE__*/ createDevtoolsComponentHook(
-  DevtoolsHooks.COMPONENT_ADDED
-)
-
-export const devtoolsComponentRemoved =  /*__PURE__*/ createDevtoolsComponentHook(
-  DevtoolsHooks.COMPONENT_REMOVED
-)
-
-export const devtoolsComponentUpdated = /*__PURE__*/ createDevtoolsComponentHook(
-  DevtoolsHooks.COMPONENT_REMOVED
-)
-
-function createDevtoolsComponentHook(hook: DevtoolsHooks) {
-  return (component: ComponentInternalInstance) => {
-    if (!devtools) return
-    devtools.emit(
-      hook,
-      component.appContext.app,
-      component.uid,
-      component.parent ? component.parent.uid : undefined
-    )
+  if (devtools) {
+    devtools.enabled = true
+    buffer.forEach(({ event, args }) => devtools.emit(event, ...args))
+    buffer = []
+  } else if (
+    // handle late devtools injection - only do this if we are in an actual
+    // browser environment to avoid the timer handle stalling test runner exit
+    // (#4815)
+    typeof window !== 'undefined' &&
+    // some envs mock window but not fully
+    window.HTMLElement &&
+    // also exclude jsdom
+    // eslint-disable-next-line no-restricted-syntax
+    !window.navigator?.userAgent?.includes('jsdom')
+  ) {
+    const replay = (target.__VUE_DEVTOOLS_HOOK_REPLAY__ =
+      target.__VUE_DEVTOOLS_HOOK_REPLAY__ || [])
+    replay.push((newHook: DevtoolsHook) => {
+      setDevtoolsHook(newHook, target)
+    })
+    // clear buffer after 3s - the user probably doesn't have devtools installed
+    // at all, and keeping the buffer will cause memory leaks (#4738)
+    setTimeout(() => {
+      if (!devtools) {
+        target.__VUE_DEVTOOLS_HOOK_REPLAY__ = null
+        devtoolsNotInstalled = true
+        buffer = []
+      }
+    }, 3000)
+  } else {
+    // non-browser env, assume not installed
+    devtoolsNotInstalled = true
+    buffer = []
   }
 }
 
-export function devtoolsComponentEmit(
+export const devtoolsComponentUpdated: DevtoolsComponentHook =
+  /*@__PURE__*/ createDevtoolsComponentHook(DevtoolsHooks.COMPONENT_UPDATED)
+
+  
+export const devtoolsComponentAdded: DevtoolsComponentHook =
+  /*@__PURE__*/ createDevtoolsComponentHook(DevtoolsHooks.COMPONENT_ADDED)
+
+  export const devtoolsComponentRemoved = (
   component: ComponentInternalInstance,
-  event: string,
-  params: any[]
-) {
-  if (!devtools) return
-  devtools.emit(
-    DevtoolsHooks.COMPONENT_EMIT,
-    component.appContext.app,
-    component,
-    event,
-    params
-  )
+): void => {
+  if (
+    devtools &&
+    typeof devtools.cleanupBuffer === 'function' &&
+    // remove the component if it wasn't buffered
+    !devtools.cleanupBuffer(component)
+  ) {
+    _devtoolsComponentRemoved(component)
+  }
 }

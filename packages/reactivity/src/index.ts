@@ -51,8 +51,9 @@ export {
     resetTracking,
     ITERATE_KEY,
     ReactiveEffect,
-    ReactiveEffectOptions,
-    DebuggerEvent
+    EffectFlags,
+    type ReactiveEffectOptions,
+    type DebuggerEvent
 } from "./effect"
 
 export { TrackOpTypes, TriggerOpTypes } from './operations'
