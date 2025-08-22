@@ -2,7 +2,6 @@
 // 更多的 namespace（如SVG和MathML）是由特定于平台的编译器声明的。
 import { ForParseResult } from './vFor'
 import { CREATE_SLOTS, FRAGMENT, RENDER_LIST } from './runtimeHelpers'
-import { DirectiveArguments } from '@vue/runtime-core'
 import { ImportItem } from './transform'
 import { PropsExpression } from './transforms/transformElement'
 
@@ -21,7 +20,7 @@ export const enum NodeTypes {
   TEXT,
   COMMENT,
   SIMPLE_EXPRESSION,
-  INTERPOLATION, /* 插值*/
+  INTERPOLATION /* 插值*/,
   ATTRIBUTE,
   DIRECTIVE,
 
@@ -49,7 +48,6 @@ export const enum NodeTypes {
   JS_ASSIGNMENT_EXPRESSION,
   JS_SEQUENCE_EXPRESSION,
   JS_RETURN_STATEMENT
-
 }
 
 export interface TextNode extends Node {
@@ -80,6 +78,20 @@ export interface SourceLocation {
 export interface ReturnStatement extends Node {
   type: NodeTypes.JS_RETURN_STATEMENT
   returns: TemplateChildNode | TemplateChildNode[] | JSChildNode
+}
+
+// Codegen Node Types ----------------------------------------------------------
+
+export interface DirectiveArguments extends ArrayExpression {
+  elements: DirectiveArgumentNode[]
+}
+
+export interface DirectiveArgumentNode extends ArrayExpression {
+  elements: // dir, exp, arg, modifiers
+  | [string]
+    | [string, ExpressionNode]
+    | [string, ExpressionNode, ExpressionNode]
+    | [string, ExpressionNode, ExpressionNode, ObjectExpression]
 }
 
 export interface IfStatement extends Node {
@@ -141,14 +153,15 @@ export interface CompoundExpressionNode extends Node {
     | InterpolationNode
     | TextNode
     | string
-    | symbol)[]
+    | symbol
+  )[]
   /**
    * 解析为函数参数的表达式将跟踪函数体中声明的标识符。
    * */
   identifiers?: string[]
 }
 
-export type  ExpressionNode = SimpleExpressionNode | CompoundExpressionNode
+export type ExpressionNode = SimpleExpressionNode | CompoundExpressionNode
 
 export type TemplateTextChildNode =
   | TextNode
@@ -184,9 +197,9 @@ export interface VNodeCall extends Node {
   tag: string | symbol | CallExpression
   props: PropsExpression | undefined
   children:
-    | TemplateChildNode[]  // 多个children
+    | TemplateChildNode[] // 多个children
     | TemplateTextChildNode // 单个text child
-    | SlotsExpression  // component slots
+    | SlotsExpression // component slots
     | ForRenderListExpression // v-for fragment call
     | undefined
   patchFlag: string | undefined
@@ -195,7 +208,6 @@ export interface VNodeCall extends Node {
   isBlock: boolean
   disabledTracking: boolean
 }
-
 
 export interface DirectiveNode extends Node {
   type: NodeTypes.DIRECTIVE
@@ -212,7 +224,7 @@ export interface BaseElementNode extends Node {
   ns: Namespace
   tag: string
   tagType: ElementTypes
-  isSelfClosing: Boolean
+  isSelfClosing: boolean
   props: Array<AttributeNode | DirectiveNode>
   children: TemplateChildNode[]
 }
@@ -234,14 +246,14 @@ export interface ComponentNode extends BaseElementNode {
 export interface RenderSlotCall extends CallExpression {
   callee: typeof RENDER_LIST
   arguments: // $slots, name ,props, fallback
-    | [string, string | ExpressionNode]
+  | [string, string | ExpressionNode]
     | [string, string | ExpressionNode, PropsExpression]
     | [
-    string,
-      string | ExpressionNode,
-      PropsExpression | '{}',
-    TemplateChildNode[]
-  ]
+        string,
+        string | ExpressionNode,
+        PropsExpression | '{}',
+        TemplateChildNode[]
+      ]
 }
 
 export interface SlotOutletNode extends BaseElementNode {
@@ -261,7 +273,6 @@ export interface ComponentNode extends BaseElementNode {
     | undefined
   ssrCodegenNode?: CallExpression
 }
-
 
 export interface TemplateNode extends BaseElementNode {
   tagType: ElementTypes.TEMPLATE
@@ -307,7 +318,6 @@ export interface TextCallNode extends Node {
   content: TextNode | InterpolationNode | CompoundExpressionNode
   codegenNode: CallExpression | SimpleExpressionNode // 当 hoisted
 }
-
 
 // JS Node Types ---------------------------------------------------------------
 
@@ -363,14 +373,12 @@ export type JSChildNode =
   | AssignmentExpression
   | SequenceExpression
 
-
 export interface CacheExpression extends Node {
   type: NodeTypes.JS_CACHE_EXPRESSION
   index: number
   value: JSChildNode
   isVNode: boolean
 }
-
 
 // SSR指定 Node Type ------------------------------------------------------------
 export interface TemplateLiteral extends Node {
@@ -395,7 +403,8 @@ export interface CallExpression extends Node {
     | JSChildNode
     | SSRCodegenNode
     | TemplateChildNode
-    | TemplateChildNode [])[]
+    | TemplateChildNode[]
+  )[]
 }
 
 export interface ForIteratorExpression extends CallExpression {
@@ -428,7 +437,7 @@ export interface ForNode extends Node {
   codegenNode?: ForCodegenNode
 }
 
-export type  ElementNode =
+export type ElementNode =
   | PlainElementNode
   | ComponentNode
   | SlotOutletNode

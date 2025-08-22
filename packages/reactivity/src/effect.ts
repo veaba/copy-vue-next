@@ -242,7 +242,7 @@ export class ReactiveEffect<T = any>
       this.deps = this.depsTail = undefined
       cleanupEffect(this)
       this.onStop && this.onStop()
-      this.flags  ~EffectFlags.ACTIVE
+      this.flags  &= ~EffectFlags.ACTIVE
     }
   }
 

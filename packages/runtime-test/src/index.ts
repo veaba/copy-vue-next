@@ -1,22 +1,22 @@
 import {
   type CreateAppFunction,
-  type RootRendererFunction,
+  type RootRenderFunction,
   type VNode,
-  createRenderer
+  createRenderer,
 } from '@vue/runtime-core'
-
-import { nodeOps, TestElement } from './nodeOps'
+import { type TestElement, nodeOps } from './nodeOps'
 import { patchProp } from './patchProp'
 import { serializeInner } from './serialize'
 import { extend } from '@vue/shared'
 
 const { render: baseRender, createApp: baseCreateApp } = createRenderer(
-  extend({ patchProp }, nodeOps)
+  extend({ patchProp }, nodeOps),
 )
-export const render = baseRender as RootRendererFunction
+
+export const render = baseRender as RootRenderFunction<TestElement>
 export const createApp = baseCreateApp as CreateAppFunction<TestElement>
 
-// 方便一次性渲染验证
+// convenience for one-off render validations
 export function renderToString(vnode: VNode): string {
   const root = nodeOps.createElement('div')
   render(vnode, root)
