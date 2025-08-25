@@ -6,31 +6,31 @@ Override for vue-next.
 
 public npm packages：
 
-|`packages/*`||
-|---|---|
-|`compiler-core`||
-|`compiler-dom`||
-|`compiler-sfc`||
-|`compiler-ssr`||
-|`compiler-reactivity`||
-|`runtime-core`||
-|`runtime-dom`||
-|`runtime-test`||
-|`server-renderer`||
-|`shared`||
-|`vue`||
-|`vue-compat`||
+| `packages/*`          | |
+|-----------------------|-|
+| `compiler-core`       | |
+| `compiler-dom`        | |
+| `compiler-sfc`        | |
+| `compiler-ssr`        | |
+| `compiler-reactivity` | |
+| `runtime-core`        | |
+| `runtime-dom`         | |
+| `runtime-test`        | |
+| `server-renderer`     | |
+| `shared`              | |
+| `vue`                 | |
+| `vue-compat`          | |
 
 private npm packages：
 
-|`packages-private/*`||
-|---|---|
-|`dts-built-test`||
-|`dts-test`||
-|`sfc-playground`||
-|`template-explorer`||
-|`compiler-reactivity`||
-|`vite-debug`||
+| `packages-private/*`  | |
+|-----------------------|-|
+| `dts-built-test`      | |
+| `dts-test`            | |
+| `sfc-playground`      | |
+| `template-explorer`   | |
+| `compiler-reactivity` | |
+| `vite-debug`          | |
 
 ## runtime-core
 
@@ -75,7 +75,7 @@ const c = _computed(getterOrOptions as any);
 ## learning
 
 - typeScript: `infer K`
-  - ts 类型推断
+	- ts 类型推断
 
 - 在ts 开发中，省略 `{`，`}` 容易丢失
 
@@ -140,7 +140,8 @@ const instance: ComponentInternalInstance = {
 
 可以理解为对象提供水分，为什么对象呢？就是刚实例化的对象。并且我们最常见提到“水合”的地方就是刚从数据库或其他存储介质中取出数据填充到对象上。
 
-那么这种一个已经在内存中实例化的对象，还没有包含任何数据，然后用数据（例如从数据库、网络、文件系统等获取的）填充到该对象内，这种行为成为 hydration 水合。
+那么这种一个已经在内存中实例化的对象，还没有包含任何数据，然后用数据（例如从数据库、网络、文件系统等获取的）填充到该对象内，这种行为成为
+hydration 水合。
 
 常见的一种水合方式就是序列化和反序列化了，如在 PHP 中对对象进行 `serialize` 和 `unserialize` ，此时的反序列化 == 实例化+水合。
 

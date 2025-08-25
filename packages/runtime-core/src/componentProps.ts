@@ -38,7 +38,7 @@ import { createPropsDefaultThis } from './compat/props'
 import { isCompatEnabled, softAssertCompatEnabled } from './compat/compatConfig'
 import { DeprecationTypes } from './compat/compatConfig'
 import { shouldSkipAttr } from './compat/attrsFallthrough'
-import { createInternalObject } from './internalObject'
+import { createInternalObject } from './internalObject.ts'
 
 export type ComponentPropsOptions<P = Data> =
   | ComponentObjectPropsOptions<P>

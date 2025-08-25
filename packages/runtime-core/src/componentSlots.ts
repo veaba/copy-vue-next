@@ -25,7 +25,7 @@ import {
 import { isHmrUpdating } from './hmr'
 import { DeprecationTypes, isCompatEnabled } from './compat/compatConfig'
 import { TriggerOpTypes, trigger } from '@vue/reactivity'
-import { createInternalObject } from './internalObject'
+import { createInternalObject } from './internalObject.ts'
 
 export type Slot<T extends any = any> = (
   ...args: IfAny<T, any[], [T] | (T extends undefined ? [] : never)>

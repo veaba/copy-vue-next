@@ -1,4 +1,35 @@
-import { type Component } from "./component";
+import {
+  type Component,
+  type ComponentInternalInstance,
+  type ConcreteComponent,
+  type Data,
+  getComponentPublicInstance,
+  validateComponentName,
+} from './component'
+import type {
+  ComponentOptions,
+  MergedComponentOptions,
+  RuntimeCompilerOptions,
+} from './componentOptions'
+import type {
+  ComponentCustomProperties,
+  ComponentPublicInstance,
+} from './componentPublicInstance'
+import { type Directive, validateDirectiveName } from './directives'
+import type { ElementNamespace, RootRenderFunction } from './renderer'
+import type { InjectionKey } from './apiInject'
+import { warn } from './warning'
+import { type VNode, cloneVNode, createVNode } from './vnode'
+import type { RootHydrateFunction } from './hydration'
+import { devtoolsInitApp, devtoolsUnmountApp } from './devtools'
+import { NO, extend, hasOwn, isFunction, isObject } from '@vue/shared'
+import { version } from '.'
+import { installAppCompatProperties } from './compat/global'
+import type { NormalizedPropsOptions } from './componentProps'
+import type { ObjectEmitsOptions } from './componentEmits'
+import { ErrorCodes, callWithAsyncErrorHandling } from './errorHandling'
+import type { DefineComponent } from './apiDefineComponent'
+
 
 export type CreateAppFunction<HostElement> = (
   rootComponent: Component,
@@ -239,4 +270,41 @@ export function createAppAPI<HostElement>(
 
     return app
   }
+}
+
+export interface AppContext {
+  app: App // for devtools
+  config: AppConfig
+  mixins: ComponentOptions[]
+  components: Record<string, Component>
+  directives: Record<string, Directive>
+  provides: Record<string | symbol, any>
+
+  /**
+   * Cache for merged/normalized component options
+   * Each app instance has its own cache because app-level global mixins and
+   * optionMergeStrategies can affect merge behavior.
+   * @internal
+   */
+  optionsCache: WeakMap<ComponentOptions, MergedComponentOptions>
+  /**
+   * Cache for normalized props options
+   * @internal
+   */
+  propsCache: WeakMap<ConcreteComponent, NormalizedPropsOptions>
+  /**
+   * Cache for normalized emits options
+   * @internal
+   */
+  emitsCache: WeakMap<ConcreteComponent, ObjectEmitsOptions | null>
+  /**
+   * HMR only
+   * @internal
+   */
+  reload?: () => void
+  /**
+   * v2 compat only
+   * @internal
+   */
+  filters?: Record<string, Function>
 }

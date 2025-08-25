@@ -15,7 +15,7 @@ import { warn } from './warning'
 import { ref } from '@vue/reactivity'
 import { ErrorCodes, handleError } from './errorHandling'
 import { isKeepAlive } from './components/KeepAlive'
-import { markAsyncBoundary } from './helpers/useId'
+import { markAsyncBoundary } from './helpers/useId.ts'
 import { type HydrationStrategy, forEachElement } from './hydrationStrategies'
 
 export type AsyncComponentResolveResult<T = Component> = T | { default: T } // es modules

@@ -35,7 +35,7 @@ import type {
 } from './componentPublicInstance'
 import type { SlotsType } from './componentSlots'
 import type { Directive } from './directives'
-import type { ComponentTypeEmits } from './apiSetupHelpers'
+import type { ComponentTypeEmits } from './apiSetupHelpers.ts'
 
 export type PublicProps = VNodeProps &
   AllowedComponentProps &

@@ -12,10 +12,11 @@ export const NOOP = (): void => {}
  */
 export const NO = () => false
 
+// 之前是正则判断，没想到 ASCII 性能高
 export const isOn = (key: string): boolean =>
   key.charCodeAt(0) === 111 /* o */ &&
   key.charCodeAt(1) === 110 /* n */ &&
-  // uppercase letter
+  //   // 大写
   (key.charCodeAt(2) > 122 || key.charCodeAt(2) < 97)
 
 export const isModelListener = (key: string): key is `onUpdate:${string}` =>
@@ -149,6 +150,7 @@ export const invokeArrayFns = (fns: Function[], ...arg: any[]): void => {
   }
 }
 
+// 对象添加一个不可枚举的私有属性，类似 `__proto__`
 export const def = (
   obj: object,
   key: string | symbol,
