@@ -101,7 +101,7 @@ enum TargetType {
   COLLECTION = 2
 }
 
-enum EffectFlags {
+export enum EffectFlags {
   /**
    * ReactiveEffect only
    */
@@ -667,7 +667,7 @@ class Dep {
   }
 }
 
-class ComputedRefImpl<T = any> implements Subscriber {
+export class ComputedRefImpl<T = any> implements Subscriber {
   /**
    * @internal
   */
