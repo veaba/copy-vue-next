@@ -13,7 +13,7 @@
 */
 import {
   capitalize,
-  def, extend, hasChanged, hasOwn, isArray, isFunction, isIntegerKey, isMap, isObject, isSymbol, toRawType
+  def, EMPTY_OBJ, extend, hasChanged, hasOwn, isArray, isFunction, isIntegerKey, isMap, isObject, isPlainObject, isSet, isSymbol, NOOP, remove, toRawType
 } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './constants'
 import { warn } from './warning'
@@ -116,6 +116,12 @@ export enum EffectFlags {
   EVALUATED = 1 << 7,
 }
 
+export enum WatchErrorCodes {
+  WATCH_GETTER = 2,
+  WATCH_CALLBACK,
+  WATCH_CLEANUP,
+}
+
 /*** ======> type <=====  ***/
 type IterableCollections = (Map<any, any> | Set<any>) & Target
 type WeakCollections = (WeakMap<any, any> | WeakSet<any>) & Target
@@ -124,6 +130,7 @@ type Instrumentations = Record<string | symbol, Function | number>
 type MapTypes = (Map<any, any> | WeakMap<any, any>) & Target
 type SetTypes = (Set<any> | WeakSet<any>) & Target
 
+export type OnCleanup = (cleanupFn: () => void) => void
 export type EffectScheduler = (...args: any[]) => any
 // If the type T accepts type "any", output type Y, otherwise output type N.
 // https://stackoverflow.com/questions/49927523/disallow-call-with-any/49928360#49928360
@@ -186,7 +193,19 @@ export type ShallowRef<T = any, S = T> = Ref<T, S> & {
   [ShallowRefMarker]?: true
 }
 
+type DistributeRef<T> = T extends Ref<infer V, unknown> ? V : T
 
+export type MaybeRef<T = any> =
+  | T
+  | Ref<T>
+  | ShallowRef<T>
+  | WritableComputedRef<T>
+
+export type ShallowUnwrapRef<T> = {
+  [K in keyof T]: DistributeRef<T[K]>
+}
+
+export type WatchStopHandle = () => void
 
 export type UnwrapRef<T> =
   T extends ShallowRef<infer V, unknown>
@@ -230,6 +249,8 @@ export type DebuggerEventExtraInfo = {
 export type DebuggerEvent = {
   effect: Subscriber
 } & DebuggerEventExtraInfo
+
+export type WatchScheduler = (job: () => void, isFirstRun: boolean) => void
 
 
 /*** ======> interface  <===== ***/
@@ -292,6 +313,27 @@ export interface WritableComputedOptions<T, S = T> {
 export interface WritableComputedRef<T, S = T> extends BaseComputedRef<T, S> {
   [WritableComputedRefSymbol]: true
 }
+
+export interface WatchOptions<Immediate = boolean> extends DebuggerOptions {
+  immediate?: Immediate
+  deep?: boolean | number
+  once?: boolean
+  scheduler?: WatchScheduler
+  onWarn?: (msg: string, ...args: any[]) => void
+  /**
+   * @internal
+   */
+  augmentJob?: (job: (...args: any[]) => void) => void
+  /**
+   * @internal
+   */
+  call?: (
+    fn: Function | Function[],
+    type: WatchErrorCodes,
+    args?: unknown[],
+  ) => void
+}
+
 
 /*** ======> class  <===== ***/
 export class EffectScope {
@@ -452,7 +494,7 @@ export class EffectScope {
   }
 }
 
-class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOptions {
+export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOptions {
   deps?: Link | undefined
   depsTail?: Link | undefined
   flags: EffectFlags = EffectFlags.ACTIVE | EffectFlags.TRACKING
@@ -930,7 +972,7 @@ class ReadonlyReactiveHandler extends BaseReactiveHandler {
     return true
   }
 }
-// TODO 开始不一样了e
+
 class RefImpl<T = any> {
   _value: T
   private _rawValue: T
@@ -1718,7 +1760,7 @@ function createIterableMethod(method: string | symbol, isReadonly: boolean, isSh
  * @param type
  * @param key 
  * */
-function track(target: object, type: TrackOpTypes, key: unknown): void {
+export function track(target: object, type: TrackOpTypes, key: unknown): void {
   if (shouldTrack && activeSub) {
     let depsMap = targetMap.get(target)
 
@@ -1748,7 +1790,7 @@ function track(target: object, type: TrackOpTypes, key: unknown): void {
 }
 
 // trigger 触发函数
-function trigger(
+export function trigger(
   target: Target,
   type: TriggerOpTypes,
   key?: unknown,
@@ -2335,4 +2377,366 @@ function hasOwnProperty(this: object, key: unknown) {
   const obj = toRaw(this)
   track(obj, TrackOpTypes.HAS, key)
   return obj.hasOwnProperty(key as string)
+}
+
+
+
+/**
+ * Returns the inner value if the argument is a ref, otherwise return the
+ * argument itself. This is a sugar function for
+ * `val = isRef(val) ? val.value : val`.
+ *
+ * @example
+ * ```js
+ * function useFoo(x: number | Ref<number>) {
+ *   const unwrapped = unref(x)
+ *   // unwrapped is guaranteed to be number now
+ * }
+ * ```
+ *
+ * @param ref - Ref or plain value to be converted into the plain value.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#unref}
+ */
+export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
+  return isRef(ref) ? ref.value : ref
+}
+
+/************** watch */
+export interface WatchHandle extends WatchStopHandle {
+  pause: () => void
+  resume: () => void
+  stop: () => void
+}
+export type WatchSource<T = any> = Ref<T, any> | ComputedRef<T> | (() => T)
+export type WatchEffect = (onCleanup: OnCleanup) => void
+export type WatchCallback<V = any, OV = any> = (
+  value: V,
+  oldValue: OV,
+  onCleanup: OnCleanup,
+) => any
+
+const cleanupMap: WeakMap<ReactiveEffect, (() => void)[]> = new WeakMap()
+let activeWatcher: ReactiveEffect | undefined = undefined
+// initial value for watchers to trigger on undefined initial values
+const INITIAL_WATCHER_VALUE = {}
+
+/**
+ * Registers a cleanup callback on the current active effect. This
+ * registered cleanup callback will be invoked right before the
+ * associated effect re-runs.
+ *
+ * @param cleanupFn - The callback function to attach to the effect's cleanup.
+ * @param failSilently - if `true`, will not throw warning when called without
+ * an active effect.
+ * @param owner - The effect that this cleanup function should be attached to.
+ * By default, the current active effect.
+ */
+export function onWatcherCleanup(
+  cleanupFn: () => void,
+  failSilently = false,
+  owner: ReactiveEffect | undefined = activeWatcher,
+): void {
+  if (owner) {
+    let cleanups = cleanupMap.get(owner)
+    if (!cleanups) cleanupMap.set(owner, (cleanups = []))
+    cleanups.push(cleanupFn)
+  } else if (__DEV__ && !failSilently) {
+    warn(
+      `onWatcherCleanup() was called when there was no active watcher` +
+        ` to associate with.`,
+    )
+  }
+}
+/**
+ * Returns the current active effect scope if there is one.
+ *
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#getcurrentscope}
+ */
+export function getCurrentScope(): EffectScope | undefined {
+  return activeEffectScope
+}
+
+// TODO apiWatch 同名 watch函数和 WatchOptions 等
+export function watch(
+  source: WatchSource | WatchSource[] | WatchEffect | object,
+  cb?: WatchCallback | null,
+  options: WatchOptions = EMPTY_OBJ,
+): WatchHandle {
+  const { immediate, deep, once, scheduler, augmentJob, call } = options
+
+  const warnInvalidSource = (s: unknown) => {
+    ;(options.onWarn || warn)(
+      `Invalid watch source: `,
+      s,
+      `A watch source can only be a getter/effect function, a ref, ` +
+        `a reactive object, or an array of these types.`,
+    )
+  }
+
+  const reactiveGetter = (source: object) => {
+    // traverse will happen in wrapped getter below
+    if (deep) return source
+    // for `deep: false | 0` or shallow reactive, only traverse root-level properties
+    if (isShallow(source) || deep === false || deep === 0)
+      return traverse(source, 1)
+    // for `deep: undefined` on a reactive object, deeply traverse all properties
+    return traverse(source)
+  }
+
+  let effect: ReactiveEffect
+  let getter: () => any
+  let cleanup: (() => void) | undefined
+  let boundCleanup: typeof onWatcherCleanup
+  let forceTrigger = false
+  let isMultiSource = false
+
+  if (isRef(source)) {
+    getter = () => source.value
+    forceTrigger = isShallow(source)
+  } else if (isReactive(source)) {
+    getter = () => reactiveGetter(source)
+    forceTrigger = true
+  } else if (isArray(source)) {
+    isMultiSource = true
+    forceTrigger = source.some(s => isReactive(s) || isShallow(s))
+    getter = () =>
+      source.map(s => {
+        if (isRef(s)) {
+          return s.value
+        } else if (isReactive(s)) {
+          return reactiveGetter(s)
+        } else if (isFunction(s)) {
+          return call ? call(s, WatchErrorCodes.WATCH_GETTER) : s()
+        } else {
+          __DEV__ && warnInvalidSource(s)
+        }
+      })
+  } else if (isFunction(source)) {
+    if (cb) {
+      // getter with cb
+      getter = call
+        ? () => call(source, WatchErrorCodes.WATCH_GETTER)
+        : (source as () => any)
+    } else {
+      // no cb -> simple effect
+      getter = () => {
+        if (cleanup) {
+          pauseTracking()
+          try {
+            cleanup()
+          } finally {
+            resetTracking()
+          }
+        }
+        const currentEffect = activeWatcher
+        activeWatcher = effect
+        try {
+          return call
+            ? call(source, WatchErrorCodes.WATCH_CALLBACK, [boundCleanup])
+            : source(boundCleanup)
+        } finally {
+          activeWatcher = currentEffect
+        }
+      }
+    }
+  } else {
+    getter = NOOP
+    __DEV__ && warnInvalidSource(source)
+  }
+
+  if (cb && deep) {
+    const baseGetter = getter
+    const depth = deep === true ? Infinity : deep
+    getter = () => traverse(baseGetter(), depth)
+  }
+
+  const scope = getCurrentScope()
+  const watchHandle: WatchHandle = () => {
+    effect.stop()
+    if (scope && scope.active) {
+      remove(scope.effects, effect)
+    }
+  }
+
+  if (once && cb) {
+    const _cb = cb
+    cb = (...args) => {
+      _cb(...args)
+      watchHandle()
+    }
+  }
+
+  let oldValue: any = isMultiSource
+    ? new Array((source as []).length).fill(INITIAL_WATCHER_VALUE)
+    : INITIAL_WATCHER_VALUE
+
+  const job = (immediateFirstRun?: boolean) => {
+    if (
+      !(effect.flags & EffectFlags.ACTIVE) ||
+      (!effect.dirty && !immediateFirstRun)
+    ) {
+      return
+    }
+    if (cb) {
+      // watch(source, cb)
+      const newValue = effect.run()
+      if (
+        deep ||
+        forceTrigger ||
+        (isMultiSource
+          ? (newValue as any[]).some((v, i) => hasChanged(v, oldValue[i]))
+          : hasChanged(newValue, oldValue))
+      ) {
+        // cleanup before running cb again
+        if (cleanup) {
+          cleanup()
+        }
+        const currentWatcher = activeWatcher
+        activeWatcher = effect
+        try {
+          const args = [
+            newValue,
+            // pass undefined as the old value when it's changed for the first time
+            oldValue === INITIAL_WATCHER_VALUE
+              ? undefined
+              : isMultiSource && oldValue[0] === INITIAL_WATCHER_VALUE
+                ? []
+                : oldValue,
+            boundCleanup,
+          ]
+          oldValue = newValue
+          call
+            ? call(cb!, WatchErrorCodes.WATCH_CALLBACK, args)
+            : // @ts-expect-error
+              cb!(...args)
+        } finally {
+          activeWatcher = currentWatcher
+        }
+      }
+    } else {
+      // watchEffect
+      effect.run()
+    }
+  }
+
+  if (augmentJob) {
+    augmentJob(job)
+  }
+
+  effect = new ReactiveEffect(getter)
+
+  effect.scheduler = scheduler
+    ? () => scheduler(job, false)
+    : (job as EffectScheduler)
+
+  boundCleanup = fn => onWatcherCleanup(fn, false, effect)
+
+  cleanup = effect.onStop = () => {
+    const cleanups = cleanupMap.get(effect)
+    if (cleanups) {
+      if (call) {
+        call(cleanups, WatchErrorCodes.WATCH_CLEANUP)
+      } else {
+        for (const cleanup of cleanups) cleanup()
+      }
+      cleanupMap.delete(effect)
+    }
+  }
+
+  if (__DEV__) {
+    effect.onTrack = options.onTrack
+    effect.onTrigger = options.onTrigger
+  }
+
+  // initial run
+  if (cb) {
+    if (immediate) {
+      job(true)
+    } else {
+      oldValue = effect.run()
+    }
+  } else if (scheduler) {
+    scheduler(job.bind(null, true), true)
+  } else {
+    effect.run()
+  }
+
+  watchHandle.pause = effect.pause.bind(effect)
+  watchHandle.resume = effect.resume.bind(effect)
+  watchHandle.stop = watchHandle
+
+  return watchHandle
+}
+
+
+
+
+export function traverse(
+  value: unknown,
+  depth: number = Infinity,
+  seen?: Set<unknown>,
+): unknown {
+  if (depth <= 0 || !isObject(value) || (value as any)[ReactiveFlags.SKIP]) {
+    return value
+  }
+
+  seen = seen || new Set()
+  if (seen.has(value)) {
+    return value
+  }
+  seen.add(value)
+  depth--
+  if (isRef(value)) {
+    traverse(value.value, depth, seen)
+  } else if (isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      traverse(value[i], depth, seen)
+    }
+  } else if (isSet(value) || isMap(value)) {
+    value.forEach((v: any) => {
+      traverse(v, depth, seen)
+    })
+  } else if (isPlainObject(value)) {
+    for (const key in value) {
+      traverse(value[key], depth, seen)
+    }
+    for (const key of Object.getOwnPropertySymbols(value)) {
+      if (Object.prototype.propertyIsEnumerable.call(value, key)) {
+        traverse(value[key as any], depth, seen)
+      }
+    }
+  }
+  return value
+}
+
+const shallowUnwrapHandlers: ProxyHandler<any> = {
+  get: (target, key, receiver) =>
+    key === ReactiveFlags.RAW
+      ? target
+      : unref(Reflect.get(target, key, receiver)),
+  set: (target, key, value, receiver) => {
+    const oldValue = target[key]
+    if (isRef(oldValue) && !isRef(value)) {
+      oldValue.value = value
+      return true
+    } else {
+      return Reflect.set(target, key, value, receiver)
+    }
+  },
+}
+
+/**
+ * Returns a proxy for the given object that shallowly unwraps properties that
+ * are refs. If the object already is reactive, it's returned as-is. If not, a
+ * new reactive proxy is created.
+ *
+ * @param objectWithRefs - Either an already-reactive object or a simple object
+ * that contains refs.
+ */
+export function proxyRefs<T extends object>(
+  objectWithRefs: T,
+): ShallowUnwrapRef<T> {
+  return isReactive(objectWithRefs)
+    ? objectWithRefs
+    : new Proxy(objectWithRefs, shallowUnwrapHandlers)
 }
