@@ -2740,3 +2740,44 @@ export function proxyRefs<T extends object>(
     ? objectWithRefs as unknown as ShallowUnwrapRef<T>
     : new Proxy(objectWithRefs, shallowUnwrapHandlers)
 }
+
+/**
+ * Force trigger effects that depends on a shallow ref. This is typically used
+ * after making deep mutations to the inner value of a shallow ref.
+ *
+ * @example
+ * ```js
+ * const shallow = shallowRef({
+ *   greet: 'Hello, world'
+ * })
+ *
+ * // Logs "Hello, world" once for the first run-through
+ * watchEffect(() => {
+ *   console.log(shallow.value.greet)
+ * })
+ *
+ * // This won't trigger the effect because the ref is shallow
+ * shallow.value.greet = 'Hello, universe'
+ *
+ * // Logs "Hello, universe"
+ * triggerRef(shallow)
+ * ```
+ *
+ * @param ref - The ref whose tied effects shall be executed.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#triggerref}
+ */
+export function triggerRef(ref: Ref): void {
+  // ref may be an instance of ObjectRefImpl
+  if ((ref as unknown as RefImpl).dep) {
+    if (__DEV__) {
+      ;(ref as unknown as RefImpl).dep.trigger({
+        target: ref,
+        type: TriggerOpTypes.SET,
+        key: 'value',
+        newValue: (ref as unknown as RefImpl)._value,
+      })
+    } else {
+      ;(ref as unknown as RefImpl).dep.trigger()
+    }
+  }
+}

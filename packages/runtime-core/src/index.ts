@@ -36,23 +36,23 @@ import {
   WatchOptions
 } from '@vue/reactivity'
 import { watch as baseWatch } from '@vue/reactivity'
-import { camelize, capitalize, EMPTY_ARR, EMPTY_OBJ, extend, getEscapedCssVarName, getGlobalThis, hasOwn, IfAny, includeBooleanAttr, isArray, isBooleanAttr, isBuiltInDirective, isGloballyAllowed,  } from '@vue/shared'
+import { camelize, capitalize, EMPTY_ARR, EMPTY_OBJ, extend, getEscapedCssVarName, getGlobalThis, hasOwn, IfAny, includeBooleanAttr, isArray, isBooleanAttr, isBuiltInDirective, isGloballyAllowed, } from '@vue/shared'
 import { isFunction, IsKeyValues, isKnownHtmlAttr, isKnownSvgAttr, isModelListener, isObject, isOn, isPlainObject, isPromise, isString, makeMap, NO, NOOP, normalizeCssVarValue, } from '@vue/shared'
-import {  NormalizedStyle, PatchFlags, remove, ShapeFlags, SlotFlags, toHandlerKey, toNumber, toRawType } from '@vue/shared'
+import { NormalizedStyle, PatchFlags, remove, ShapeFlags, SlotFlags, toHandlerKey, toNumber, toRawType } from '@vue/shared'
 import { assertNumber, warn } from './warning'
 import { CompilerOptions, ComponentInjectOptions } from '@vue/compile-core'
 import { LifecycleHooks, ErrorCodes, TeleportMoveTypes, MoveType, DeprecationTypes, SchedulerJobFlags, DOMNodeTypes, MismatchTypes, AccessTypes, DevtoolsHooks, BooleanFlags, OptionTypes } from './enum'
 import { compatModelEventPrefix, COMPONENTS, DIRECTIVES, FILTERS, } from './define'
-import { Fragment, isHmrUpdating, leaveCbKey, NULL_DYNAMIC_COMPONENT, ssrContextKey, Static, TeleportEndKey } from './define'
+import { Fragment, isHmrUpdating, leaveCbKey, NULL_DYNAMIC_COMPONENT, ssrContextKey, Static, TeleportEndKey, Text } from './define'
 import type { App, AppConfig, AppContext, AsyncComponentOptions, ClassComponent, ComponentInternalInstance, ComponentOptionsBase, ComponentRenderContext, } from './interface'
-import type { DevtoolsHook, DirectiveBinding, FunctionalComponent, HydrationRenderer, KeepAliveContext, LegacyDirective, LegacyVNodeProps, ObjectDirective, PropOptions,  } from './interface'
+import type { DevtoolsHook, DirectiveBinding, FunctionalComponent, HydrationRenderer, KeepAliveContext, LegacyDirective, LegacyVNodeProps, ObjectDirective, PropOptions, } from './interface'
 import type { Renderer, RendererElement, RendererInternals, RendererNode, RendererOptions, SchedulerJob, SuspenseBoundary, SuspenseProps, TeleportProps, TeleportTargetElement, TransitionHooks, VNode, WatchAPIOptions } from './interface'
 import type { AssetTypes, AsyncComponentLoader, CompatConfig, CompatVue, Component, ComponentObjectPropsOptions, ComponentOptions, ComponentOptionsMixin, Constructor, HTMLElementEventHandler, RawChildren, RawProps, } from './type'
 import type { ComponentPropsOptions, ComponentProvideOptions, ComponentPublicInstance, ComponentTypeEmits, ComputedOptions, ConcreteComponent, ContextualRenderFn, CreateAppFunction, } from './type'
-import type { CreateComponentPublicInstanceWithMixins, Data, DebuggerHook, DefineComponent, DefineSetupFnComponent, DevtoolsComponentHook, Directive, DirectiveHook, ElementNamespace, EmitsOptions,  } from './type'
-import type { ErrorCapturedHook, ErrorTypes, ExtractDefaultPropTypes, ExtractPropTypes, InjectionKey, InternalRenderFunction, InternalSlots, LifecycleHook, MergedComponentOptions, MethodOptions, MountComponentFn,  } from './type'
+import type { CreateComponentPublicInstanceWithMixins, Data, DebuggerHook, DefineComponent, DefineSetupFnComponent, DevtoolsComponentHook, Directive, DirectiveHook, ElementNamespace, EmitsOptions, } from './type'
+import type { ErrorCapturedHook, ErrorTypes, ExtractDefaultPropTypes, ExtractPropTypes, InjectionKey, InternalRenderFunction, InternalSlots, LifecycleHook, MergedComponentOptions, MethodOptions, MountComponentFn, } from './type'
 import type { NormalizedProps, NormalizedPropsOptions, ObjectEmitsOptions, ObjectWatchOptionItem, OptionMergeFunction, Prop, PublicPropertiesMap, PublicProps, RawSlots, RenderFunction, RootHydrateFunction, RootRenderFunction, } from './type'
-import type { SchedulerJobs, SetupContext, SetupRenderEffectFn, Slot, Slots, SlotsType, TeleportVNode, TypeEmitsToOptions, VNodeArrayChildren, VNodeChild, VNodeHook, VNodeNormalizedChildren,} from './type'
+import type { SchedulerJobs, SetupContext, SetupRenderEffectFn, Slot, Slots, SlotsType, TeleportVNode, TypeEmitsToOptions, VNodeArrayChildren, VNodeChild, VNodeHook, VNodeNormalizedChildren, } from './type'
 import type { VNodeNormalizedRef, VNodeNormalizedRefAtom, VNodeProps, VNodeRef, VNodeTypes, WatchCallback } from './type'
 import type { AssertionResult, CompileFunction, ComponentWatchOptionItem, ComponentWatchOptions, CountMap, CreateHook, DeprecationData, DevtoolsPerformanceHook, HMRComponent, LegacyAsyncComponent, LegacyAsyncReturnValue, LegacyVNodeChildren, MountChildrenFn, MoveFn, NextFn, NormalizedProp, ObjectInjectOptions, PatchBlockChildrenFn, PatchChildrenFn, PatchFn, Plugin, ProcessTextOrCommentFn, PropConstructor, RemoveFn, SetRootFn, ToResolvedProps, UnmountChildrenFn, UnmountFn } from './type'
 import type { DirectiveArguments } from './type'
@@ -422,26 +422,26 @@ export const isReservedPrefix = (key: string): key is '_' | '$' =>
 
 const attrsProxyHandlers = __DEV__
   ? {
-      get(target: Data, key: string) {
-        markAttrsAccessed()
-        track(target, TrackOpTypes.GET, '')
-        return target[key]
-      },
-      set() {
-        warn(`setupContext.attrs is readonly.`)
-        return false
-      },
-      deleteProperty() {
-        warn(`setupContext.attrs is readonly.`)
-        return false
-      },
-    }
+    get(target: Data, key: string) {
+      markAttrsAccessed()
+      track(target, TrackOpTypes.GET, '')
+      return target[key]
+    },
+    set() {
+      warn(`setupContext.attrs is readonly.`)
+      return false
+    },
+    deleteProperty() {
+      warn(`setupContext.attrs is readonly.`)
+      return false
+    },
+  }
   : {
-      get(target: Data, key: string) {
-        track(target, TrackOpTypes.GET, '')
-        return target[key]
-      },
-    }
+    get(target: Data, key: string) {
+      track(target, TrackOpTypes.GET, '')
+      return target[key]
+    },
+  }
 
 
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
@@ -526,7 +526,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     } else if (
       // global properties
       ((globalProperties = appContext.config.globalProperties),
-      hasOwn(globalProperties, key))
+        hasOwn(globalProperties, key))
     ) {
       if (__COMPAT__) {
         const desc = Object.getOwnPropertyDescriptor(globalProperties, key)!
@@ -552,12 +552,12 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
           `Property ${JSON.stringify(
             key,
           )} must be accessed via $data because it starts with a reserved ` +
-            `character ("$" or "_") and is not proxied on the render context.`,
+          `character ("$" or "_") and is not proxied on the render context.`,
         )
       } else if (instance === currentRenderingInstance) {
         warn(
           `Property ${JSON.stringify(key)} was accessed during render ` +
-            `but is not defined on instance.`,
+          `but is not defined on instance.`,
         )
       }
     }
@@ -590,7 +590,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       __DEV__ &&
         warn(
           `Attempting to mutate public property "${key}". ` +
-            `Properties starting with $ are reserved and readonly.`,
+          `Properties starting with $ are reserved and readonly.`,
         )
       return false
     } else {
@@ -2074,6 +2074,8 @@ function baseCreateRenderer(
       // Give it a placeholder if this is not hydration
       // TODO handle self-defined fallback
       if (!initialVNode.el) {
+
+
         const placeholder = (instance.subTree = createVNode(Comment))
         processCommentNode(null, placeholder, container!, anchor)
         initialVNode.placeholder = placeholder.el
@@ -2170,6 +2172,7 @@ function baseCreateRenderer(
               startMeasure(instance, `render`)
             }
             instance.subTree = renderComponentRoot(instance)
+
             if (__DEV__) {
               endMeasure(instance, `render`)
             }
@@ -2289,7 +2292,6 @@ function baseCreateRenderer(
         initialVNode = container = anchor = null as any
       } else {
         let { next, bu, u, parent, vnode } = instance
-
         if (__FEATURE_SUSPENSE__) {
           const nonHydratedAsyncRoot = locateNonHydratedAsyncRoot(instance)
           // we are trying to update some async comp before hydration
@@ -2359,12 +2361,14 @@ function baseCreateRenderer(
         if (__DEV__) {
           startMeasure(instance, `patch`)
         }
+
         patch(
           prevTree,
           nextTree,
           // parent may have changed if it's in a teleport
           hostParentNode(prevTree.el!)!,
           // anchor may have changed if it's in a fragment
+          // TODO
           getNextHostNode(prevTree),
           instance,
           parentSuspense,
@@ -3824,11 +3828,13 @@ export function createHydrationFunctions(
           ) {
             let subTree
             if (isFragmentStart) {
+
               subTree = createVNode(Fragment)
               subTree.anchor = nextNode
                 ? nextNode.previousSibling
                 : container.lastChild
             } else {
+
               subTree =
                 node.nodeType === 3 ? createTextVNode('') : createVNode('div')
             }
@@ -4494,8 +4500,10 @@ export function getCompatConfigForKey(
 export function normalizeVNode(child: VNodeChild): VNode {
   if (child == null || typeof child === 'boolean') {
     // empty placeholder
+
     return createVNode(Comment)
   } else if (isArray(child)) {
+
     // fragment
     return createVNode(
       Fragment,
@@ -4508,6 +4516,8 @@ export function normalizeVNode(child: VNodeChild): VNode {
     // always produce all-vnode children arrays
     return cloneIfMounted(child)
   } else {
+
+
     // strings and numbers
     return createVNode(Text, null, String(child))
   }
@@ -4948,6 +4958,7 @@ function _createVNode(
     if (__DEV__ && !type) {
       warn(`Invalid vnode type when creating vnode: ${type}.`)
     }
+
     type = Comment
   }
 
@@ -4972,11 +4983,13 @@ function _createVNode(
 
   // class component normalization.
   if (isClassComponent(type)) {
+    isFunction(type) && console.log('不应该后面都等于 函数类型')
     type = type.__vccOpts
   }
 
   // 2.x async/functional component compat
   if (__COMPAT__) {
+
     type = convertLegacyComponent(type, currentRenderingInstance)
   }
 
@@ -5022,6 +5035,8 @@ function _createVNode(
       type,
     )
   }
+
+
 
   return createBaseVNode(
     type,
@@ -5859,6 +5874,7 @@ export function renderComponentRoot(
   } catch (err) {
     blockStack.length = 0
     handleError(err, instance, ErrorCodes.RENDER_FUNCTION)
+
     result = createVNode(Comment)
   }
 
@@ -7427,6 +7443,7 @@ export function createAppAPI<HostElement>(
               ` you need to unmount the previous app by calling \`app.unmount()\` first.`,
             )
           }
+
           const vnode = app._ceVNode || createVNode(rootComponent, rootProps)
           // store app context on the root VNode.
           // this will be set on the root instance on initial mount.
@@ -9617,6 +9634,7 @@ function normalizeSuspenseChildren(vnode: VNode): void {
   vnode.ssContent = normalizeSuspenseSlot(
     isSlotChildren ? (children as Slots).default : children,
   )
+
   vnode.ssFallback = isSlotChildren
     ? normalizeSuspenseSlot((children as Slots).fallback)
     : createVNode(Comment)
@@ -9850,12 +9868,14 @@ export function defineAsyncComponent<
           })
           .catch(err => {
             onError(err)
-            return () =>
-              errorComponent
+            return () => {
+
+              return errorComponent
                 ? createVNode(errorComponent as ConcreteComponent, {
                   error: err,
                 })
                 : null
+            }
           })
       }
 
@@ -9899,10 +9919,12 @@ export function defineAsyncComponent<
         if (loaded.value && resolvedComp) {
           return createInnerComp(resolvedComp, instance)
         } else if (error.value && errorComponent) {
+
           return createVNode(errorComponent, {
             error: error.value,
           })
         } else if (loadingComponent && !delayed.value) {
+
           return createVNode(loadingComponent)
         }
       }
@@ -10027,6 +10049,7 @@ function createInnerComp(
   parent: ComponentInternalInstance,
 ) {
   const { ref, props, children, ce } = parent.vnode
+
   const vnode = createVNode(comp, props, children)
   // ensure inner component inherits the async wrapper's ref owner
   vnode.ref = ref
@@ -10335,18 +10358,18 @@ export function finishComponentSetup(
 
 const createHook =
   <T extends Function = () => any>(lifecycle: LifecycleHooks) =>
-  (
-    hook: T,
-    target: ComponentInternalInstance | null = currentInstance,
-  ): void => {
-    // post-create lifecycle registrations are noops during SSR (except for serverPrefetch)
-    if (
-      !isInSSRComponentSetup ||
-      lifecycle === LifecycleHooks.SERVER_PREFETCH
-    ) {
-      injectHook(lifecycle, (...args: unknown[]) => hook(...args), target)
+    (
+      hook: T,
+      target: ComponentInternalInstance | null = currentInstance,
+    ): void => {
+      // post-create lifecycle registrations are noops during SSR (except for serverPrefetch)
+      if (
+        !isInSSRComponentSetup ||
+        lifecycle === LifecycleHooks.SERVER_PREFETCH
+      ) {
+        injectHook(lifecycle, (...args: unknown[]) => hook(...args), target)
+      }
     }
-  }
 
 export function injectHook(
   type: LifecycleHooks,
@@ -10384,12 +10407,12 @@ export function injectHook(
     const apiName = toHandlerKey(ErrorTypeStrings[type].replace(/ hook$/, ''))
     warn(
       `${apiName} is called when there is no active component instance to be ` +
-        `associated with. ` +
-        `Lifecycle injection APIs can only be used during execution of setup().` +
-        (__FEATURE_SUSPENSE__
-          ? ` If you are using async setup(), make sure to register lifecycle ` +
-            `hooks before the first await statement.`
-          : ``),
+      `associated with. ` +
+      `Lifecycle injection APIs can only be used during execution of setup().` +
+      (__FEATURE_SUSPENSE__
+        ? ` If you are using async setup(), make sure to register lifecycle ` +
+        `hooks before the first await statement.`
+        : ``),
     )
   }
 }
@@ -10848,6 +10871,7 @@ function installCompatMount(
    */
   app._createRoot = options => {
     const component = app._component
+
     const vnode = createVNode(component, options.propsData || null)
     vnode.appContext = context
 
@@ -11120,18 +11144,15 @@ function applySingletonPrototype(app: App, Ctor: Function) {
   }
 }
 
-// 有更改
+//
 export function nextTick<T = void, R = void>(
   this: T,
   fn?: (this: T) => R,
 ): Promise<Awaited<R>> {
   const p = currentFlushPromise || resolvedPromise
-  if (fn) {
-    return Promise.resolve(p.then(this ? fn.bind(this) : fn))
-  } else {
-    return p as Promise<Awaited<R>>
-  }
+  return fn ? p.then(this ? fn.bind(this) : fn) : p
 }
+
 export function deepMergeData(to: any, from: any): any {
   for (const key in from) {
     const toVal = to[key]
@@ -11170,7 +11191,7 @@ export function handleSetupResult(
     if (__DEV__ && isVNode(setupResult)) {
       warn(
         `setup() should not return VNodes directly - ` +
-          `return a render function instead.`,
+        `return a render function instead.`,
       )
     }
     // setup returned bindings.
@@ -11184,8 +11205,7 @@ export function handleSetupResult(
     }
   } else if (__DEV__ && setupResult !== undefined) {
     warn(
-      `setup() should return an object. Received: ${
-        setupResult === null ? 'null' : typeof setupResult
+      `setup() should return an object. Received: ${setupResult === null ? 'null' : typeof setupResult
       }`,
     )
   }
@@ -11204,7 +11224,7 @@ export function exposeSetupStateOnRenderContext(
           `setup() return property ${JSON.stringify(
             key,
           )} should not start with "$" or "_" ` +
-            `which are reserved prefixes for Vue internals.`,
+          `which are reserved prefixes for Vue internals.`,
         )
         return
       }
@@ -11417,6 +11437,7 @@ export function resolveInjections(
  * @private
  */
 export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
+
   return createVNode(Text, null, text, flag)
 }
 
@@ -11467,7 +11488,7 @@ export function defineComponent<
   // props
   TypeProps,
   RuntimePropsOptions extends
-    ComponentObjectPropsOptions = ComponentObjectPropsOptions,
+  ComponentObjectPropsOptions = ComponentObjectPropsOptions,
   RuntimePropsKeys extends string = string,
   // emits
   TypeEmits extends ComponentTypeEmits = {},
@@ -11489,15 +11510,15 @@ export function defineComponent<
   Provide extends ComponentProvideOptions = ComponentProvideOptions,
   // resolved types
   ResolvedEmits extends EmitsOptions = {} extends RuntimeEmitsOptions
-    ? TypeEmitsToOptions<TypeEmits>
-    : RuntimeEmitsOptions,
+  ? TypeEmitsToOptions<TypeEmits>
+  : RuntimeEmitsOptions,
   InferredProps = IsKeyValues<TypeProps> extends true
-    ? TypeProps
-    : string extends RuntimePropsKeys
-      ? ComponentObjectPropsOptions extends RuntimePropsOptions
-        ? {}
-        : ExtractPropTypes<RuntimePropsOptions>
-      : { [key in RuntimePropsKeys]?: any },
+  ? TypeProps
+  : string extends RuntimePropsKeys
+  ? ComponentObjectPropsOptions extends RuntimePropsOptions
+  ? {}
+  : ExtractPropTypes<RuntimePropsOptions>
+  : { [key in RuntimePropsKeys]?: any },
   TypeRefs extends Record<string, unknown> = {},
   TypeEl extends Element = any,
 >(
@@ -11593,7 +11614,7 @@ export function defineComponent(
     ? // #8236: extend call and options.name access are considered side-effects
       // by Rollup, so we have to wrap it in a pure-annotated IIFE.
       /*@__PURE__*/ (() =>
-        extend({ name: options.name }, extraOptions, { setup: options }))()
+      extend({ name: options.name }, extraOptions, { setup: options }))()
     : options
 }
 
@@ -11660,8 +11681,10 @@ export function compatH(
     if (isObject(propsOrChildren) && !is2ndArgArrayChildren) {
       // single vnode without props
       if (isVNode(propsOrChildren)) {
+
         return convertLegacySlots(createVNode(type, null, [propsOrChildren]))
       }
+
       // props without children
       return convertLegacySlots(
         convertLegacyDirectives(
@@ -11670,6 +11693,7 @@ export function compatH(
         ),
       )
     } else {
+
       // omit props
       return convertLegacySlots(createVNode(type, null, propsOrChildren))
     }
@@ -11677,6 +11701,7 @@ export function compatH(
     if (isVNode(children)) {
       children = [children]
     }
+
     return convertLegacySlots(
       convertLegacyDirectives(
         createVNode(type, convertLegacyProps(propsOrChildren, type), children),
@@ -11850,7 +11875,7 @@ function resolveAsset(
       const extra =
         type === COMPONENTS
           ? `\nIf this is a native custom element, make sure to exclude it from ` +
-            `component resolution via compilerOptions.isCustomElement.`
+          `component resolution via compilerOptions.isCustomElement.`
           : ``
       warn(`Failed to resolve ${type.slice(0, -1)}: ${name}${extra}`)
     }
@@ -11859,7 +11884,7 @@ function resolveAsset(
   } else if (__DEV__) {
     warn(
       `resolve${capitalize(type.slice(0, -1))} ` +
-        `can only be used in render() or setup().`,
+      `can only be used in render() or setup().`,
     )
   }
 }
@@ -12113,7 +12138,7 @@ function defineReactive(obj: any, key: string, val: any) {
       Object.keys(val).forEach(key => {
         try {
           defineReactiveSimple(val, key, val[key])
-        } catch (e: any) {}
+        } catch (e: any) { }
       })
     }
   }
@@ -12345,27 +12370,27 @@ export const compatUtils = (
 
 export const RuntimeCompiledPublicInstanceProxyHandlers: ProxyHandler<any> =
   /*@__PURE__*/ extend({}, PublicInstanceProxyHandlers, {
-    get(target: ComponentRenderContext, key: string) {
-      // fast path for unscopables when using `with` block
-      if ((key as any) === Symbol.unscopables) {
-        return
-      }
-      return PublicInstanceProxyHandlers.get!(target, key, target)
-    },
-    has(_: ComponentRenderContext, key: string) {
-      const has = key[0] !== '_' && !isGloballyAllowed(key)
-      if (__DEV__ && !has && PublicInstanceProxyHandlers.has!(_, key)) {
-        warn(
-          `Property ${JSON.stringify(
-            key,
-          )} should not start with _ which is a reserved prefix for Vue internals.`,
-        )
-      }
-      return has
-    },
-  })
+  get(target: ComponentRenderContext, key: string) {
+    // fast path for unscopables when using `with` block
+    if ((key as any) === Symbol.unscopables) {
+      return
+    }
+    return PublicInstanceProxyHandlers.get!(target, key, target)
+  },
+  has(_: ComponentRenderContext, key: string) {
+    const has = key[0] !== '_' && !isGloballyAllowed(key)
+    if (__DEV__ && !has && PublicInstanceProxyHandlers.has!(_, key)) {
+      warn(
+        `Property ${JSON.stringify(
+          key,
+        )} should not start with _ which is a reserved prefix for Vue internals.`,
+      )
+    }
+    return has
+  },
+})
 
-  
+
 /**
  * For runtime-dom to register the compiler.
  * Note the exported method uses any to avoid d.ts relying on the compiler types.
@@ -12504,11 +12529,14 @@ export function h(type: any, propsOrChildren?: any, children?: any): VNode {
     if (isObject(propsOrChildren) && !isArray(propsOrChildren)) {
       // single vnode without props
       if (isVNode(propsOrChildren)) {
+
         return createVNode(type, null, [propsOrChildren])
       }
+
       // props without children
       return createVNode(type, propsOrChildren)
     } else {
+
       // omit props
       return createVNode(type, null, propsOrChildren)
     }
@@ -12518,6 +12546,8 @@ export function h(type: any, propsOrChildren?: any, children?: any): VNode {
     } else if (l === 3 && isVNode(children)) {
       children = [children]
     }
+
+
     return createVNode(type, propsOrChildren, children)
   }
 }

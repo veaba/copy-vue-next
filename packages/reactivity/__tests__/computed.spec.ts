@@ -7,10 +7,11 @@ import {
   reactive,
   ref, resetTracking, shallowRef,
   toRaw,
+  triggerRef,
   WritableComputedRef
 } from '../src/reactive'
 import { TrackOpTypes, TriggerOpTypes } from '../src/constants'
-import { nextTick, defineComponent, h } from '@vue/runtime-core'
+import { nextTick, defineComponent, h, onMounted, onUnmounted } from '@vue/runtime-core'
 import { nodeOps, render, serializeInner, TestElement, triggerEvent } from '@vue/runtime-test'
 
 describe('reactivity/computed', () => {
@@ -560,7 +561,7 @@ describe('reactivity/computed', () => {
     expect(serializeInner(root)).toBe(`2`)
   })
 
-  it.skip('should not trigger effect scheduler by recursive computed effect', async () => {
+  it('should not trigger effect scheduler by recursive computed effect', async () => {
     const v = ref('Hello')
     const c = computed(() => {
       v.value += ' World'
@@ -791,7 +792,8 @@ describe('reactivity/computed', () => {
   })
 
   // #10236
-  it.skip('chained computed should still refresh after owner component unmount', async () => {
+  // TODO bug~~
+  it('chained computed should still refresh after owner component unmount', async () => {
     const a = ref(0)
     const spy = vi.fn()
 
@@ -825,7 +827,7 @@ describe('reactivity/computed', () => {
   // case: radix-vue `useForwardExpose` sets a template ref during mount,
   // and checks for the element's closest form element in a computed.
   // the computed is expected to only evaluate after mount.
-  it.skip('computed deps should only be refreshed when the subscribing effect is run, not when scheduled', async () => {
+  it('computed deps should only be refreshed when the subscribing effect is run, not when scheduled', async () => {
     const calls: string[] = []
     const a = ref(0)
     const b = computed(() => {
@@ -855,7 +857,7 @@ describe('reactivity/computed', () => {
     expect(calls).toMatchObject(['b eval', 'mounted', 'b eval'])
   })
 
-  it.skip('should chained computeds keep reactivity when computed effect happens', async () => {
+  it('should chained computeds keep reactivity when computed effect happens', async () => {
     const v = ref('Hello')
     const c = computed(() => {
       v.value += ' World'
@@ -881,7 +883,7 @@ describe('reactivity/computed', () => {
     )
   })
 
-  it.skip('should keep dirty level when side effect computed value changed', () => {
+  it('should keep dirty level when side effect computed value changed', () => {
     const v = ref(0)
     const c = computed(() => {
       v.value += 1
@@ -948,7 +950,7 @@ describe('reactivity/computed', () => {
   })
 
   // #11797
-  test.skip('should prevent endless recursion in self-referencing computed getters', async () => {
+  test('should prevent endless recursion in self-referencing computed getters', async () => {
     const Comp = defineComponent({
       data() {
         return {
@@ -990,7 +992,7 @@ describe('reactivity/computed', () => {
     expect(serializeInner(root)).toBe(`<button>Step</button><p>Step 2</p>`)
   })
 
-  test.skip('manual trigger computed', () => {
+  test('manual trigger computed', () => {
     const cValue = computed(() => 1)
     triggerRef(cValue)
     expect(cValue.value).toBe(1)

@@ -4,7 +4,7 @@ import { BooleanFlags, DeprecationTypes, ErrorCodes, LifecycleHooks, MoveType } 
 import {  configureCompat,nextTick, Suspense, SuspenseImpl, Teleport, TeleportImpl } from "."
 import { CompilerOptions } from "@vue/compile-core"
 import type { OverloadParameters, SlotFlags } from "@vue/shared"
-import { COMPONENTS, DIRECTIVES, FILTERS, Fragment, Static } from "./define"
+import { COMPONENTS, DIRECTIVES, FILTERS, Fragment, Static,Text } from "./define"
 
 declare const SlotSymbol: unique symbol
 
@@ -171,6 +171,7 @@ export type PatchChildrenFn = (
   slotScopeIds: string[] | null,
   optimized: boolean,
 ) => void
+
 export type NextFn = (vnode: VNode) => RendererNode | null
 
 
