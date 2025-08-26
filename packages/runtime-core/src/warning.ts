@@ -1,13 +1,10 @@
-import type { VNode } from './vnode'
-import {
-  type ComponentInternalInstance,
-  type ConcreteComponent,
-  type Data,
-  formatComponentName,
-} from './component'
+
 import { isFunction, isString } from '@vue/shared'
 import { isRef, pauseTracking, resetTracking, toRaw } from '@vue/reactivity'
-import { ErrorCodes, callWithErrorHandling } from './errorHandling'
+import { callWithErrorHandling, formatComponentName } from '.'
+import { ErrorCodes } from './enum'
+import { ComponentInternalInstance, VNode } from './interface'
+import { ConcreteComponent, Data } from './type'
 
 type ComponentVNode = VNode & {
   type: ConcreteComponent

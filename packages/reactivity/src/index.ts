@@ -1,5 +1,5 @@
 // functions
-export { reactive, markRaw, isReactive,toRaw, isProxy, isRef,shallowReadonly,shallowReactive   } from './reactive'
+export { reactive,computed, markRaw, isReactive,toRaw, isProxy, isRef,shallowReadonly,shallowReactive   } from './reactive'
 export { pauseTracking, resetTracking } from './reactive'
 export { trigger,track, unref, watch, ref, traverse, proxyRefs, getCurrentScope } from './reactive'
 // types

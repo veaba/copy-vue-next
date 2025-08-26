@@ -30,3 +30,23 @@ export * from "@vue/runtime-core";
 ## src/components
 
 ## src/helpers
+
+## typos
+
+```diff
+- function mergeObjectOptions(to: Object | undefined, from: Object | undefined) {
++ function mergeObjectOptions(to: object | undefined, from: object | undefined) {
+  return to ? extend(Object.create(null), to, from) : from
+}
+
+```
+
+```diff
+export interface AppRecord {
+  id: number
+  app: App
+  version: string
+-  types: Record<string, string | Symbol>
++  types: Record<string, string | symbol>
+}
+```

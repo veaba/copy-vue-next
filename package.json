@@ -17,6 +17,7 @@
     "open": "open http://localhost:5000/packages-private/template-explorer/local.html"
   },
   "devDependencies": {
+    "@babel/parser": "catalog:",
     "@babel/types": "^7.12.0",
     "@ls-lint/ls-lint": "^1.9.2",
     "@microsoft/api-extractor": "^7.9.15",

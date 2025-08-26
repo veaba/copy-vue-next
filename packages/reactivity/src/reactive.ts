@@ -42,7 +42,7 @@ const builtInSymbols = new Set(
     .filter(isSymbol),
 )
 export const reactiveMap: WeakMap<Target, any> = new WeakMap<Target, any>()
-export let activeEffectScope: EffectScope | undefined
+let activeEffectScope: EffectScope | undefined
 
 const arrayProto = Array.prototype
 
@@ -1791,7 +1791,7 @@ export function track(target: object, type: TrackOpTypes, key: unknown): void {
 
 // trigger 触发函数
 export function trigger(
-  target: Target,
+  target: object,
   type: TriggerOpTypes,
   key?: unknown,
   newValue?: unknown,
@@ -2737,6 +2737,6 @@ export function proxyRefs<T extends object>(
   objectWithRefs: T,
 ): ShallowUnwrapRef<T> {
   return isReactive(objectWithRefs)
-    ? objectWithRefs
+    ? objectWithRefs as unknown as ShallowUnwrapRef<T>
     : new Proxy(objectWithRefs, shallowUnwrapHandlers)
 }

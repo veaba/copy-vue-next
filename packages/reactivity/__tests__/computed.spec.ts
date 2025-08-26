@@ -10,8 +10,8 @@ import {
   WritableComputedRef
 } from '../src/reactive'
 import { TrackOpTypes, TriggerOpTypes } from '../src/constants'
-import { nextTick,h } from '@vue/runtime-core'
-import { nodeOps, render, serializeInner } from '@vue/runtime-test'
+import { nextTick, defineComponent, h } from '@vue/runtime-core'
+import { nodeOps, render, serializeInner, TestElement, triggerEvent } from '@vue/runtime-test'
 
 describe('reactivity/computed', () => {
   it('should return updated value', () => {

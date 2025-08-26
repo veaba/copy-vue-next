@@ -3,16 +3,12 @@
  * */
 
 import {
-  ComputedGetter,
-  DebuggerEventExtraInfo,
-  DebuggerOptions,
   EffectFlags,
   getCurrentScope,
   isProxy,
   isReactive,
   isRef,
   markRaw,
-  OnCleanup,
   pauseTracking,
   proxyRefs,
   reactive,
@@ -25,380 +21,80 @@ import {
   shallowReactive,
   shallowReadonly,
   ShallowRef,
-  ShallowUnwrapRef,
-  Subscriber,
   toRaw,
   traverse,
   trigger,
   TriggerOpTypes,
-  unref,
-  UnwrapNestedRefs,
   WatchEffect,
   WatchErrorCodes,
   WatchHandle,
   WatchOptions as BaseWatchOptions,
   WatchSource,
-  WatchStopHandle,
-  WritableComputedOptions,
   TrackOpTypes,
-  track
+  track,
+  computed,
+  WatchOptions
 } from '@vue/reactivity'
 import { watch as baseWatch } from '@vue/reactivity'
-import { camelize, capitalize, EMPTY_ARR, EMPTY_OBJ, extend, getEscapedCssVarName, getGlobalThis, hasOwn, includeBooleanAttr, isArray, isBooleanAttr, isBuiltInDirective, isFunction, isKnownHtmlAttr, isKnownSvgAttr, isModelListener, isObject, isOn, isPlainObject, isPromise, isString, makeMap, NO, NOOP, normalizeCssVarValue, remove, toNumber, toRawType } from '@vue/shared'
+import { camelize, capitalize, EMPTY_ARR, EMPTY_OBJ, extend, getEscapedCssVarName, getGlobalThis, hasOwn, IfAny, includeBooleanAttr, isArray, isBooleanAttr, isBuiltInDirective, isGloballyAllowed,  } from '@vue/shared'
+import { isFunction, IsKeyValues, isKnownHtmlAttr, isKnownSvgAttr, isModelListener, isObject, isOn, isPlainObject, isPromise, isString, makeMap, NO, NOOP, normalizeCssVarValue, } from '@vue/shared'
+import {  NormalizedStyle, PatchFlags, remove, ShapeFlags, SlotFlags, toHandlerKey, toNumber, toRawType } from '@vue/shared'
 import { assertNumber, warn } from './warning'
-
-/**** enum ***/
-export enum MoveType {
-  ENTER,
-  LEAVE,
-  REORDER
-}
-
-enum DevtoolsHooks {
-  APP_INIT = 'app:init',
-  APP_UNMOUNT = 'app:unmount',
-  COMPONENT_UPDATED = 'component:updated',
-  COMPONENT_ADDED = 'component:added',
-  COMPONENT_REMOVED = 'component:removed',
-  COMPONENT_EMIT = 'component:emit',
-  PERFORMANCE_START = 'perf:start',
-  PERFORMANCE_END = 'perf:end',
-}
-export enum LifecycleHooks {
-  BEFORE_CREATE = 'bc',
-  CREATED = 'c',
-  BEFORE_MOUNT = 'bm',
-  MOUNTED = 'm',
-  BEFORE_UPDATE = 'bu',
-  UPDATED = 'u',
-  BEFORE_UNMOUNT = 'bum',
-  UNMOUNTED = 'um',
-  DEACTIVATED = 'da',
-  ACTIVATED = 'a',
-  RENDER_TRIGGERED = 'rtg',
-  RENDER_TRACKED = 'rtc',
-  ERROR_CAPTURED = 'ec',
-  SERVER_PREFETCH = 'sp'
-}
-enum AccessTypes {
-  OTHER,
-  SETUP,
-  DATA,
-  PROPS,
-  CONTEXT,
-}
-export enum TeleportMoveTypes {
-  TARGET_CHANGE,
-  TOGGLE, // enable / disable
-  REORDER, // moved in the main view
-}
-enum MismatchTypes {
-  TEXT = 0,
-  CHILDREN = 1,
-  CLASS = 2,
-  STYLE = 3,
-  ATTRIBUTE = 4,
-}
-export enum SchedulerJobFlags {
-  QUEUED = 1 << 0,
-  PRE = 1 << 1,
-  /**
-   * Indicates whether the effect is allowed to recursively trigger itself
-   * when managed by the scheduler.
-   *
-   * By default, a job cannot trigger itself because some built-in method calls,
-   * e.g. Array.prototype.push actually performs reads as well (#1740) which
-   * can lead to confusing infinite loops.
-   * The allowed cases are component update functions and watch callbacks.
-   * Component update functions may update child component props, which in turn
-   * trigger flush: "pre" watch callbacks that mutates state that the parent
-   * relies on (#1801). Watch callbacks doesn't track its dependencies so if it
-   * triggers itself again, it's likely intentional and it is the user's
-   * responsibility to perform recursive state mutation that eventually
-   * stabilizes (#1727).
-   */
-  ALLOW_RECURSE = 1 << 2,
-  DISPOSED = 1 << 3
-}
-export enum DeprecationTypes {
-  GLOBAL_MOUNT = 'GLOBAL_MOUNT',
-  GLOBAL_MOUNT_CONTAINER = 'GLOBAL_MOUNT_CONTAINER',
-  GLOBAL_EXTEND = 'GLOBAL_EXTEND',
-  GLOBAL_PROTOTYPE = 'GLOBAL_PROTOTYPE',
-  GLOBAL_SET = 'GLOBAL_SET',
-  GLOBAL_DELETE = 'GLOBAL_DELETE',
-  GLOBAL_OBSERVABLE = 'GLOBAL_OBSERVABLE',
-  GLOBAL_PRIVATE_UTIL = 'GLOBAL_PRIVATE_UTIL',
-
-  CONFIG_SILENT = 'CONFIG_SILENT',
-  CONFIG_DEVTOOLS = 'CONFIG_DEVTOOLS',
-  CONFIG_KEY_CODES = 'CONFIG_KEY_CODES',
-  CONFIG_PRODUCTION_TIP = 'CONFIG_PRODUCTION_TIP',
-  CONFIG_IGNORED_ELEMENTS = 'CONFIG_IGNORED_ELEMENTS',
-  CONFIG_WHITESPACE = 'CONFIG_WHITESPACE',
-  CONFIG_OPTION_MERGE_STRATS = 'CONFIG_OPTION_MERGE_STRATS',
-
-  INSTANCE_SET = 'INSTANCE_SET',
-  INSTANCE_DELETE = 'INSTANCE_DELETE',
-  INSTANCE_DESTROY = 'INSTANCE_DESTROY',
-  INSTANCE_EVENT_EMITTER = 'INSTANCE_EVENT_EMITTER',
-  INSTANCE_EVENT_HOOKS = 'INSTANCE_EVENT_HOOKS',
-  INSTANCE_CHILDREN = 'INSTANCE_CHILDREN',
-  INSTANCE_LISTENERS = 'INSTANCE_LISTENERS',
-  INSTANCE_SCOPED_SLOTS = 'INSTANCE_SCOPED_SLOTS',
-  INSTANCE_ATTRS_CLASS_STYLE = 'INSTANCE_ATTRS_CLASS_STYLE',
-
-  OPTIONS_DATA_FN = 'OPTIONS_DATA_FN',
-  OPTIONS_DATA_MERGE = 'OPTIONS_DATA_MERGE',
-  OPTIONS_BEFORE_DESTROY = 'OPTIONS_BEFORE_DESTROY',
-  OPTIONS_DESTROYED = 'OPTIONS_DESTROYED',
-
-  WATCH_ARRAY = 'WATCH_ARRAY',
-  PROPS_DEFAULT_THIS = 'PROPS_DEFAULT_THIS',
-
-  V_ON_KEYCODE_MODIFIER = 'V_ON_KEYCODE_MODIFIER',
-  CUSTOM_DIR = 'CUSTOM_DIR',
-
-  ATTR_FALSE_VALUE = 'ATTR_FALSE_VALUE',
-  ATTR_ENUMERATED_COERCION = 'ATTR_ENUMERATED_COERCION',
-
-  TRANSITION_CLASSES = 'TRANSITION_CLASSES',
-  TRANSITION_GROUP_ROOT = 'TRANSITION_GROUP_ROOT',
-
-  COMPONENT_ASYNC = 'COMPONENT_ASYNC',
-  COMPONENT_FUNCTIONAL = 'COMPONENT_FUNCTIONAL',
-  COMPONENT_V_MODEL = 'COMPONENT_V_MODEL',
-
-  RENDER_FUNCTION = 'RENDER_FUNCTION',
-
-  FILTERS = 'FILTERS',
-
-  PRIVATE_APIS = 'PRIVATE_APIS'
-}
-
-export enum SlotFlags {
-  /**
-   * Stable slots that only reference slot props or context state. The slot
-   * can fully capture its own dependencies so when passed down the parent won't
-   * need to force the child to update.
-   */
-  STABLE = 1,
-  /**
-   * Slots that reference scope variables (v-for or an outer slot prop), or
-   * has conditional structure (v-if, v-for). The parent will need to force
-   * the child to update because the slot does not fully capture its dependencies.
-   */
-  DYNAMIC = 2,
-  /**
-   * `<slot/>` being forwarded into a child component. Whether the parent needs
-   * to update the child is dependent on what kind of slots the parent itself
-   * received. This has to be refined at runtime, when the child's vnode
-   * is being created (in `normalizeChildren`)
-   */
-  FORWARDED = 3,
-}
-
-enum BooleanFlags {
-  shouldCast,
-  shouldCastTrue,
-}
-
-export enum ShapeFlags {
-  ELEMENT = 1,
-  FUNCTIONAL_COMPONENT = 1 << 1,
-  STATEFUL_COMPONENT = 1 << 2,
-  TEXT_CHILDREN = 1 << 3,
-  ARRAY_CHILDREN = 1 << 4,
-  SLOTS_CHILDREN = 1 << 5,
-  TELEPORT = 1 << 6,
-  SUSPENSE = 1 << 7,
-  COMPONENT_SHOULD_KEEP_ALIVE = 1 << 8,
-  COMPONENT_KEPT_ALIVE = 1 << 9,
-  COMPONENT = ShapeFlags.STATEFUL_COMPONENT | ShapeFlags.FUNCTIONAL_COMPONENT,
-}
+import { CompilerOptions, ComponentInjectOptions } from '@vue/compile-core'
+import { LifecycleHooks, ErrorCodes, TeleportMoveTypes, MoveType, DeprecationTypes, SchedulerJobFlags, DOMNodeTypes, MismatchTypes, AccessTypes, DevtoolsHooks, BooleanFlags, OptionTypes } from './enum'
+import { compatModelEventPrefix, COMPONENTS, DIRECTIVES, FILTERS, } from './define'
+import { Fragment, isHmrUpdating, leaveCbKey, NULL_DYNAMIC_COMPONENT, ssrContextKey, Static, TeleportEndKey } from './define'
+import type { App, AppConfig, AppContext, AsyncComponentOptions, ClassComponent, ComponentInternalInstance, ComponentOptionsBase, ComponentRenderContext, } from './interface'
+import type { DevtoolsHook, DirectiveBinding, FunctionalComponent, HydrationRenderer, KeepAliveContext, LegacyDirective, LegacyVNodeProps, ObjectDirective, PropOptions,  } from './interface'
+import type { Renderer, RendererElement, RendererInternals, RendererNode, RendererOptions, SchedulerJob, SuspenseBoundary, SuspenseProps, TeleportProps, TeleportTargetElement, TransitionHooks, VNode, WatchAPIOptions } from './interface'
+import type { AssetTypes, AsyncComponentLoader, CompatConfig, CompatVue, Component, ComponentObjectPropsOptions, ComponentOptions, ComponentOptionsMixin, Constructor, HTMLElementEventHandler, RawChildren, RawProps, } from './type'
+import type { ComponentPropsOptions, ComponentProvideOptions, ComponentPublicInstance, ComponentTypeEmits, ComputedOptions, ConcreteComponent, ContextualRenderFn, CreateAppFunction, } from './type'
+import type { CreateComponentPublicInstanceWithMixins, Data, DebuggerHook, DefineComponent, DefineSetupFnComponent, DevtoolsComponentHook, Directive, DirectiveHook, ElementNamespace, EmitsOptions,  } from './type'
+import type { ErrorCapturedHook, ErrorTypes, ExtractDefaultPropTypes, ExtractPropTypes, InjectionKey, InternalRenderFunction, InternalSlots, LifecycleHook, MergedComponentOptions, MethodOptions, MountComponentFn,  } from './type'
+import type { NormalizedProps, NormalizedPropsOptions, ObjectEmitsOptions, ObjectWatchOptionItem, OptionMergeFunction, Prop, PublicPropertiesMap, PublicProps, RawSlots, RenderFunction, RootHydrateFunction, RootRenderFunction, } from './type'
+import type { SchedulerJobs, SetupContext, SetupRenderEffectFn, Slot, Slots, SlotsType, TeleportVNode, TypeEmitsToOptions, VNodeArrayChildren, VNodeChild, VNodeHook, VNodeNormalizedChildren,} from './type'
+import type { VNodeNormalizedRef, VNodeNormalizedRefAtom, VNodeProps, VNodeRef, VNodeTypes, WatchCallback } from './type'
+import type { AssertionResult, CompileFunction, ComponentWatchOptionItem, ComponentWatchOptions, CountMap, CreateHook, DeprecationData, DevtoolsPerformanceHook, HMRComponent, LegacyAsyncComponent, LegacyAsyncReturnValue, LegacyVNodeChildren, MountChildrenFn, MoveFn, NextFn, NormalizedProp, ObjectInjectOptions, PatchBlockChildrenFn, PatchChildrenFn, PatchFn, Plugin, ProcessTextOrCommentFn, PropConstructor, RemoveFn, SetRootFn, ToResolvedProps, UnmountChildrenFn, UnmountFn } from './type'
+import type { DirectiveArguments } from './type'
 
 
-export enum PatchFlags {
-  /**
-   * Indicates an element with dynamic textContent (children fast path)
-   */
-  TEXT = 1,
-
-  /**
-   * Indicates an element with dynamic class binding.
-   */
-  CLASS = 1 << 1,
-
-  /**
-   * Indicates an element with dynamic style
-   * The compiler pre-compiles static string styles into static objects
-   * + detects and hoists inline static objects
-   * e.g. `style="color: red"` and `:style="{ color: 'red' }"` both get hoisted
-   * as:
-   * ```js
-   * const style = { color: 'red' }
-   * render() { return e('div', { style }) }
-   * ```
-   */
-  STYLE = 1 << 2,
-
-  /**
-   * Indicates an element that has non-class/style dynamic props.
-   * Can also be on a component that has any dynamic props (includes
-   * class/style). when this flag is present, the vnode also has a dynamicProps
-   * array that contains the keys of the props that may change so the runtime
-   * can diff them faster (without having to worry about removed props)
-   */
-  PROPS = 1 << 3,
-
-  /**
-   * Indicates an element with props with dynamic keys. When keys change, a full
-   * diff is always needed to remove the old key. This flag is mutually
-   * exclusive with CLASS, STYLE and PROPS.
-   */
-  FULL_PROPS = 1 << 4,
-
-  /**
-   * Indicates an element that requires props hydration
-   * (but not necessarily patching)
-   * e.g. event listeners & v-bind with prop modifier
-   */
-  NEED_HYDRATION = 1 << 5,
-
-  /**
-   * Indicates a fragment whose children order doesn't change.
-   */
-  STABLE_FRAGMENT = 1 << 6,
-
-  /**
-   * Indicates a fragment with keyed or partially keyed children
-   */
-  KEYED_FRAGMENT = 1 << 7,
-
-  /**
-   * Indicates a fragment with unkeyed children.
-   */
-  UNKEYED_FRAGMENT = 1 << 8,
-
-  /**
-   * Indicates an element that only needs non-props patching, e.g. ref or
-   * directives (onVnodeXXX hooks). since every patched vnode checks for refs
-   * and onVnodeXXX hooks, it simply marks the vnode so that a parent block
-   * will track it.
-   */
-  NEED_PATCH = 1 << 9,
-
-  /**
-   * Indicates a component with dynamic slots (e.g. slot that references a v-for
-   * iterated value, or dynamic slot names).
-   * Components with this flag are always force updated.
-   */
-  DYNAMIC_SLOTS = 1 << 10,
-
-  /**
-   * Indicates a fragment that was created only because the user has placed
-   * comments at the root level of a template. This is a dev-only flag since
-   * comments are stripped in production.
-   */
-  DEV_ROOT_FRAGMENT = 1 << 11,
-
-  /**
-   * SPECIAL FLAGS -------------------------------------------------------------
-   * Special flags are negative integers. They are never matched against using
-   * bitwise operators (bitwise matching should only happen in branches where
-   * patchFlag > 0), and are mutually exclusive. When checking for a special
-   * flag, simply check patchFlag === FLAG.
-   */
-
-  /**
-   * Indicates a cached static vnode. This is also a hint for hydration to skip
-   * the entire sub tree since static content never needs to be updated.
-   */
-  CACHED = -1,
-  /**
-   * A special flag that indicates that the diffing algorithm should bail out
-   * of optimized mode. For example, on block fragments created by renderSlot()
-   * when encountering non-compiler generated slots (i.e. manually written
-   * render functions, which should always be fully diffed)
-   * OR manually cloneVNodes
-   */
-  BAIL = -2,
-}
-
-export enum DOMNodeTypes {
-  ELEMENT = 1,
-  TEXT = 3,
-  COMMENT = 8,
-}
-
-export enum ErrorCodes {
-  SETUP_FUNCTION,
-  RENDER_FUNCTION,
-  // The error codes for the watch have been transferred to the reactivity
-  // package along with baseWatch to maintain code compatibility. Hence,
-  // it is essential to keep these values unchanged.
-  // WATCH_GETTER,
-  // WATCH_CALLBACK,
-  // WATCH_CLEANUP,
-  NATIVE_EVENT_HANDLER = 5,
-  COMPONENT_EVENT_HANDLER,
-  VNODE_HOOK,
-  DIRECTIVE_HOOK,
-  TRANSITION_HOOK,
-  APP_ERROR_HANDLER,
-  APP_WARN_HANDLER,
-  FUNCTION_REF,
-  ASYNC_COMPONENT_LOADER,
-  SCHEDULER,
-  COMPONENT_UPDATE,
-  APP_UNMOUNT_CLEANUP,
-}
 /**** define ***/
-declare const SlotSymbol: unique symbol
+export const version: string = __VERSION__
 const RECURSION_LIMIT = 100
+
 // exported only for test
-export let singletonApp: App
-
-
-export const NULL_DYNAMIC_COMPONENT: unique symbol = Symbol.for('v-ndc')
-export const ssrContextKey: unique symbol = Symbol.for('v-scx')
-export const Text: unique symbol = Symbol.for('v-txt')
-export const Comment: unique symbol = Symbol.for('v-cmt')
-export const Static: unique symbol = Symbol.for('v-stc')
-export const Fragment = Symbol.for('v-fgt') as any as {
-  __isFragment: true
-  new(): {
-    $props: VNodeProps
-  }
-}
-export const compatModelEventPrefix = `onModelCompat:`
-export const TeleportEndKey: unique symbol = Symbol('_vte')
-export const leaveCbKey: unique symbol = Symbol('_leaveCb')
-export let activeEffectScope: EffectScope | undefined
-export let currentRenderingInstance: ComponentInternalInstance | null = null
-export let currentScopeId: string | null = null
-export let isHmrUpdating = false
-export let isInSSRComponentSetup = false
-export let isCopyingConfig = false
-export let shouldCacheAccess = true
+let singletonApp: App
+let installWithProxy: (i: ComponentInternalInstance) => void
+let compile: CompileFunction | undefined
+let shouldCacheAccess = true
+let currentRenderingInstance: ComponentInternalInstance | null = null
+let isInSSRComponentSetup = false
 let hasWarned = false
+let activeEffectScope: EffectScope | undefined
 
+let currentInstance: ComponentInternalInstance | null = null
 
+export let currentScopeId: string | null = null
 // test only
 let warningEnabled = true
 
-/**
- * @internal Used to identify the current app when using `inject()` within
- * `app.runWithContext()`.
- */
-export let currentApp: App<unknown> | null = null
-let installWithProxy: (i: ComponentInternalInstance) => void
-let singletonCtor: CompatVue
-export let currentInstance: ComponentInternalInstance | null = null
+
 let buffer: { event: string; args: any[] }[] = []
 let devtoolsNotInstalled = false
 let accessedAttrs: boolean = false
+const patched = new WeakSet<object>()
+const seenConfigObjects = /*@__PURE__*/ new WeakSet<CompatConfig>()
+const warnedInvalidKeys: Record<string, boolean> = {}
 
+const methodsToPatch = [
+  'push',
+  'pop',
+  'shift',
+  'unshift',
+  'splice',
+  'sort',
+  'reverse',
+]
 
 export function markAttrsAccessed(): void {
   accessedAttrs = true
@@ -406,12 +102,18 @@ export function markAttrsAccessed(): void {
 const instanceWarned: Record<string, true> = Object.create(null)
 const warnCount: Record<string, number> = Object.create(null)
 
-
+/**
+ * @internal Used to identify the current app when using `inject()` within
+ * `app.runWithContext()`.
+ */
+export let currentApp: App<unknown> | null = null
 
 const allowMismatchAttr = 'data-allow-mismatch'
 let hasLoggedMismatchError = false
 let supported: boolean
 let perf: Performance
+let isCopyingConfig = false
+let singletonCtor: CompatVue
 const styleCommentRE = /\/\*[^]*?\*\//g
 const listDelimiterRE = /;(?![^(]*\))/g
 const propertyDelimiterRE = /:([^]+)/
@@ -540,2090 +242,16 @@ const legacyDirectiveHookMap: Partial<
 }
 
 
+const skipLegacyRootLevelProps = /*@__PURE__*/ makeMap(
+  'staticStyle,staticClass,directives,model,hook',
+)
+
 /**** type ***/
-export type Data = Record<string, unknown>
-export type MergedComponentOptions = ComponentOptions &
-  MergedComponentOptionsOverride
-type ObjectProvideOptions = Record<string | symbol, unknown>
-type DefaultFactory<T> = (props: Data) => T | null | undefined
-type MergedHook<T = () => void> = T | T[]
-type Hook<T = () => void> = T | T[]
-type CountMap = Map<SchedulerJob, number>
-type DevtoolsComponentHook = (component: ComponentInternalInstance) => void
-type HMRComponent = ComponentOptions | ClassComponent
 
-export type InjectionKey<T> = symbol & InjectionConstraint<T>
-export type VNodeChild = VNodeChildAtom | VNodeArrayChildren
-export type NormalizedStyle = Record<string, string | number>
-export type ComponentProvideOptions = ObjectProvideOptions | Function
-export type LifecycleHook<TFn = Function> = (TFn & SchedulerJob)[] | null
-export type ElementNamespace = 'svg' | 'mathml' | undefined
-export type ComponentInjectOptions = string[] | ObjectInjectOptions
-export type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N
-export type Slots = Readonly<InternalSlots>
-export type VNodeArrayChildren = Array<VNodeArrayChildren | VNodeChildAtom>
-export type OptionMergeFunction = (to: unknown, from: unknown) => any
-export type ComponentTypeEmits = ((...args: any[]) => any) | Record<string, any>
-export type EmitsOptions = ObjectEmitsOptions | string[]
-export type OptionTypesKeys = 'P' | 'B' | 'D' | 'C' | 'M' | 'Defaults'
-export type NormalizedPropsOptions = [NormalizedProps, string[]] | []
-export type NormalizedProps = Record<string, NormalizedProp>
-export type PropType<T> = PropConstructor<T> | (PropConstructor<T> | null)[]
-export type Prop<T, D = T> = PropOptions<T, D> | PropType<T>
-export type TeleportVNode = VNode<RendererNode, RendererElement, TeleportProps>
-export type LooseRequired<T> = { [P in keyof (T & Required<T>)]: T[P] }
-export type RenderFunction = () => VNodeChild
-export type SchedulerJobs = SchedulerJob | SchedulerJob[]
-export type ErrorTypes = LifecycleHooks | ErrorCodes | WatchErrorCodes
 
-
-
-// legacy config warnings
-export type LegacyConfig = {
-  /**
-   * @deprecated `config.silent` option has been removed
-   */
-  silent?: boolean
-  /**
-   * @deprecated use __VUE_PROD_DEVTOOLS__ compile-time feature flag instead
-   * https://github.com/vuejs/core/tree/main/packages/vue#bundler-build-feature-flags
-   */
-  devtools?: boolean
-  /**
-   * @deprecated use `config.isCustomElement` instead
-   * https://v3-migration.vuejs.org/breaking-changes/global-api.html#config-ignoredelements-is-now-config-iscustomelement
-   */
-  ignoredElements?: (string | RegExp)[]
-  /**
-   * @deprecated
-   * https://v3-migration.vuejs.org/breaking-changes/keycode-modifiers.html
-   */
-  keyCodes?: Record<string, number | number[]>
-  /**
-   * @deprecated
-   * https://v3-migration.vuejs.org/breaking-changes/global-api.html#config-productiontip-removed
-   */
-  productionTip?: boolean
-}
-
-export type LegacyPublicInstance = ComponentPublicInstance &
-  LegacyPublicProperties
-
-export interface LegacyPublicProperties {
-  $set<T extends Record<keyof any, any>, K extends keyof T>(
-    target: T,
-    key: K,
-    value: T[K],
-  ): void
-  $delete<T extends Record<keyof any, any>, K extends keyof T>(
-    target: T,
-    key: K,
-  ): void
-  $mount(el?: string | Element): this
-  $destroy(): void
-  $scopedSlots: Slots
-  $on(event: string | string[], fn: Function): this
-  $once(event: string, fn: Function): this
-  $off(event?: string | string[], fn?: Function): this
-  $children: LegacyPublicProperties[]
-  $listeners: Record<string, Function | Function[]>
-}
-
-export type HydrationStrategy = (
-  hydrate: () => void,
-  forEachElement: (cb: (el: Element) => any) => void,
-) => (() => void) | void
-
-export type AsyncComponentResolveResult<T = Component> = T | { default: T } // es modules
-
-export type AsyncComponentLoader<T = any> = () => Promise<
-  AsyncComponentResolveResult<T>
->
-
-/**
- * @deprecated the default `Vue` export has been removed in Vue 3. The type for
- * the default export is provided only for migration purposes. Please use
- * named imports instead - e.g. `import { createApp } from 'vue'`.
- */
-export type CompatVue = Pick<App, 'version' | 'component' | 'directive'> & {
-  configureCompat: typeof configureCompat
-
-  // no inference here since these types are not meant for actual use - they
-  // are merely here to provide type checks for internal implementation and
-  // information for migration.
-  new(options?: ComponentOptions): LegacyPublicInstance
-
-  version: string
-  config: AppConfig & LegacyConfig
-
-  nextTick: typeof nextTick
-
-  use<Options extends unknown[]>(
-    plugin: Plugin<Options>,
-    ...options: Options
-  ): CompatVue
-  use<Options>(plugin: Plugin<Options>, options: Options): CompatVue
-
-  mixin(mixin: ComponentOptions): CompatVue
-
-  component(name: string): Component | undefined
-  component(name: string, component: Component): CompatVue
-  directive<T = any, V = any>(name: string): Directive<T, V> | undefined
-  directive<T = any, V = any>(
-    name: string,
-    directive: Directive<T, V>,
-  ): CompatVue
-
-  compile(template: string): RenderFunction
-
-  /**
-   * @deprecated Vue 3 no longer supports extending constructors.
-   */
-  extend: (options?: ComponentOptions) => CompatVue
-  /**
-   * @deprecated Vue 3 no longer needs set() for adding new properties.
-   */
-  set(target: any, key: PropertyKey, value: any): void
-  /**
-   * @deprecated Vue 3 no longer needs delete() for property deletions.
-   */
-  delete(target: any, key: PropertyKey): void
-  /**
-   * @deprecated use `reactive` instead.
-   */
-  observable: typeof reactive
-  /**
-   * @deprecated filters have been removed from Vue 3.
-   */
-  filter(name: string, arg?: any): null
-  /**
-   * @internal
-   */
-  cid: number
-  /**
-   * @internal
-   */
-  options: ComponentOptions
-  /**
-   * @internal
-   */
-  util: any
-  /**
-   * @internal
-   */
-  super: CompatVue
-}
-
-
-type WatchOptionItem = string | WatchCallback | ObjectWatchOptionItem
-type ComponentWatchOptionItem = WatchOptionItem | WatchOptionItem[]
-type ComponentWatchOptions = Record<string, ComponentWatchOptionItem>
-type VNodeMountHook = (vnode: VNode) => void
-type VNodeUpdateHook = (vnode: VNode, oldVNode: VNode) => void
-type OptionalKeys<T> = Exclude<keyof T, RequiredKeys<T>>
-
-type DevtoolsPerformanceHook = (
-  component: ComponentInternalInstance,
-  type: string,
-  time: number,
-) => void
-type DeprecationData = {
-  message: string | ((...args: any[]) => string)
-  link?: string
-}
-type UnmountFn = (
-  vnode: VNode,
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  doRemove?: boolean,
-  optimized?: boolean,
-) => void
-type RemoveFn = (vnode: VNode) => void
-type MoveFn = (
-  vnode: VNode,
-  container: RendererElement,
-  anchor: RendererNode | null,
-  type: MoveType,
-  parentSuspense?: SuspenseBoundary | null,
-) => void
-
-export type PublicPropertiesMap = Record<
-  string,
-  (i: ComponentInternalInstance) => any
->
-
-export type MountComponentFn = (
-  initialVNode: VNode,
-  container: RendererElement,
-  anchor: RendererNode | null,
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  namespace: ElementNamespace,
-  optimized: boolean,
-) => void
-type PatchBlockChildrenFn = (
-  oldChildren: VNode[],
-  newChildren: VNode[],
-  fallbackContainer: RendererElement,
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  namespace: ElementNamespace,
-  slotScopeIds: string[] | null,
-) => void
-type MountChildrenFn = (
-  children: VNodeArrayChildren,
-  container: RendererElement,
-  anchor: RendererNode | null,
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  namespace: ElementNamespace,
-  slotScopeIds: string[] | null,
-  optimized: boolean,
-  start?: number,
-) => void
-type PatchChildrenFn = (
-  n1: VNode | null,
-  n2: VNode,
-  container: RendererElement,
-  anchor: RendererNode | null,
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  namespace: ElementNamespace,
-  slotScopeIds: string[] | null,
-  optimized: boolean,
-) => void
-type NextFn = (vnode: VNode) => RendererNode | null
-
-interface LegacyAsyncOptions {
-  component: Promise<Component>
-  loading?: Component
-  error?: Component
-  delay?: number
-  timeout?: number
-}
-
-type LegacyAsyncReturnValue = Promise<Component> | LegacyAsyncOptions
-type LegacyAsyncComponent = (
-  resolve?: (res: LegacyAsyncReturnValue) => void,
-  reject?: (reason?: any) => void,
-) => LegacyAsyncReturnValue | undefined
-
-
-type DefaultKeys<T> = {
-  [K in keyof T]: T[K] extends
-  | { default: any }
-  // Boolean implicitly defaults to false
-  | BooleanConstructor
-  | { type: BooleanConstructor }
-  ? T[K] extends { type: BooleanConstructor; required: true } // not default if Boolean is marked as required
-  ? never
-  : K
-  : never
-}[keyof T]
-
-type UnmountChildrenFn = (
-  children: VNode[],
-  parentComponent: ComponentInternalInstance | null,
-  parentSuspense: SuspenseBoundary | null,
-  doRemove?: boolean,
-  optimized?: boolean,
-  start?: number,
-) => void
-
-export type ContextualRenderFn = {
-  (...args: any[]): any
-  _n: boolean /* already normalized */
-  _c: boolean /* compiled */
-  _d: boolean /* disableTracking */
-  _ns: boolean /* nonScoped */
-}
-
-export type VNodeHook =
-  | VNodeMountHook
-  | VNodeUpdateHook
-  | VNodeMountHook[]
-  | VNodeUpdateHook[]
-
-/**
- * @internal
- */
-export type InternalRenderFunction = {
-  (
-    ctx: ComponentPublicInstance,
-    cache: ComponentInternalInstance['renderCache'],
-    // for compiler-optimized bindings
-    $props: ComponentInternalInstance['props'],
-    $setup: ComponentInternalInstance['setupState'],
-    $data: ComponentInternalInstance['data'],
-    $options: ComponentInternalInstance['ctx'],
-  ): VNodeChild
-  _rc?: boolean // isRuntimeCompiled
-
-  // __COMPAT__ only
-  _compatChecked?: boolean // v3 and already checked for v2 compat
-  _compatWrapped?: boolean // is wrapped for v2 compat
-}
-
-// extract props which defined with default from prop options
-export type ExtractDefaultPropTypes<O> = O extends object
-  ? // use `keyof Pick<O, DefaultKeys<O>>` instead of `DefaultKeys<O>` to support IDE features
-  { [K in keyof Pick<O, DefaultKeys<O>>]: InferPropType<O[K]> }
-  : {}
-
-type RequiredKeys<T> = {
-  [K in keyof T]: T[K] extends
-  | { required: true }
-  | { default: any }
-  // don't mark Boolean props as undefined
-  | BooleanConstructor
-  | { type: BooleanConstructor }
-  ? T[K] extends { default: undefined | (() => undefined) }
-  ? never
-  : K
-  : never
-}[keyof T]
-
-/**
- * Extract prop types from a runtime props options object.
- * The extracted types are **internal** - i.e. the resolved props received by
- * the component.
- * - Boolean props are always present
- * - Props with default values are always present
- *
- * To extract accepted props from the parent, use {@link ExtractPublicPropTypes}.
- */
-export type ExtractPropTypes<O> = {
-  // use `keyof Pick<O, RequiredKeys<O>>` instead of `RequiredKeys<O>` to
-  // support IDE features
-  [K in keyof Pick<O, RequiredKeys<O>>]: O[K] extends { default: any }
-  ? Exclude<InferPropType<O[K]>, undefined>
-  : InferPropType<O[K]>
-} & {
-  // use `keyof Pick<O, OptionalKeys<O>>` instead of `OptionalKeys<O>` to
-  // support IDE features
-  [K in keyof Pick<O, OptionalKeys<O>>]?: InferPropType<O[K]>
-}
-
-type InferPropType<T, NullAsAny = true> = [T] extends [null]
-  ? NullAsAny extends true
-  ? any
-  : null
-  : [T] extends [{ type: null | true }]
-  ? any // As TS issue https://github.com/Microsoft/TypeScript/issues/14829 // somehow `ObjectConstructor` when inferred from { (): T } becomes `any` // `BooleanConstructor` when inferred from PropConstructor(with PropMethod) becomes `Boolean`
-  : [T] extends [ObjectConstructor | { type: ObjectConstructor }]
-  ? Record<string, any>
-  : [T] extends [BooleanConstructor | { type: BooleanConstructor }]
-  ? boolean
-  : [T] extends [DateConstructor | { type: DateConstructor }]
-  ? Date
-  : [T] extends [(infer U)[] | { type: (infer U)[] }]
-  ? U extends DateConstructor
-  ? Date | InferPropType<U, false>
-  : InferPropType<U, false>
-  : [T] extends [Prop<infer V, infer D>]
-  ? unknown extends V
-  ? keyof V extends never
-  ? IfAny<V, V, D>
-  : V
-  : V
-  : T
-
-type ResolveProps<PropsOrPropOptions, E extends EmitsOptions> = Readonly<
-  PropsOrPropOptions extends ComponentPropsOptions
-  ? ExtractPropTypes<PropsOrPropOptions>
-  : PropsOrPropOptions
-> &
-  ({} extends E ? {} : EmitsToProps<E>)
-
-export type VNodeNormalizedRefAtom = {
-  /**
-   * component instance
-   */
-  i: ComponentInternalInstance
-  /**
-   * Actual ref
-   */
-  r: VNodeRef
-  /**
-   * setup ref key
-   */
-  k?: string
-  /**
-   * refInFor marker
-   */
-  f?: boolean
-}
-export type ComponentObjectPropsOptions<P = Data> = {
-  [K in keyof P]: Prop<P[K]> | null
-}
-
-export type ComponentPropsOptions<P = Data> =
-  | ComponentObjectPropsOptions<P>
-  | string[]
-
-export type VNodeNormalizedRef =
-  | VNodeNormalizedRefAtom
-  | VNodeNormalizedRefAtom[]
-
-type PluginInstallFunction<Options = any[]> = Options extends unknown[]
-  ? (app: App, ...options: Options) => any
-  : (app: App, options: Options) => any
-type NormalizedProp = PropOptions & {
-  [BooleanFlags.shouldCast]?: boolean
-  [BooleanFlags.shouldCastTrue]?: boolean
-}
-type PropConstructor<T = any> =
-  | { new(...args: any[]): T & {} }
-  | { (): T }
-  | PropMethod<T>
-type PropMethod<T, TConstructor = any> = [T] extends [
-  ((...args: any) => any) | undefined,
-] // if is function with args, allowing non-required functions
-  ? { new(): TConstructor; (): T; readonly prototype: TConstructor } // Create Function like constructor
-  : never
-
-type ProcessTextOrCommentFn = (
-  n1: VNode | null,
-  n2: VNode,
-  container: RendererElement,
-  anchor: RendererNode | null,
-) => void
-export type ObjectPlugin<Options = any[]> = {
-  install: PluginInstallFunction<Options>
-}
-export type VNodeTypes =
-  | string
-  | VNode
-  | Component
-  | typeof Text
-  | typeof Static
-  | typeof Comment
-  | typeof Fragment
-  | typeof Teleport
-  | typeof TeleportImpl
-  | typeof Suspense
-  | typeof SuspenseImpl
-
-export interface PropOptions<T = any, D = T> {
-  type?: PropType<T> | true | null
-  required?: boolean
-  default?: D | DefaultFactory<D> | null | undefined | object
-  validator?(value: unknown, props: Data): boolean
-  /**
-   * @internal
-   */
-  skipCheck?: boolean
-  /**
-   * @internal
-   */
-  skipFactory?: boolean
-}
-export type VNodeRef =
-  | string
-  | Ref
-  | ((
-    ref: Element | ComponentPublicInstance | null,
-    refs: Record<string, any>,
-  ) => void)
-
-export type EmitsToProps<T extends EmitsOptions | ComponentTypeEmits> =
-  T extends string[]
-  ? {
-    [K in `on${Capitalize<T[number]>}`]?: (...args: any[]) => any
-  }
-  : T extends ObjectEmitsOptions
-  ? {
-    [K in string & keyof T as `on${Capitalize<K>}`]?: (
-      ...args: T[K] extends (...args: infer P) => any
-        ? P
-        : T[K] extends null
-        ? any[]
-        : never
-    ) => any
-  }
-  : {}
-
-export type VNodeProps = {
-  key?: PropertyKey
-  ref?: VNodeRef
-  ref_for?: boolean
-  ref_key?: string
-
-  // vnode hooks
-  onVnodeBeforeMount?: VNodeMountHook | VNodeMountHook[]
-  onVnodeMounted?: VNodeMountHook | VNodeMountHook[]
-  onVnodeBeforeUpdate?: VNodeUpdateHook | VNodeUpdateHook[]
-  onVnodeUpdated?: VNodeUpdateHook | VNodeUpdateHook[]
-  onVnodeBeforeUnmount?: VNodeMountHook | VNodeMountHook[]
-  onVnodeUnmounted?: VNodeMountHook | VNodeMountHook[]
-}
-export type FunctionPlugin<Options = any[]> = PluginInstallFunction<Options> &
-  Partial<ObjectPlugin<Options>>
-export type Plugin<
-  Options = any[],
-  // TODO: in next major Options extends unknown[] and remove P
-  P extends unknown[] = Options extends unknown[] ? Options : [Options],
-> = FunctionPlugin<P> | ObjectPlugin<P>
-
-export type WatchCallback<V = any, OV = any> = (
-  value: V,
-  oldValue: OV,
-  onCleanup: OnCleanup
-) => any
-type VNodeChildAtom =
-  | VNode
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | void
-export interface WatchOptions<Immediate = boolean> extends WatchEffectOptions {
-  immediate?: Immediate
-  deep?: boolean | number
-  once?: boolean
-}
-
-export type ObjectWatchOptionItem = {
-  handler: WatchCallback | string
-} & WatchOptions
-
-export type RawSlots = {
-  [name: string]: unknown
-  // manual render fn hint to skip forced children updates
-  $stable?: boolean
-  /**
-   * for tracking slot owner instance. This is attached during
-   * normalizeChildren when the component vnode is created.
-   * @internal
-   */
-  _ctx?: ComponentInternalInstance | null
-  /**
-   * indicates compiler generated slots
-   * we use a reserved property instead of a vnode patchFlag because the slots
-   * object may be directly passed down to a child component in a manual
-   * render function, and the optimization hint need to be on the slot object
-   * itself to be preserved.
-   * @internal
-   */
-  _?: SlotFlags
-}
-export type VNodeNormalizedChildren =
-  | string
-  | VNodeArrayChildren
-  | RawSlots
-  | null
-
-// use `E extends any` to force evaluating type to fix #2362
-export type SetupContext<
-  E = EmitsOptions,
-  S extends SlotsType = {},
-> = E extends any
-  ? {
-    attrs: Data
-    slots: UnwrapSlotsType<S>
-    emit: EmitFn<E>
-    expose: <Exposed extends Record<string, any> = Record<string, any>>(
-      exposed?: Exposed,
-    ) => void
-  }
-  : never
-
-export type CreateAppFunction<HostElement> = (
-  rootComponent: Component,
-  rootProps?: Data | null,
-) => App<HostElement>
-
-
-export type CompatConfig = Partial<
-  Record<DeprecationTypes, boolean | 'suppress-warning'>
-> & {
-  MODE?: 2 | 3 | ((comp: Component | null) => 2 | 3)
-}
-export type ExposedKeys<
-  T,
-  Exposed extends string & keyof T
-> = '' extends Exposed ? T : Pick<T, Exposed>
-
-export type InternalSlots = {
-  [name: string]: Slot | undefined
-}
-export type SlotsType<T extends Record<string, any> = Record<string, any>> = {
-  [SlotSymbol]?: T
-}
-type ObjectInjectOptions = Record<
-  string | symbol,
-  string | symbol | { from?: string | symbol; default?: unknown }
->
-export type Slot<T extends any = any> = (
-  ...args: IfAny<T, any[], [T] | (T extends undefined ? [] : never)>
-) => VNode[]
-
-export type UnionToIntersection<U> = (U extends any
-  ? (k: U) => void
-  : never) extends (k: infer I) => void
-  ? I
-  : never
-
-export type EmitFn<
-  Options = ObjectEmitsOptions,
-  Event extends keyof Options = keyof Options
-> = Options extends Array<infer V>
-  ? (event: V, ...args: any[]) => void
-  : {} extends Options // if the emit is empty object (usually the default value for emit) should be converted to function
-  ? (event: string, ...args: any[]) => void
-  : UnionToIntersection<
-    {
-      [key in Event]: Options[key] extends (...args: infer Args) => any
-      ? (event: key, ...args: Args) => void
-      : Options[key] extends any[]
-      ? (event: key, ...args: Options[key]) => void
-      : (event: key, ...args: any[]) => void
-    }[Event]
-  >
-
-export type RootRenderFunction<HostElement = RendererElement> = (
-  vnode: VNode | null,
-  container: HostElement,
-  namespace?: ElementNamespace
-) => void
-
-type PatchFn = (
-  n1: VNode | null, // null means this is a mount
-  n2: VNode,
-  container: RendererElement,
-  anchor?: RendererNode | null,
-  parentComponent?: ComponentInternalInstance | null,
-  parentSuspense?: SuspenseBoundary | null,
-  namespace?: ElementNamespace,
-  slotScopeIds?: string[] | null,
-  optimized?: boolean
-) => void
-
-export type RootHydrateFunction = (
-  vnode: VNode<Node, Element>,
-  container: (Element | ShadowRoot) & { _vnode?: VNode }
-) => void
-
-/**
- * Concrete component type matches its actual value: it's either an options
- * object, or a function. Use this where the code expects to work with actual
- * values, e.g. checking if its a function or not. This is mostly for internal
- * implementation code.
- */
-export type ConcreteComponent<
-  Props = {},
-  RawBindings = any,
-  D = any,
-  C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions,
-  E extends EmitsOptions | Record<string, any[]> = {},
-  S extends Record<string, any> = any
-> =
-  | ComponentOptions<Props, RawBindings, D, C, M>
-  | FunctionalComponent<Props, E, S>
-
-export type SetupRenderEffectFn = (
-  instance: ComponentInternalInstance,
-  initialVNode: VNode,
-  container: RendererElement,
-  anchor: RendererNode | null,
-  parentSuspense: SuspenseBoundary | null,
-  namespace: ElementNamespace,
-  optimized: boolean
-) => void
-
-export type DebuggerEvent = {
-  effect: Subscriber
-} & DebuggerEventExtraInfo
-
-export type DebuggerHook = (e: DebuggerEvent) => void
-export type ErrorCapturedHook<TError = unknown> = (
-  err: TError,
-  instance: ComponentPublicInstance | null,
-  info: string
-) => boolean | void
-export type MergedComponentOptionsOverride = {
-  beforeCreate?: MergedHook
-  created?: MergedHook
-  beforeMount?: MergedHook
-  mounted?: MergedHook
-  beforeUpdate?: MergedHook
-  updated?: MergedHook
-  activated?: MergedHook
-  deactivated?: MergedHook
-  /** @deprecated use `beforeUnmount` instead */
-  beforeDestroy?: MergedHook
-  beforeUnmount?: MergedHook
-  /** @deprecated use `unmounted` instead */
-  destroyed?: MergedHook
-  unmounted?: MergedHook
-  renderTracked?: MergedHook<DebuggerHook>
-  renderTriggered?: MergedHook<DebuggerHook>
-  errorCaptured?: MergedHook<ErrorCapturedHook>
-}
-
-export type Prettify<T> = { [K in keyof T]: T[K] } & {}
-
-export type ExtractComputedReturns<T extends any> = {
-  [key in keyof T]: T[key] extends { get: (...args: any[]) => infer TReturn }
-  ? TReturn
-  : T[key] extends (...args: any[]) => infer TReturn
-  ? TReturn
-  : never
-}
-
-export type UnwrapSlotsType<
-  S extends SlotsType,
-  T = NonNullable<S[typeof SlotSymbol]>
-> = [keyof S] extends [never]
-  ? Slots
-  : Readonly<
-    Prettify<
-      {
-        [K in keyof T]: NonNullable<T[K]> extends (...args: any[]) => any
-        ? T[K]
-        : Slot<T[K]>
-      }
-    >
-  >
-
-// public properties exposed on the proxy, which is used as the render context
-// in templates (as `this` in the render option)
-export type ComponentPublicInstance<
-  P = {}, // props type extracted from props option
-  B = {}, // raw bindings returned from setup()
-  D = {}, // return from data()
-  C extends ComputedOptions = {},
-  M extends MethodOptions = {},
-  E extends EmitsOptions = {},
-  PublicProps = {},
-  Defaults = {},
-  MakeDefaultsOptional extends boolean = false,
-  Options = ComponentOptionsBase<any, any, any, any, any, any, any, any, any>,
-  I extends ComponentInjectOptions = {},
-  S extends SlotsType = {},
-  Exposed extends string = '',
-  TypeRefs extends Data = {},
-  TypeEl extends Element = any
-> = {
-  $: ComponentInternalInstance
-  $data: D
-  $props: MakeDefaultsOptional extends true
-  ? Partial<Defaults> & Omit<Prettify<P> & PublicProps, keyof Defaults>
-  : Prettify<P> & PublicProps
-  $attrs: Data
-  $refs: Data & TypeRefs
-  $slots: UnwrapSlotsType<S>
-  $root: ComponentPublicInstance | null
-  $parent: ComponentPublicInstance | null
-  $host: Element | null
-  $emit: EmitFn<E>
-  $el: TypeEl
-  $options: Options & MergedComponentOptionsOverride
-  $forceUpdate: () => void
-  $nextTick: typeof nextTick
-  $watch<T extends string | ((...args: any) => any)>(
-    source: T,
-    cb: T extends (...args: any) => infer R
-      ? (...args: [R, R, OnCleanup]) => any
-      : (...args: [any, any, OnCleanup]) => any,
-    options?: WatchOptions
-  ): WatchStopHandle
-} & ExposedKeys<
-  IfAny<
-    P,
-    P,
-    Readonly<Defaults> & Omit<P, keyof ShallowUnwrapRef<B> | keyof Defaults>
-  > &
-  ShallowUnwrapRef<B> &
-  UnwrapNestedRefs<D> &
-  ExtractComputedReturns<C> &
-  M &
-  ComponentCustomProperties &
-  InjectToObject<I>,
-  Exposed
->
-
-type EnsureNonVoid<T> = T extends void ? {} : T
-
-export type UnwrapMixinsType<
-  T,
-  Type extends OptionTypesKeys
-> = T extends OptionTypesType ? T[Type] : never
-
-export type OptionTypesType<
-  P = {},
-  B = {},
-  D = {},
-  C extends ComputedOptions = {},
-  M extends MethodOptions = {},
-  Defaults = {}
-> = {
-  P: P
-  B: B
-  D: D
-  C: C
-  M: M
-  Defaults: Defaults
-}
-
-type IsDefaultMixinComponent<T> = T extends ComponentOptionsMixin
-  ? ComponentOptionsMixin extends T
-  ? true
-  : false
-  : false
-
-type ExtractMixin<T> = {
-  Mixin: MixinToOptionTypes<T>
-}[T extends ComponentOptionsMixin ? 'Mixin' : never]
-
-export type IntersectionMixin<T> = IsDefaultMixinComponent<T> extends true
-  ? OptionTypesType
-  : UnionToIntersection<ExtractMixin<T>>
-
-type MixinToOptionTypes<T> = T extends ComponentOptionsBase<
-  infer P,
-  infer B,
-  infer D,
-  infer C,
-  infer M,
-  infer Mixin,
-  infer Extends,
-  any,
-  any,
-  infer Defaults,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any
->
-  ? OptionTypesType<P & {}, B & {}, D & {}, C & {}, M & {}, Defaults & {}> &
-  IntersectionMixin<Mixin> &
-  IntersectionMixin<Extends>
-  : never
-
-type MatchPattern = string | RegExp | (string | RegExp)[]
-
-/**
- * This is the same as `CreateComponentPublicInstance` but adds local components,
- * global directives, exposed, and provide inference.
- * It changes the arguments order so that we don't need to repeat mixin
- * inference everywhere internally, but it has to be a new type to avoid
- * breaking types that relies on previous arguments order (#10842)
- */
-export type CreateComponentPublicInstanceWithMixins<
-  P = {},
-  B = {},
-  D = {},
-  C extends ComputedOptions = {},
-  M extends MethodOptions = {},
-  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
-  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
-  E extends EmitsOptions = {},
-  PublicProps = P,
-  Defaults = {},
-  MakeDefaultsOptional extends boolean = false,
-  I extends ComponentInjectOptions = {},
-  S extends SlotsType = {},
-  LC extends Record<string, Component> = {},
-  Directives extends Record<string, Directive> = {},
-  Exposed extends string = string,
-  TypeRefs extends Data = {},
-  TypeEl extends Element = any,
-  Provide extends ComponentProvideOptions = ComponentProvideOptions,
-  // mixin inference
-  PublicMixin = IntersectionMixin<Mixin> & IntersectionMixin<Extends>,
-  PublicP = UnwrapMixinsType<PublicMixin, 'P'> & EnsureNonVoid<P>,
-  PublicB = UnwrapMixinsType<PublicMixin, 'B'> & EnsureNonVoid<B>,
-  PublicD = UnwrapMixinsType<PublicMixin, 'D'> & EnsureNonVoid<D>,
-  PublicC extends ComputedOptions = UnwrapMixinsType<PublicMixin, 'C'> &
-  EnsureNonVoid<C>,
-  PublicM extends MethodOptions = UnwrapMixinsType<PublicMixin, 'M'> &
-  EnsureNonVoid<M>,
-  PublicDefaults = UnwrapMixinsType<PublicMixin, 'Defaults'> &
-  EnsureNonVoid<Defaults>
-> = ComponentPublicInstance<
-  PublicP,
-  PublicB,
-  PublicD,
-  PublicC,
-  PublicM,
-  E,
-  PublicProps,
-  PublicDefaults,
-  MakeDefaultsOptional,
-  ComponentOptionsBase<
-    P,
-    B,
-    D,
-    C,
-    M,
-    Mixin,
-    Extends,
-    E,
-    string,
-    Defaults,
-    {},
-    string,
-    S,
-    LC,
-    Directives,
-    Exposed,
-    Provide
-  >,
-  I,
-  S,
-  Exposed,
-  TypeRefs,
-  TypeEl
->
-
-export type ComponentOptions<
-  Props = {},
-  RawBindings = any,
-  D = any,
-  C extends ComputedOptions = any,
-  M extends MethodOptions = any,
-  Mixin extends ComponentOptionsMixin = any,
-  Extends extends ComponentOptionsMixin = any,
-  E extends EmitsOptions = any,
-  EE extends string = string,
-  Defaults = {},
-  I extends ComponentInjectOptions = {},
-  II extends string = string,
-  S extends SlotsType = {},
-  LC extends Record<string, Component> = {},
-  Directives extends Record<string, Directive> = {},
-  Exposed extends string = string,
-  Provide extends ComponentProvideOptions = ComponentProvideOptions
-> = ComponentOptionsBase<
-  Props,
-  RawBindings,
-  D,
-  C,
-  M,
-  Mixin,
-  Extends,
-  E,
-  EE,
-  Defaults,
-  I,
-  II,
-  S,
-  LC,
-  Directives,
-  Exposed,
-  Provide
-> &
-  ThisType<
-    CreateComponentPublicInstanceWithMixins<
-      {},
-      RawBindings,
-      D,
-      C,
-      M,
-      Mixin,
-      Extends,
-      E,
-      Readonly<Props>,
-      Defaults,
-      false,
-      I,
-      S,
-      LC,
-      Directives
-    >
-  >
-
-export type InjectToObject<
-  T extends ComponentInjectOptions
-> = T extends string[]
-  ? {
-    [K in T[number]]?: unknown
-  }
-  : T extends ObjectInjectOptions
-  ? {
-    [K in keyof T]?: unknown
-  }
-  : never
-
-export type ComponentOptionsMixin = ComponentOptionsBase<
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any,
-  any
->
-
-export type DirectiveModifiers<K extends string = string> = Partial<
-  Record<K, boolean>
->
-export type ShortEmitsToObject<E> = E extends Record<string, any[]>
-  ? {
-    [K in keyof E]: (...args: E[K]) => any
-  }
-  : E
-
-export type SSRDirectiveHook<
-  Value = any,
-  Modifiers extends string = string,
-  Arg extends string = string
-> = (
-  binding: DirectiveBinding<Value, Modifiers, Arg>,
-  vnode: VNode
-) => Data | undefined
-
-export type FunctionDirective<
-  HostElement = any,
-  V = any,
-  Modifiers extends string = string,
-  Arg extends string = string
-> = DirectiveHook<HostElement, any, V, Modifiers, Arg>
-
-export type DirectiveHook<
-  HostElement = any,
-  Prev = VNode<any, HostElement> | null,
-  Value = any,
-  Modifiers extends string = string,
-  Arg extends string = string
-> = (
-  el: HostElement,
-  binding: DirectiveBinding<Value, Modifiers, Arg>,
-  vnode: VNode<any, HostElement>,
-  prevVNode: Prev
-) => void
-export type Directive<
-  HostElement = any,
-  Value = any,
-  Modifiers extends string = string,
-  Arg extends string = string
-> =
-  | ObjectDirective<HostElement, Value, Modifiers, Arg>
-  | FunctionDirective<HostElement, Value, Modifiers, Arg>
-
-export type Component<
-  PropsOrInstance = any,
-  RawBindings = any,
-  D = any,
-  C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions,
-  E extends EmitsOptions | Record<string, any[]> = {},
-  S extends Record<string, any> = any
-> =
-  | ConcreteComponent<PropsOrInstance, RawBindings, D, C, M, E, S>
-  | ComponentPublicInstanceConstructor<PropsOrInstance>
-
-export interface ComponentCustomElementInterface {
-  /**
-   * @internal
-   */
-  _injectChildStyle(type: ConcreteComponent): void
-  /**
-   * @internal
-   */
-  _removeChildStyle(type: ConcreteComponent): void
-  /**
-   * @internal
-   */
-  _setProp(
-    key: string,
-    val: any,
-    shouldReflect?: boolean,
-    shouldUpdate?: boolean,
-  ): void
-  /**
-   * @internal attached by the nested Teleport when shadowRoot is false.
-   */
-  _teleportTarget?: RendererElement
-}
-
-export type ComponentPublicInstanceConstructor<
-  T extends ComponentPublicInstance<
-    Props,
-    RawBindings,
-    D,
-    C,
-    M
-  > = ComponentPublicInstance<any>,
-  Props = any,
-  RawBindings = any,
-  D = any,
-  C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions
-> = {
-  __isFragment?: never
-  __isTeleport?: never
-  __isSuspense?: never
-  new(...args: any[]): T
-}
-export type ObjectEmitsOptions = Record<
-  string,
-  ((...args: any[]) => any) | null
->
-export type ComputedOptions = Record<
-  string,
-  ComputedGetter<any> | WritableComputedOptions<any>
->
-export interface MethodOptions {
-  [key: string]: Function
-}
-export type PublicProps = VNodeProps &
-  AllowedComponentProps &
-  ComponentCustomProps
-
-export type DefineComponent<
-  PropsOrPropOptions = {},
-  RawBindings = {},
-  D = {},
-  C extends ComputedOptions = ComputedOptions,
-  M extends MethodOptions = MethodOptions,
-  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
-  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
-  E extends EmitsOptions = {},
-  EE extends string = string,
-  PP = PublicProps,
-  Props = ResolveProps<PropsOrPropOptions, E>,
-  Defaults = ExtractDefaultPropTypes<PropsOrPropOptions>,
-  S extends SlotsType = {},
-  LC extends Record<string, Component> = {},
-  Directives extends Record<string, Directive> = {},
-  Exposed extends string = string,
-  Provide extends ComponentProvideOptions = ComponentProvideOptions,
-  MakeDefaultsOptional extends boolean = true,
-  TypeRefs extends Record<string, unknown> = {},
-  TypeEl extends Element = any,
-> = ComponentPublicInstanceConstructor<
-  CreateComponentPublicInstanceWithMixins<
-    Props,
-    RawBindings,
-    D,
-    C,
-    M,
-    Mixin,
-    Extends,
-    E,
-    PP,
-    Defaults,
-    MakeDefaultsOptional,
-    {},
-    S,
-    LC & GlobalComponents,
-    Directives & GlobalDirectives,
-    Exposed,
-    TypeRefs,
-    TypeEl
-  >
-> &
-  ComponentOptionsBase<
-    Props,
-    RawBindings,
-    D,
-    C,
-    M,
-    Mixin,
-    Extends,
-    E,
-    EE,
-    Defaults,
-    {},
-    string,
-    S,
-    LC & GlobalComponents,
-    Directives & GlobalDirectives,
-    Exposed,
-    Provide
-  > &
-  PP
 
 /**** interface ***/
-interface InjectionConstraint<T> { }
-export interface AppConfig {
-  // @private
-  readonly isNativeTag: (tag: string) => boolean
 
-  performance: boolean
-  optionMergeStrategies: Record<string, OptionMergeFunction>
-  globalProperties: ComponentCustomProperties & Record<string, any>
-  errorHandler?: (
-    err: unknown,
-    instance: ComponentPublicInstance | null,
-    info: string,
-  ) => void
-  warnHandler?: (
-    msg: string,
-    instance: ComponentPublicInstance | null,
-    trace: string,
-  ) => void
-
-  /**
-   * Options to pass to `@vue/compiler-dom`.
-   * Only supported in runtime compiler build.
-   */
-  compilerOptions: RuntimeCompilerOptions
-
-  /**
-   * @deprecated use config.compilerOptions.isCustomElement
-   */
-  isCustomElement?: (tag: string) => boolean
-
-  /**
-   * TODO document for 3.5
-   * Enable warnings for computed getters that recursively trigger itself.
-   */
-  warnRecursiveComputed?: boolean
-
-  /**
-   * Whether to throw unhandled errors in production.
-   * Default is `false` to avoid crashing on any error (and only logs it)
-   * But in some cases, e.g. SSR, throwing might be more desirable.
-   */
-  throwUnhandledErrorInProduction?: boolean
-
-  /**
-   * Prefix for all useId() calls within this app
-   */
-  idPrefix?: string
-}
-interface TeleportTargetElement extends Element {
-  // last teleport target
-  _lpa?: Node | null
-}
-export interface LegacyDirective {
-  bind?: DirectiveHook
-  inserted?: DirectiveHook
-  update?: DirectiveHook
-  componentUpdated?: DirectiveHook
-  unbind?: DirectiveHook
-}
-
-
-
-export interface AsyncComponentOptions<T = any> {
-  loader: AsyncComponentLoader<T>
-  loadingComponent?: Component
-  errorComponent?: Component
-  delay?: number
-  timeout?: number
-  suspensible?: boolean
-  hydrate?: HydrationStrategy
-  onError?: (
-    error: Error,
-    retry: () => void,
-    fail: () => void,
-    attempts: number,
-  ) => any
-}
-
-
-export interface AppContext {
-  app: App // for devtools
-  config: AppConfig
-  mixins: ComponentOptions[]
-  components: Record<string, Component>
-  directives: Record<string, Directive>
-  provides: Record<string | symbol, any>
-
-  /**
-   * Cache for merged/normalized component options
-   * Each app instance has its own cache because app-level global mixins and
-   * optionMergeStrategies can affect merge behavior.
-   * @internal
-   */
-  optionsCache: WeakMap<ComponentOptions, MergedComponentOptions>
-  /**
-   * Cache for normalized props options
-   * @internal
-   */
-  propsCache: WeakMap<ConcreteComponent, NormalizedPropsOptions>
-  /**
-   * Cache for normalized emits options
-   * @internal
-   */
-  emitsCache: WeakMap<ConcreteComponent, ObjectEmitsOptions | null>
-  /**
-   * HMR only
-   * @internal
-   */
-  reload?: () => void
-  /**
-   * v2 compat only
-   * @internal
-   */
-  filters?: Record<string, Function>
-}
-
-export interface GlobalDirectives { }
-export interface ComponentCustomProps { }
-export interface ClassComponent {
-  new(...args: any[]): ComponentPublicInstance<any, any, any, any, any>
-  __vccOpts: ComponentOptions
-}
-
-export interface GlobalComponents {
-  Teleport: DefineComponent<TeleportProps>
-  Suspense: DefineComponent<SuspenseProps>
-  KeepAlive: DefineComponent<KeepAliveProps>
-  BaseTransition: DefineComponent<BaseTransitionProps>
-}
-export interface KeepAliveProps {
-  include?: MatchPattern
-  exclude?: MatchPattern
-  max?: number | string
-}
-export interface AllowedComponentProps {
-  class?: unknown
-  style?: unknown
-}
-export interface WatchEffectOptions extends DebuggerOptions {
-  flush?: 'pre' | 'post' | 'sync'
-}
-export interface WatchAPIOptions<Immediate = boolean> extends WatchEffectOptions {
-  immediate?: Immediate
-  deep?: boolean | number
-  once?: boolean
-}
-
-interface AppRecord {
-  id: number
-  app: App
-  version: string
-  types: Record<string, string | Symbol>
-}
-
-
-export interface DevtoolsHook {
-  enabled?: boolean
-  emit: (event: string, ...payload: any[]) => void
-  on: (event: string, handler: Function) => void
-  once: (event: string, handler: Function) => void
-  off: (event: string, handler: Function) => void
-  appRecords: AppRecord[]
-  /**
-   * Added at https://github.com/vuejs/devtools/commit/f2ad51eea789006ab66942e5a27c0f0986a257f9
-   * Returns whether the arg was buffered or not
-   */
-  cleanupBuffer?: (matchArg: unknown) => boolean
-}
-
-export interface KeepAliveContext extends ComponentRenderContext {
-  renderer: RendererInternals
-  activate: (
-    vnode: VNode,
-    container: RendererElement,
-    anchor: RendererNode | null,
-    namespace: ElementNamespace,
-    optimized: boolean,
-  ) => void
-  deactivate: (vnode: VNode) => void
-}
-
-// An object exposing the internals of a renderer, passed to tree-shakeable
-// features so that they can be decoupled from this file. Keys are shortened
-// to optimize bundle size.
-export interface RendererInternals<
-  HostNode = RendererNode,
-  HostElement = RendererElement,
-> {
-  p: PatchFn
-  um: UnmountFn
-  r: RemoveFn
-  m: MoveFn
-  mt: MountComponentFn
-  mc: MountChildrenFn
-  pc: PatchChildrenFn
-  pbc: PatchBlockChildrenFn
-  n: NextFn
-  o: RendererOptions<HostNode, HostElement>
-}
-
-export interface ComponentRenderContext {
-  [key: string]: any
-  _: ComponentInternalInstance
-}
-
-export interface TeleportProps {
-  to: string | RendererElement | null | undefined
-  disabled?: boolean
-  defer?: boolean
-}
-export interface BaseTransitionProps<HostElement = RendererElement> {
-  mode?: 'in-out' | 'out-in' | 'default'
-  appear?: boolean
-
-  // If true, indicates this is a transition that doesn't actually insert/remove
-  // the element, but toggles the show / hidden status instead.
-  // The transition hooks are injected, but will be skipped by the renderer.
-  // Instead, a custom directive can control the transition by calling the
-  // injected hooks (e.g. v-show).
-  persisted?: boolean
-
-  // Hooks. Using camel case for easier usage in render functions & JSX.
-  // In templates these can be written as @before-enter="xxx" as prop names
-  // are camelized.
-  onBeforeEnter?: Hook<(el: HostElement) => void>
-  onEnter?: Hook<(el: HostElement, done: () => void) => void>
-  onAfterEnter?: Hook<(el: HostElement) => void>
-  onEnterCancelled?: Hook<(el: HostElement) => void>
-  // leave
-  onBeforeLeave?: Hook<(el: HostElement) => void>
-  onLeave?: Hook<(el: HostElement, done: () => void) => void>
-  onAfterLeave?: Hook<(el: HostElement) => void>
-  onLeaveCancelled?: Hook<(el: HostElement) => void> // only fired in persisted mode
-  // appear
-  onBeforeAppear?: Hook<(el: HostElement) => void>
-  onAppear?: Hook<(el: HostElement, done: () => void) => void>
-  onAfterAppear?: Hook<(el: HostElement) => void>
-  onAppearCancelled?: Hook<(el: HostElement) => void>
-}
-
-
-export interface TransitionHooks<HostElement = RendererElement> {
-  mode: BaseTransitionProps['mode']
-  persisted: boolean
-  beforeEnter(el: HostElement): void
-  enter(el: HostElement): void
-  leave(el: HostElement, remove: () => void): void
-  clone(vnode: VNode): TransitionHooks<HostElement>
-  // optional
-  afterLeave?(): void
-  delayLeave?(
-    el: HostElement,
-    earlyRemove: () => void,
-    delayedLeave: () => void,
-  ): void
-  delayedLeave?(): void
-}
-
-export interface App<HostElement = any> {
-  version: string
-  config: AppConfig
-
-  use<Options extends unknown[]>(
-    plugin: Plugin<Options>,
-    ...options: NoInfer<Options>
-  ): this
-  use<Options>(plugin: Plugin<Options>, options: NoInfer<Options>): this
-
-  mixin(mixin: ComponentOptions): this
-  component(name: string): Component | undefined
-  component<T extends Component | DefineComponent>(
-    name: string,
-    component: T,
-  ): this
-  directive<
-    HostElement = any,
-    Value = any,
-    Modifiers extends string = string,
-    Arg extends string = string,
-  >(
-    name: string,
-  ): Directive<HostElement, Value, Modifiers, Arg> | undefined
-  directive<
-    HostElement = any,
-    Value = any,
-    Modifiers extends string = string,
-    Arg extends string = string,
-  >(
-    name: string,
-    directive: Directive<HostElement, Value, Modifiers, Arg>,
-  ): this
-  mount(
-    rootContainer: HostElement | string,
-    /**
-     * @internal
-     */
-    isHydrate?: boolean,
-    /**
-     * @internal
-     */
-    namespace?: boolean | ElementNamespace,
-    /**
-     * @internal
-     */
-    vnode?: VNode,
-  ): ComponentPublicInstance
-  unmount(): void
-  onUnmount(cb: () => void): void
-  provide<T, K = InjectionKey<T> | string | number>(
-    key: K,
-    value: K extends InjectionKey<infer V> ? V : T,
-  ): this
-
-  /**
-   * Runs a function with the app as active instance. This allows using of `inject()` within the function to get access
-   * to variables provided via `app.provide()`.
-   *
-   * @param fn - function to run with the app as active instance
-   */
-  runWithContext<T>(fn: () => T): T
-
-  // internal, but we need to expose these for the server-renderer and devtools
-  _uid: number
-  _component: ConcreteComponent
-  _props: Data | null
-  _container: HostElement | null
-  _context: AppContext
-  _instance: ComponentInternalInstance | null
-
-  /**
-   * @internal custom element vnode
-   */
-  _ceVNode?: VNode
-
-  /**
-   * v2 compat only
-   */
-  filter?(name: string): Function | undefined
-  filter?(name: string, filter: Function): this
-
-  /**
-   * @internal v3 compat only
-   */
-  _createRoot?(options: ComponentOptions): ComponentPublicInstance
-}
-
-
-/**
- * Subset of compiler options that makes sense for the runtime.
- */
-export interface RuntimeCompilerOptions {
-  isCustomElement?: (tag: string) => boolean
-  whitespace?: 'preserve' | 'condense'
-  comments?: boolean
-  delimiters?: [string, string]
-}
-
-export interface SchedulerJob extends Function {
-  id?: number
-  /**
-   * flags can technically be undefined, but it can still be used in bitwise
-   * operations just like 0.
-   */
-  flags?: SchedulerJobFlags
-  /**
-   * Attached by renderer.ts when setting up a component's render effect
-   * Used to obtain component information when reporting max recursive updates.
-   */
-  i?: ComponentInternalInstance
-}
-export interface RendererNode {
-  [key: string | symbol]: any
-}
-
-export interface RendererElement extends RendererNode { }
-export interface Renderer<HostElement = RendererElement> {
-  render: RootRenderFunction<HostElement>
-  createApp: CreateAppFunction<HostElement>
-}
-
-export interface RendererOptions<
-  HostNode = RendererNode,
-  HostElement = RendererElement
-> {
-  patchProp(
-    el: HostElement,
-    key: string,
-    prevValue: any,
-    nextValue: any,
-    namespace?: ElementNamespace,
-    parentComponent?: ComponentInternalInstance | null
-  ): void
-  insert(el: HostNode, parent: HostElement, anchor?: HostNode | null): void
-  remove(el: HostNode): void
-  createElement(
-    type: string,
-    namespace?: ElementNamespace,
-    isCustomizedBuiltIn?: string,
-    vnodeProps?: (VNodeProps & { [key: string]: any }) | null
-  ): HostElement
-  createText(text: string): HostNode
-  createComment(text: string): HostNode
-  setText(node: HostNode, text: string): void
-  setElementText(node: HostElement, text: string): void
-  parentNode(node: HostNode): HostElement | null
-  nextSibling(node: HostNode): HostNode | null
-  querySelector?(selector: string): HostElement | null
-  setScopeId?(el: HostElement, id: string): void
-  cloneNode?(node: HostNode): HostNode
-  insertStaticContent?(
-    content: string,
-    parent: HostElement,
-    anchor: HostNode | null,
-    namespace: ElementNamespace,
-    start?: HostNode | null,
-    end?: HostNode | null
-  ): [HostNode, HostNode]
-}
-export interface VNode<
-  HostNode = RendererNode,
-  HostElement = RendererElement,
-  ExtraProps = { [key: string]: any }
-> {
-  /**
-   * @internal
-   */
-  __v_isVNode: true
-
-  /**
-   * @internal
-   */
-  [ReactiveFlags.SKIP]: true
-
-  type: VNodeTypes
-  props: (VNodeProps & ExtraProps) | null
-  key: PropertyKey | null
-  ref: VNodeNormalizedRef | null
-  /**
-   * SFC only. This is assigned on vnode creation using currentScopeId
-   * which is set alongside currentRenderingInstance.
-   */
-  scopeId: string | null
-  /**
-   * SFC only. This is assigned to:
-   * - Slot fragment vnodes with :slotted SFC styles.
-   * - Component vnodes (during patch/hydration) so that its root node can
-   *   inherit the component's slotScopeIds
-   * @internal
-   */
-  slotScopeIds: string[] | null
-  children: VNodeNormalizedChildren
-  component: ComponentInternalInstance | null
-  dirs: DirectiveBinding[] | null
-  transition: TransitionHooks<HostElement> | null
-
-  // DOM
-  el: HostNode | null
-  placeholder: HostNode | null // async component el placeholder
-  anchor: HostNode | null // fragment anchor
-  target: HostElement | null // teleport target
-  targetStart: HostNode | null // teleport target start anchor
-  targetAnchor: HostNode | null // teleport target anchor
-  /**
-   * number of elements contained in a static vnode
-   * @internal
-   */
-  staticCount: number
-
-  // suspense
-  suspense: SuspenseBoundary | null
-  /**
-   * @internal
-   */
-  ssContent: VNode | null
-  /**
-   * @internal
-   */
-  ssFallback: VNode | null
-
-  // optimization only
-  shapeFlag: number
-  patchFlag: number
-  /**
-   * @internal
-   */
-  dynamicProps: string[] | null
-  /**
-   * @internal
-   */
-  dynamicChildren: (VNode[] & { hasOnce?: boolean }) | null
-
-  // application root node only
-  appContext: AppContext | null
-
-  /**
-   * @internal lexical scope owner instance
-   */
-  ctx: ComponentInternalInstance | null
-
-  /**
-   * @internal attached by v-memo
-   */
-  memo?: any[]
-  /**
-   * @internal index for cleaning v-memo cache
-   */
-  cacheIndex?: number
-  /**
-   * @internal __COMPAT__ only
-   */
-  isCompatRoot?: true
-  /**
-   * @internal custom element interception hook
-   */
-  ce?: (instance: ComponentInternalInstance) => void
-}
-export interface HydrationRenderer extends Renderer<Element | ShadowRoot> {
-  hydrate: RootHydrateFunction
-}
-
-export interface SuspenseProps {
-  onResolve?: () => void
-  onPending?: () => void
-  onFallback?: () => void
-  timeout?: string | number
-  /**
-   * Allow suspense to be captured by parent suspense
-   *
-   * @default false
-   */
-  suspensible?: boolean
-}
-
-export interface SuspenseBoundary {
-  vnode: VNode<RendererNode, RendererElement, SuspenseProps>
-  parent: SuspenseBoundary | null
-  parentComponent: ComponentInternalInstance | null
-  namespace: ElementNamespace
-  container: RendererElement
-  hiddenContainer: RendererElement
-  activeBranch: VNode | null
-  pendingBranch: VNode | null
-  deps: number
-  pendingId: number
-  timeout: number
-  isInFallback: boolean
-  isHydrating: boolean
-  isUnmounted: boolean
-  effects: Function[]
-  resolve(force?: boolean, sync?: boolean): void
-  fallback(fallbackVNode: VNode): void
-  move(
-    container: RendererElement,
-    anchor: RendererNode | null,
-    type: MoveType
-  ): void
-  next(): RendererNode | null
-  registerDep(
-    instance: ComponentInternalInstance,
-    setupRenderEffect: SetupRenderEffectFn,
-    optimized: boolean
-  ): void
-  unmount(parentSuspense: SuspenseBoundary | null, doRemove?: boolean): void
-}
-
-export interface DirectiveBinding<
-  Value = any,
-  Modifiers extends string = string,
-  Arg extends string = string
-> {
-  instance: ComponentPublicInstance | Record<string, any> | null
-  value: Value
-  oldValue: Value | null
-  arg?: Arg
-  modifiers: DirectiveModifiers<Modifiers>
-  dir: ObjectDirective<any, Value>
-}
-export interface ObjectDirective<
-  HostElement = any,
-  Value = any,
-  Modifiers extends string = string,
-  Arg extends string = string
-> {
-  /**
-   * @internal without this, ts-expect-error in directives.test-d.ts somehow
-   * fails when running tsc, but passes in IDE and when testing against built
-   * dts. Could be a TS bug.
-   */
-  __mod?: Modifiers
-  created?: DirectiveHook<HostElement, null, Value, Modifiers, Arg>
-  beforeMount?: DirectiveHook<HostElement, null, Value, Modifiers, Arg>
-  mounted?: DirectiveHook<HostElement, null, Value, Modifiers, Arg>
-  beforeUpdate?: DirectiveHook<
-    HostElement,
-    VNode<any, HostElement>,
-    Value,
-    Modifiers,
-    Arg
-  >
-  updated?: DirectiveHook<
-    HostElement,
-    VNode<any, HostElement>,
-    Value,
-    Modifiers,
-    Arg
-  >
-  beforeUnmount?: DirectiveHook<HostElement, null, Value, Modifiers, Arg>
-  unmounted?: DirectiveHook<HostElement, null, Value, Modifiers, Arg>
-  getSSRProps?: SSRDirectiveHook<Value, Modifiers, Arg>
-  deep?: boolean
-}
-
-// Note: can't mark this whole interface internal because some public interfaces
-// extend it.
-export interface ComponentInternalOptions {
-  /**
-   * @internal
-   */
-  __scopeId?: string
-  /**
-   * @internal
-   */
-  __cssModules?: Data
-  /**
-   * @internal
-   */
-  __hmrId?: string
-  /**
-   * Compat build only, for bailing out of certain compatibility behavior
-   */
-  __isBuiltIn?: boolean
-  /**
-   * This one should be exposed so that devtools can make use of it
-   */
-  __file?: string
-  /**
-   * name inferred from filename
-   */
-  __name?: string
-}
-
-export interface FunctionalComponent<
-  P = {},
-  E extends EmitsOptions | Record<string, any[]> = {},
-  S extends Record<string, any> = any,
-  EE extends EmitsOptions = ShortEmitsToObject<E>
-> extends ComponentInternalOptions {
-  // use of any here is intentional so it can be a valid JSX Element constructor
-  (
-    props: P & EmitsToProps<EE>,
-    ctx: Omit<SetupContext<EE, IfAny<S, {}, SlotsType<S>>>, 'expose'>
-  ): any
-  props?: ComponentPropsOptions<P>
-  emits?: EE | (keyof EE)[]
-  slots?: IfAny<S, Slots, SlotsType<S>>
-  inheritAttrs?: boolean
-  displayName?: string
-  compatConfig?: CompatConfig
-}
-
-// v2 options 类型
-interface LegacyOptions<
-  Props,
-  D,
-  C extends ComputedOptions,
-  M extends MethodOptions,
-  Mixin extends ComponentOptionsMixin,
-  Extends extends ComponentOptionsMixin,
-  I extends ComponentInjectOptions,
-  II extends string,
-  Provide extends ComponentProvideOptions = ComponentProvideOptions
-> {
-  compatConfig?: CompatConfig
-
-  // allow any custom options
-  [key: string]: any
-
-  // state
-  // Limitation: we cannot expose RawBindings on the `this` context for data
-  // since that leads to some sort of circular inference and breaks ThisType
-  // for the entire component.
-  data?: (
-    this: CreateComponentPublicInstanceWithMixins<
-      Props,
-      {},
-      {},
-      {},
-      MethodOptions,
-      Mixin,
-      Extends
-    >,
-    vm: CreateComponentPublicInstanceWithMixins<
-      Props,
-      {},
-      {},
-      {},
-      MethodOptions,
-      Mixin,
-      Extends
-    >
-  ) => D
-  computed?: C
-  methods?: M
-  watch?: ComponentWatchOptions
-  provide?: Provide
-  inject?: I | II[]
-
-  // assets
-  filters?: Record<string, Function>
-
-  // composition
-  mixins?: Mixin[]
-  extends?: Extends
-
-  // lifecycle
-  beforeCreate?(): any
-  created?(): any
-  beforeMount?(): any
-  mounted?(): any
-  beforeUpdate?(): any
-  updated?(): any
-  activated?(): any
-  deactivated?(): any
-  /** @deprecated use `beforeUnmount` instead */
-  beforeDestroy?(): any
-  beforeUnmount?(): any
-  /** @deprecated use `unmounted` instead */
-  destroyed?(): any
-  unmounted?(): any
-  renderTracked?: DebuggerHook
-  renderTriggered?: DebuggerHook
-  errorCaptured?: ErrorCapturedHook
-
-  /**
-   * runtime compile only
-   * @deprecated use `compilerOptions.delimiters` instead.
-   */
-  delimiters?: [string, string]
-
-  /**
-   * #3468
-   *
-   * type-only, used to assist Mixin's type inference,
-   * typescript will try to simplify the inferred `Mixin` type,
-   * with the `__differentiator`, typescript won't be able to combine different mixins,
-   * because the `__differentiator` will be different
-   */
-  __differentiator?: keyof D | keyof C | keyof M
-}
-
-export interface ComponentCustomOptions { }
-
-export interface ComponentOptionsBase<
-  Props,
-  RawBindings,
-  D,
-  C extends ComputedOptions,
-  M extends MethodOptions,
-  Mixin extends ComponentOptionsMixin,
-  Extends extends ComponentOptionsMixin,
-  E extends EmitsOptions,
-  EE extends string = string,
-  Defaults = {},
-  I extends ComponentInjectOptions = {},
-  II extends string = string,
-  S extends SlotsType = {},
-  LC extends Record<string, Component> = {},
-  Directives extends Record<string, Directive> = {},
-  Exposed extends string = string,
-  Provide extends ComponentProvideOptions = ComponentProvideOptions
->
-  extends LegacyOptions<Props, D, C, M, Mixin, Extends, I, II, Provide>,
-  ComponentInternalOptions,
-  ComponentCustomOptions {
-  setup?: (
-    this: void,
-    props: LooseRequired<
-      Props &
-      Prettify<
-        UnwrapMixinsType<
-          IntersectionMixin<Mixin> & IntersectionMixin<Extends>,
-          'P'
-        >
-      >
-    >,
-    ctx: SetupContext<E, S>
-  ) => Promise<RawBindings> | RawBindings | RenderFunction | void
-  name?: string
-  template?: string | object // can be a direct DOM node
-  // Note: we are intentionally using the signature-less `Function` type here
-  // since any type with signature will cause the whole inference to fail when
-  // the return expression contains reference to `this`.
-  // Luckily `render()` doesn't need any arguments nor does it care about return
-  // type.
-  render?: Function
-  // NOTE: extending both LC and Record<string, Component> allows objects to be forced
-  // to be of type Component, while still inferring LC generic
-  components?: LC & Record<string, Component>
-  // NOTE: extending both Directives and Record<string, Directive> allows objects to be forced
-  // to be of type Directive, while still inferring Directives generic
-  directives?: Directives & Record<string, Directive>
-  inheritAttrs?: boolean
-  emits?: (E | EE[]) & ThisType<void>
-  slots?: S
-  expose?: Exposed[]
-  serverPrefetch?(): void | Promise<any>
-
-  // Runtime compiler only -----------------------------------------------------
-  compilerOptions?: RuntimeCompilerOptions
-
-  // Internal ------------------------------------------------------------------
-
-  /**
-   * SSR only. This is produced by compiler-ssr and attached in compiler-sfc
-   * not user facing, so the typing is lax and for test only.
-   * @internal
-   */
-  ssrRender?: (
-    ctx: any,
-    push: (item: any) => void,
-    parentInstance: ComponentInternalInstance,
-    attrs: Data | undefined,
-    // for compiler-optimized bindings
-    $props: ComponentInternalInstance['props'],
-    $setup: ComponentInternalInstance['setupState'],
-    $data: ComponentInternalInstance['data'],
-    $options: ComponentInternalInstance['ctx']
-  ) => void
-
-  /**
-   * Only generated by compiler-sfc to mark a ssr render function inlined and
-   * returned from setup()
-   * @internal
-   */
-  __ssrInlineRender?: boolean
-
-  /**
-   * marker for AsyncComponentWrapper
-   * @internal
-   */
-  __asyncLoader?: () => Promise<ConcreteComponent>
-  /**
-   * the inner component resolved by the AsyncComponentWrapper
-   * @internal
-   */
-  __asyncResolved?: ConcreteComponent
-  /**
-   * Exposed for lazy hydration
-   * @internal
-   */
-  __asyncHydrate?: (
-    el: Element,
-    instance: ComponentInternalInstance,
-    hydrate: () => void
-  ) => void
-
-  // Type differentiators ------------------------------------------------------
-
-  // Note these are internal but need to be exposed in d.ts for type inference
-  // to work!
-
-  // type-only differentiator to separate OptionWithoutProps from a constructor
-  // type returned by defineComponent() or FunctionalComponent
-  call?: (this: unknown, ...args: unknown[]) => never
-  // type-only differentiators for built-in Vnode types
-  __isFragment?: never
-  __isTeleport?: never
-  __isSuspense?: never
-
-  __defaults?: Defaults
-}
-export interface ComponentCustomProperties { }
 
 /**** class  ***/
 export class EffectScope {
@@ -2791,6 +419,31 @@ export const isReservedPrefix = (key: string): key is '_' | '$' =>
   key === '_' || key === '$'
 
 /**** define object ***/
+
+const attrsProxyHandlers = __DEV__
+  ? {
+      get(target: Data, key: string) {
+        markAttrsAccessed()
+        track(target, TrackOpTypes.GET, '')
+        return target[key]
+      },
+      set() {
+        warn(`setupContext.attrs is readonly.`)
+        return false
+      },
+      deleteProperty() {
+        warn(`setupContext.attrs is readonly.`)
+        return false
+      },
+    }
+  : {
+      get(target: Data, key: string) {
+        track(target, TrackOpTypes.GET, '')
+        return target[key]
+      },
+    }
+
+
 export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   get({ _: instance }: ComponentRenderContext, key: string) {
     if (key === ReactiveFlags.SKIP) {
@@ -5940,297 +3593,6 @@ export function createComponentInstance(
 }
 
 
-/**** component ***/
-export interface ComponentInternalInstance {
-  uid: number
-  type: ConcreteComponent
-  parent: ComponentInternalInstance | null
-  root: ComponentInternalInstance
-  appContext: AppContext
-  /**
-   * Vnode representing this component in its parent's vdom tree
-   */
-  vnode: VNode
-  /**
-   * The pending new vnode from parent updates
-   * @internal
-   */
-  next: VNode | null
-  /**
-   * Root vnode of this component's own vdom tree
-   */
-  subTree: VNode
-  /**
-   * Render effect instance
-   */
-  effect: ReactiveEffect
-  /**
-   * Force update render effect
-   */
-  update: () => void
-  /**
-   * Render effect job to be passed to scheduler (checks if dirty)
-   */
-  job: SchedulerJob
-  /**
-   * The render function that returns vdom tree.
-   * @internal
-   */
-  render: InternalRenderFunction | null
-  /**
-   * SSR render function
-   * @internal
-   */
-  ssrRender?: Function | null
-  /**
-   * Object containing values this component provides for its descendants
-   * @internal
-   */
-  provides: Data
-  /**
-   * for tracking useId()
-   * first element is the current boundary prefix
-   * second number is the index of the useId call within that boundary
-   * @internal
-   */
-  ids: [string, number, number]
-  /**
-   * Tracking reactive effects (e.g. watchers) associated with this component
-   * so that they can be automatically stopped on component unmount
-   * @internal
-   */
-  scope: EffectScope
-  /**
-   * cache for proxy access type to avoid hasOwnProperty calls
-   * @internal
-   */
-  accessCache: Data | null
-  /**
-   * cache for render function values that rely on _ctx but won't need updates
-   * after initialized (e.g. inline handlers)
-   * @internal
-   */
-  renderCache: (Function | VNode | undefined)[]
-
-  /**
-   * Resolved component registry, only for components with mixins or extends
-   * @internal
-   */
-  components: Record<string, ConcreteComponent> | null
-  /**
-   * Resolved directive registry, only for components with mixins or extends
-   * @internal
-   */
-  directives: Record<string, Directive> | null
-  /**
-   * Resolved filters registry, v2 compat only
-   * @internal
-   */
-  filters?: Record<string, Function>
-  /**
-   * resolved props options
-   * @internal
-   */
-  propsOptions: NormalizedPropsOptions
-  /**
-   * resolved emits options
-   * @internal
-   */
-  emitsOptions: ObjectEmitsOptions | null
-  /**
-   * resolved inheritAttrs options
-   * @internal
-   */
-  inheritAttrs?: boolean
-  /**
-   * Custom Element instance (if component is created by defineCustomElement)
-   * @internal
-   */
-  ce?: ComponentCustomElementInterface
-  /**
-   * is custom element? (kept only for compatibility)
-   * @internal
-   */
-  isCE?: boolean
-  /**
-   * custom element specific HMR method
-   * @internal
-   */
-  ceReload?: (newStyles?: string[]) => void
-
-  // the rest are only for stateful components ---------------------------------
-
-  // main proxy that serves as the public instance (`this`)
-  proxy: ComponentPublicInstance | null
-
-  // exposed properties via expose()
-  exposed: Record<string, any> | null
-  exposeProxy: Record<string, any> | null
-
-  /**
-   * alternative proxy used only for runtime-compiled render functions using
-   * `with` block
-   * @internal
-   */
-  withProxy: ComponentPublicInstance | null
-  /**
-   * This is the target for the public instance proxy. It also holds properties
-   * injected by user options (computed, methods etc.) and user-attached
-   * custom properties (via `this.x = ...`)
-   * @internal
-   */
-  ctx: Data
-
-  // state
-  data: Data
-  props: Data
-  attrs: Data
-  slots: InternalSlots
-  refs: Data
-  emit: EmitFn
-
-  /**
-   * used for keeping track of .once event handlers on components
-   * @internal
-   */
-  emitted: Record<string, boolean> | null
-  /**
-   * used for caching the value returned from props default factory functions to
-   * avoid unnecessary watcher trigger
-   * @internal
-   */
-  propsDefaults: Data
-  /**
-   * setup related
-   * @internal
-   */
-  setupState: Data
-  /**
-   * devtools access to additional info
-   * @internal
-   */
-  devtoolsRawSetupState?: any
-  /**
-   * @internal
-   */
-  setupContext: SetupContext | null
-
-  /**
-   * suspense related
-   * @internal
-   */
-  suspense: SuspenseBoundary | null
-  /**
-   * suspense pending batch id
-   * @internal
-   */
-  suspenseId: number
-  /**
-   * @internal
-   */
-  asyncDep: Promise<any> | null
-  /**
-   * @internal
-   */
-  asyncResolved: boolean
-
-  // lifecycle
-  isMounted: boolean
-  isUnmounted: boolean
-  isDeactivated: boolean
-  /**
-   * @internal
-   */
-  [LifecycleHooks.BEFORE_CREATE]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.CREATED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.BEFORE_MOUNT]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.MOUNTED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.BEFORE_UPDATE]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.UPDATED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.BEFORE_UNMOUNT]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.UNMOUNTED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.RENDER_TRACKED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.RENDER_TRIGGERED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.ACTIVATED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.DEACTIVATED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.ERROR_CAPTURED]: LifecycleHook
-  /**
-   * @internal
-   */
-  [LifecycleHooks.SERVER_PREFETCH]: LifecycleHook<() => Promise<unknown>>
-
-  /**
-   * For caching bound $forceUpdate on public proxy access
-   * @internal
-   */
-  f?: () => void
-  /**
-   * For caching bound $nextTick on public proxy access
-   * @internal
-   */
-  n?: () => Promise<void>
-  /**
-   * `updateTeleportCssVars`
-   * For updating css vars on contained teleports
-   * @internal
-   */
-  ut?: (vars?: Record<string, unknown>) => void
-
-  /**
-   * dev only. For style v-bind hydration mismatch checks
-   * @internal
-   */
-  getCssVars?: () => Record<string, unknown>
-
-  /**
-   * v2 compat only, for caching mutated $options
-   * @internal
-   */
-  resolvedOptions?: MergedComponentOptions
-}
-
-/**** h ***/
-
-/**** createApp ***/
-
-/**** hydration ***/
-
 // Note: hydration is DOM-specific
 // But we have to place it in core due to tight coupling with core - splitting
 // it out creates a ton of unnecessary complexity.
@@ -7957,6 +5319,31 @@ export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
   currentInstance || currentRenderingInstance
 
 
+export function provide<T, K = InjectionKey<T> | string | number>(
+  key: K,
+  value: K extends InjectionKey<infer V> ? V : T,
+): void {
+  if (!currentInstance) {
+    if (__DEV__) {
+      warn(`provide() can only be used inside setup().`)
+    }
+  } else {
+    let provides = currentInstance.provides
+    // by default an instance inherits its parent's provides object
+    // but when it needs to provide values of its own, it creates its
+    // own provides object using parent provides object as prototype.
+    // this way in `inject` we can simply look up injections from direct
+    // parent and let the prototype chain do the work.
+    const parentProvides =
+      currentInstance.parent && currentInstance.parent.provides
+    if (parentProvides === provides) {
+      provides = currentInstance.provides = Object.create(parentProvides)
+    }
+    // TS doesn't allow symbol as index type
+    provides[key as string] = value
+  }
+}
+
 export function inject<T>(key: InjectionKey<T> | string): T | undefined
 export function inject<T>(
   key: InjectionKey<T> | string,
@@ -8007,6 +5394,8 @@ export function inject(
     warn(`inject() can only be used inside setup() or functional components.`)
   }
 }
+
+
 
 function isInHmrContext(instance: ComponentInternalInstance | null) {
   while (instance) {
@@ -8339,6 +5728,42 @@ const getFunctionalFallthrough = (attrs: Data): Data | undefined => {
   }
   return res
 }
+
+/**
+ * dev only
+ * In dev mode, template root level comments are rendered, which turns the
+ * template into a fragment root, but we need to locate the single element
+ * root for attrs and scope id processing.
+ */
+const getChildRoot = (vnode: VNode): [VNode, SetRootFn] => {
+  const rawChildren = vnode.children as VNodeArrayChildren
+  const dynamicChildren = vnode.dynamicChildren
+  const childRoot = filterSingleRoot(rawChildren, false)
+  if (!childRoot) {
+    return [vnode, undefined]
+  } else if (
+    __DEV__ &&
+    childRoot.patchFlag > 0 &&
+    childRoot.patchFlag & PatchFlags.DEV_ROOT_FRAGMENT
+  ) {
+    return getChildRoot(childRoot)
+  }
+
+  const index = rawChildren.indexOf(childRoot)
+  const dynamicIndex = dynamicChildren ? dynamicChildren.indexOf(childRoot) : -1
+  const setRoot: SetRootFn = (updatedRoot: VNode) => {
+    rawChildren[index] = updatedRoot
+    if (dynamicChildren) {
+      if (dynamicIndex > -1) {
+        dynamicChildren[dynamicIndex] = updatedRoot
+      } else if (updatedRoot.patchFlag > 0) {
+        vnode.dynamicChildren = [...dynamicChildren, updatedRoot]
+      }
+    }
+  }
+  return [normalizeVNode(childRoot), setRoot]
+}
+
 
 export function renderComponentRoot(
   instance: ComponentInternalInstance,
@@ -11183,7 +8608,7 @@ export const useSSRContext = <T = Record<string, any>>(): T | undefined => {
 function doWatch(
   source: WatchSource | WatchSource[] | WatchEffect | object,
   cb: WatchCallback | null,
-  options: WatchOptions = EMPTY_OBJ,
+  options: WatchAPIOptions = EMPTY_OBJ,
 ): WatchHandle {
   const { immediate, deep, flush, once } = options
 
@@ -11602,7 +9027,7 @@ export function normalizePropsOrEmits(
     : props
 }
 
-function mergeObjectOptions(to: Object | undefined, from: Object | undefined) {
+function mergeObjectOptions(to: object | undefined, from: object | undefined) {
   return to ? extend(Object.create(null), to, from) : from
 }
 
@@ -12555,8 +9980,6 @@ export function configureCompat(config: CompatConfig): void {
   }
   extend(globalCompatConfig, config)
 }
-const seenConfigObjects = /*@__PURE__*/ new WeakSet<CompatConfig>()
-const warnedInvalidKeys: Record<string, boolean> = {}
 
 
 // dev only
@@ -12910,6 +10333,102 @@ export function finishComponentSetup(
   }
 }
 
+const createHook =
+  <T extends Function = () => any>(lifecycle: LifecycleHooks) =>
+  (
+    hook: T,
+    target: ComponentInternalInstance | null = currentInstance,
+  ): void => {
+    // post-create lifecycle registrations are noops during SSR (except for serverPrefetch)
+    if (
+      !isInSSRComponentSetup ||
+      lifecycle === LifecycleHooks.SERVER_PREFETCH
+    ) {
+      injectHook(lifecycle, (...args: unknown[]) => hook(...args), target)
+    }
+  }
+
+export function injectHook(
+  type: LifecycleHooks,
+  hook: Function & { __weh?: Function },
+  target: ComponentInternalInstance | null = currentInstance,
+  prepend: boolean = false,
+): Function | undefined {
+  if (target) {
+    const hooks = target[type] || (target[type] = [])
+    // cache the error handling wrapper for injected hooks so the same hook
+    // can be properly deduped by the scheduler. "__weh" stands for "with error
+    // handling".
+    const wrappedHook =
+      hook.__weh ||
+      (hook.__weh = (...args: unknown[]) => {
+        // disable tracking inside all lifecycle hooks
+        // since they can potentially be called inside effects.
+        pauseTracking()
+        // Set currentInstance during hook invocation.
+        // This assumes the hook does not synchronously trigger other hooks, which
+        // can only be false when the user does something really funky.
+        const reset = setCurrentInstance(target)
+        const res = callWithAsyncErrorHandling(hook, target, type, args)
+        reset()
+        resetTracking()
+        return res
+      })
+    if (prepend) {
+      hooks.unshift(wrappedHook)
+    } else {
+      hooks.push(wrappedHook)
+    }
+    return wrappedHook
+  } else if (__DEV__) {
+    const apiName = toHandlerKey(ErrorTypeStrings[type].replace(/ hook$/, ''))
+    warn(
+      `${apiName} is called when there is no active component instance to be ` +
+        `associated with. ` +
+        `Lifecycle injection APIs can only be used during execution of setup().` +
+        (__FEATURE_SUSPENSE__
+          ? ` If you are using async setup(), make sure to register lifecycle ` +
+            `hooks before the first await statement.`
+          : ``),
+    )
+  }
+}
+
+export const onBeforeMount: CreateHook = createHook(LifecycleHooks.BEFORE_MOUNT)
+export const onMounted: CreateHook = createHook(LifecycleHooks.MOUNTED)
+export const onBeforeUpdate: CreateHook = createHook(
+  LifecycleHooks.BEFORE_UPDATE,
+)
+export const onUpdated: CreateHook = createHook(LifecycleHooks.UPDATED)
+export function onActivated(
+  hook: Function,
+  target?: ComponentInternalInstance | null,
+): void {
+  registerKeepAliveHook(hook, LifecycleHooks.ACTIVATED, target)
+}
+export function onDeactivated(
+  hook: Function,
+  target?: ComponentInternalInstance | null,
+): void {
+  registerKeepAliveHook(hook, LifecycleHooks.DEACTIVATED, target)
+}
+export function onErrorCaptured<TError = Error>(
+  hook: ErrorCapturedHook<TError>,
+  target: ComponentInternalInstance | null = currentInstance,
+): void {
+  injectHook(LifecycleHooks.ERROR_CAPTURED, hook, target)
+}
+export const onRenderTracked: CreateHook<DebuggerHook> =
+  createHook<DebuggerHook>(LifecycleHooks.RENDER_TRACKED)
+export const onRenderTriggered: CreateHook<DebuggerHook> =
+  createHook<DebuggerHook>(LifecycleHooks.RENDER_TRIGGERED)
+export const onBeforeUnmount: CreateHook = createHook(
+  LifecycleHooks.BEFORE_UNMOUNT,
+)
+export const onUnmounted: CreateHook = createHook(LifecycleHooks.UNMOUNTED)
+export const onServerPrefetch: CreateHook = createHook(
+  LifecycleHooks.SERVER_PREFETCH,
+)
 
 export function applyOptions(instance: ComponentInternalInstance): void {
   const options = resolveMergedOptions(instance)
@@ -13601,15 +11120,18 @@ function applySingletonPrototype(app: App, Ctor: Function) {
   }
 }
 
-
+// 有更改
 export function nextTick<T = void, R = void>(
   this: T,
   fn?: (this: T) => R,
 ): Promise<Awaited<R>> {
   const p = currentFlushPromise || resolvedPromise
-  return fn ? p.then(this ? fn.bind(this) : fn) : p
+  if (fn) {
+    return Promise.resolve(p.then(this ? fn.bind(this) : fn))
+  } else {
+    return p as Promise<Awaited<R>>
+  }
 }
-
 export function deepMergeData(to: any, from: any): any {
   for (const key in from) {
     const toVal = to[key]
@@ -13770,5 +11292,1232 @@ export function createSetupContext(
       emit: instance.emit,
       expose,
     }
+  }
+}
+
+
+/**
+ * Dev-only
+ */
+function getSlotsProxy(instance: ComponentInternalInstance): Slots {
+  return new Proxy(instance.slots, {
+    get(target, key: string) {
+      track(instance, TrackOpTypes.GET, '$slots')
+      return target[key]
+    },
+  })
+}
+
+function registerKeepAliveHook(
+  hook: Function & { __wdc?: Function },
+  type: LifecycleHooks,
+  target: ComponentInternalInstance | null = currentInstance,
+) {
+  // cache the deactivate branch check wrapper for injected hooks so the same
+  // hook can be properly deduped by the scheduler. "__wdc" stands for "with
+  // deactivation check".
+  const wrappedHook =
+    hook.__wdc ||
+    (hook.__wdc = () => {
+      // only fire the hook if the target instance is NOT in a deactivated branch.
+      let current: ComponentInternalInstance | null = target
+      while (current) {
+        if (current.isDeactivated) {
+          return
+        }
+        current = current.parent
+      }
+      return hook()
+    })
+  injectHook(type, wrappedHook, target)
+  // In addition to registering it on the target instance, we walk up the parent
+  // chain and register it on all ancestor instances that are keep-alive roots.
+  // This avoids the need to walk the entire component tree when invoking these
+  // hooks, and more importantly, avoids the need to track child components in
+  // arrays.
+  if (target) {
+    let current = target.parent
+    while (current && current.parent) {
+      if (isKeepAlive(current.parent.vnode)) {
+        injectToKeepAliveRoot(wrappedHook, type, target, current)
+      }
+      current = current.parent
+    }
+  }
+}
+
+function callHook(
+  hook: Function,
+  instance: ComponentInternalInstance,
+  type: LifecycleHooks,
+) {
+  callWithAsyncErrorHandling(
+    isArray(hook)
+      ? hook.map(h => h.bind(instance.proxy!))
+      : hook.bind(instance.proxy!),
+    instance,
+    type,
+  )
+}
+
+function createDuplicateChecker() {
+  const cache = Object.create(null)
+  return (type: OptionTypes, key: string) => {
+    if (cache[key]) {
+      warn(`${type} property "${key}" is already defined in ${cache[key]}.`)
+    } else {
+      cache[key] = type
+    }
+  }
+}
+
+export function resolveInjections(
+  injectOptions: ComponentInjectOptions,
+  ctx: any,
+  checkDuplicateProperties = NOOP as any,
+): void {
+  if (isArray(injectOptions)) {
+    injectOptions = normalizeInject(injectOptions)!
+  }
+  for (const key in injectOptions) {
+    const opt = injectOptions[key]
+    let injected: unknown
+    if (isObject(opt)) {
+      if ('default' in opt) {
+        injected = inject(
+          opt.from || key,
+          opt.default,
+          true /* treat default function as factory */,
+        )
+      } else {
+        injected = inject(opt.from || key)
+      }
+    } else {
+      injected = inject(opt)
+    }
+    if (isRef(injected)) {
+      // unwrap injected refs (ref #4196)
+      Object.defineProperty(ctx, key, {
+        enumerable: true,
+        configurable: true,
+        get: () => (injected as Ref).value,
+        set: v => ((injected as Ref).value = v),
+      })
+    } else {
+      ctx[key] = injected
+    }
+    if (__DEV__) {
+      checkDuplicateProperties!(OptionTypes.INJECT, key)
+    }
+  }
+}
+
+
+/**
+ * @private
+ */
+export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
+  return createVNode(Text, null, text, flag)
+}
+
+
+
+// defineComponent is a utility that is primarily used for type inference
+// when declaring components. Type inference is provided in the component
+// options (provided as the argument). The returned value has artificial types
+// for TSX / manual render function / IDE support.
+
+// overload 1: direct setup function
+// (uses user defined props interface)
+export function defineComponent<
+  Props extends Record<string, any>,
+  E extends EmitsOptions = {},
+  EE extends string = string,
+  S extends SlotsType = {},
+>(
+  setup: (
+    props: Props,
+    ctx: SetupContext<E, S>,
+  ) => RenderFunction | Promise<RenderFunction>,
+  options?: Pick<ComponentOptions, 'name' | 'inheritAttrs'> & {
+    props?: (keyof Props)[]
+    emits?: E | EE[]
+    slots?: S
+  },
+): DefineSetupFnComponent<Props, E, S>
+export function defineComponent<
+  Props extends Record<string, any>,
+  E extends EmitsOptions = {},
+  EE extends string = string,
+  S extends SlotsType = {},
+>(
+  setup: (
+    props: Props,
+    ctx: SetupContext<E, S>,
+  ) => RenderFunction | Promise<RenderFunction>,
+  options?: Pick<ComponentOptions, 'name' | 'inheritAttrs'> & {
+    props?: ComponentObjectPropsOptions<Props>
+    emits?: E | EE[]
+    slots?: S
+  },
+): DefineSetupFnComponent<Props, E, S>
+
+// overload 2: defineComponent with options object, infer props from options
+export function defineComponent<
+  // props
+  TypeProps,
+  RuntimePropsOptions extends
+    ComponentObjectPropsOptions = ComponentObjectPropsOptions,
+  RuntimePropsKeys extends string = string,
+  // emits
+  TypeEmits extends ComponentTypeEmits = {},
+  RuntimeEmitsOptions extends EmitsOptions = {},
+  RuntimeEmitsKeys extends string = string,
+  // other options
+  Data = {},
+  SetupBindings = {},
+  Computed extends ComputedOptions = {},
+  Methods extends MethodOptions = {},
+  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
+  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
+  InjectOptions extends ComponentInjectOptions = {},
+  InjectKeys extends string = string,
+  Slots extends SlotsType = {},
+  LocalComponents extends Record<string, Component> = {},
+  Directives extends Record<string, Directive> = {},
+  Exposed extends string = string,
+  Provide extends ComponentProvideOptions = ComponentProvideOptions,
+  // resolved types
+  ResolvedEmits extends EmitsOptions = {} extends RuntimeEmitsOptions
+    ? TypeEmitsToOptions<TypeEmits>
+    : RuntimeEmitsOptions,
+  InferredProps = IsKeyValues<TypeProps> extends true
+    ? TypeProps
+    : string extends RuntimePropsKeys
+      ? ComponentObjectPropsOptions extends RuntimePropsOptions
+        ? {}
+        : ExtractPropTypes<RuntimePropsOptions>
+      : { [key in RuntimePropsKeys]?: any },
+  TypeRefs extends Record<string, unknown> = {},
+  TypeEl extends Element = any,
+>(
+  options: {
+    props?: (RuntimePropsOptions & ThisType<void>) | RuntimePropsKeys[]
+    /**
+     * @private for language-tools use only
+     */
+    __typeProps?: TypeProps
+    /**
+     * @private for language-tools use only
+     */
+    __typeEmits?: TypeEmits
+    /**
+     * @private for language-tools use only
+     */
+    __typeRefs?: TypeRefs
+    /**
+     * @private for language-tools use only
+     */
+    __typeEl?: TypeEl
+  } & ComponentOptionsBase<
+    ToResolvedProps<InferredProps, ResolvedEmits>,
+    SetupBindings,
+    Data,
+    Computed,
+    Methods,
+    Mixin,
+    Extends,
+    RuntimeEmitsOptions,
+    RuntimeEmitsKeys,
+    {}, // Defaults
+    InjectOptions,
+    InjectKeys,
+    Slots,
+    LocalComponents,
+    Directives,
+    Exposed,
+    Provide
+  > &
+    ThisType<
+      CreateComponentPublicInstanceWithMixins<
+        ToResolvedProps<InferredProps, ResolvedEmits>,
+        SetupBindings,
+        Data,
+        Computed,
+        Methods,
+        Mixin,
+        Extends,
+        ResolvedEmits,
+        {},
+        {},
+        false,
+        InjectOptions,
+        Slots,
+        LocalComponents,
+        Directives,
+        Exposed
+      >
+    >,
+): DefineComponent<
+  InferredProps,
+  SetupBindings,
+  Data,
+  Computed,
+  Methods,
+  Mixin,
+  Extends,
+  ResolvedEmits,
+  RuntimeEmitsKeys,
+  PublicProps,
+  ToResolvedProps<InferredProps, ResolvedEmits>,
+  ExtractDefaultPropTypes<RuntimePropsOptions>,
+  Slots,
+  LocalComponents,
+  Directives,
+  Exposed,
+  Provide,
+  // MakeDefaultsOptional - if TypeProps is provided, set to false to use
+  // user props types verbatim
+  unknown extends TypeProps ? true : false,
+  TypeRefs,
+  TypeEl
+>
+
+// implementation, close to no-op
+/*! #__NO_SIDE_EFFECTS__ */
+export function defineComponent(
+  options: unknown,
+  extraOptions?: ComponentOptions,
+) {
+  return isFunction(options)
+    ? // #8236: extend call and options.name access are considered side-effects
+      // by Rollup, so we have to wrap it in a pure-annotated IIFE.
+      /*@__PURE__*/ (() =>
+        extend({ name: options.name }, extraOptions, { setup: options }))()
+    : options
+}
+
+
+
+function injectToKeepAliveRoot(
+  hook: Function & { __weh?: Function },
+  type: LifecycleHooks,
+  target: ComponentInternalInstance,
+  keepAliveRoot: ComponentInternalInstance,
+) {
+  // injectHook wraps the original for error handling, so make sure to remove
+  // the wrapped version.
+  const injected = injectHook(type, hook, keepAliveRoot, true /* prepend */)
+  onUnmounted(() => {
+    remove(keepAliveRoot[type]!, injected)
+  }, target)
+}
+
+
+export function closeBlock(): void {
+  blockStack.pop()
+  currentBlock = blockStack[blockStack.length - 1] || null
+}
+
+export function openBlock(disableTracking = false): void {
+  blockStack.push((currentBlock = disableTracking ? null : []))
+}
+
+export function compatH(
+  type: string | Component,
+  children?: LegacyVNodeChildren,
+): VNode
+export function compatH(
+  type: string | Component,
+  props?: Data & LegacyVNodeProps,
+  children?: LegacyVNodeChildren,
+): VNode
+
+export function compatH(
+  type: any,
+  propsOrChildren?: any,
+  children?: any,
+): VNode {
+  if (!type) {
+    type = Comment
+  }
+
+  // to support v2 string component name look!up
+  if (typeof type === 'string') {
+    const t = hyphenate(type)
+    if (t === 'transition' || t === 'transition-group' || t === 'keep-alive') {
+      // since transition and transition-group are runtime-dom-specific,
+      // we cannot import them directly here. Instead they are registered using
+      // special keys in @vue/compat entry.
+      type = `__compat__${t}`
+    }
+    type = resolveDynamicComponent(type)
+  }
+
+  const l = arguments.length
+  const is2ndArgArrayChildren = isArray(propsOrChildren)
+  if (l === 2 || is2ndArgArrayChildren) {
+    if (isObject(propsOrChildren) && !is2ndArgArrayChildren) {
+      // single vnode without props
+      if (isVNode(propsOrChildren)) {
+        return convertLegacySlots(createVNode(type, null, [propsOrChildren]))
+      }
+      // props without children
+      return convertLegacySlots(
+        convertLegacyDirectives(
+          createVNode(type, convertLegacyProps(propsOrChildren, type)),
+          propsOrChildren,
+        ),
+      )
+    } else {
+      // omit props
+      return convertLegacySlots(createVNode(type, null, propsOrChildren))
+    }
+  } else {
+    if (isVNode(children)) {
+      children = [children]
+    }
+    return convertLegacySlots(
+      convertLegacyDirectives(
+        createVNode(type, convertLegacyProps(propsOrChildren, type), children),
+        propsOrChildren,
+      ),
+    )
+  }
+}
+
+const isSimpleType = /*@__PURE__*/ makeMap(
+  'String,Number,Boolean,Function,Symbol,BigInt',
+)
+
+/**
+ * dev only
+ */
+function assertType(
+  value: unknown,
+  type: PropConstructor | null,
+): AssertionResult {
+  let valid
+  const expectedType = getType(type)
+  if (expectedType === 'null') {
+    valid = value === null
+  } else if (isSimpleType(expectedType)) {
+    const t = typeof value
+    valid = t === expectedType.toLowerCase()
+    // for primitive wrapper objects
+    if (!valid && t === 'object') {
+      valid = value instanceof (type as PropConstructor)
+    }
+  } else if (expectedType === 'Object') {
+    valid = isObject(value)
+  } else if (expectedType === 'Array') {
+    valid = isArray(value)
+  } else {
+    valid = value instanceof (type as PropConstructor)
+  }
+  return {
+    valid,
+    expectedType,
+  }
+}
+
+
+// dev only
+// use function string name to check type constructors
+// so that it works across vms / iframes.
+function getType(ctor: Prop<any> | null): string {
+  // Early return for null to avoid unnecessary computations
+  if (ctor === null) {
+    return 'null'
+  }
+
+  // Avoid using regex for common cases by checking the type directly
+  if (typeof ctor === 'function') {
+    // Using name property to avoid converting function to string
+    return ctor.name || ''
+  } else if (typeof ctor === 'object') {
+    // Attempting to directly access constructor name if possible
+    const name = ctor.constructor && ctor.constructor.name
+    return name || ''
+  }
+
+  // Fallback for other types (though they're less likely to have meaningful names here)
+  return ''
+}
+
+export function convertLegacyRenderFn(
+  instance: ComponentInternalInstance,
+): void {
+  const Component = instance.type as ComponentOptions
+  const render = Component.render as InternalRenderFunction | undefined
+
+  // v3 runtime compiled, or already checked / wrapped
+  if (!render || render._rc || render._compatChecked || render._compatWrapped) {
+    return
+  }
+
+  if (render.length >= 2) {
+    // v3 pre-compiled function, since v2 render functions never need more than
+    // 2 arguments, and v2 functional render functions would have already been
+    // normalized into v3 functional components
+    render._compatChecked = true
+    return
+  }
+
+  // v2 render function, try to provide compat
+  if (checkCompatEnabled(DeprecationTypes.RENDER_FUNCTION, instance)) {
+    const wrapped = (Component.render = function compatRender() {
+      // @ts-expect-error
+      return render.call(this, compatH)
+    })
+    // @ts-expect-error
+    wrapped._compatWrapped = true
+  }
+}
+
+
+/**
+ * @private
+ */
+export function resolveDynamicComponent(component: unknown): VNodeTypes {
+  if (isString(component)) {
+    return resolveAsset(COMPONENTS, component, false) || component
+  } else {
+    // invalid types will fallthrough to createVNode and raise warning
+    return (component || NULL_DYNAMIC_COMPONENT) as any
+  }
+}
+
+
+/**
+ * @private
+ * overload 1: components
+ */
+function resolveAsset(
+  type: typeof COMPONENTS,
+  name: string,
+  warnMissing?: boolean,
+  maybeSelfReference?: boolean,
+): ConcreteComponent | undefined
+// overload 2: directives
+function resolveAsset(
+  type: typeof DIRECTIVES,
+  name: string,
+): Directive | undefined
+// implementation
+// overload 3: filters (compat only)
+function resolveAsset(type: typeof FILTERS, name: string): Function | undefined
+// implementation
+function resolveAsset(
+  type: AssetTypes,
+  name: string,
+  warnMissing = true,
+  maybeSelfReference = false,
+) {
+  const instance = currentRenderingInstance || currentInstance
+  if (instance) {
+    const Component = instance.type
+
+    // explicit self name has highest priority
+    if (type === COMPONENTS) {
+      const selfName = getComponentName(
+        Component,
+        false /* do not include inferred name to avoid breaking existing code */,
+      )
+      if (
+        selfName &&
+        (selfName === name ||
+          selfName === camelize(name) ||
+          selfName === capitalize(camelize(name)))
+      ) {
+        return Component
+      }
+    }
+
+    const res =
+      // local registration
+      // check instance[type] first which is resolved for options API
+      resolve(instance[type] || (Component as ComponentOptions)[type], name) ||
+      // global registration
+      resolve(instance.appContext[type], name)
+
+    if (!res && maybeSelfReference) {
+      // fallback to implicit self-reference
+      return Component
+    }
+
+    if (__DEV__ && warnMissing && !res) {
+      const extra =
+        type === COMPONENTS
+          ? `\nIf this is a native custom element, make sure to exclude it from ` +
+            `component resolution via compilerOptions.isCustomElement.`
+          : ``
+      warn(`Failed to resolve ${type.slice(0, -1)}: ${name}${extra}`)
+    }
+
+    return res
+  } else if (__DEV__) {
+    warn(
+      `resolve${capitalize(type.slice(0, -1))} ` +
+        `can only be used in render() or setup().`,
+    )
+  }
+}
+
+
+function convertLegacySlots(vnode: VNode): VNode {
+  const { props, children } = vnode
+
+  let slots: Record<string, any> | undefined
+
+  if (vnode.shapeFlag & ShapeFlags.COMPONENT && isArray(children)) {
+    slots = {}
+    // check "slot" property on vnodes and turn them into v3 function slots
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i]
+      const slotName =
+        (isVNode(child) && child.props && child.props.slot) || 'default'
+      const slot = slots[slotName] || (slots[slotName] = [] as any[])
+      if (isVNode(child) && child.type === 'template') {
+        slot.push(child.children)
+      } else {
+        slot.push(child)
+      }
+    }
+    if (slots) {
+      for (const key in slots) {
+        const slotChildren = slots[key]
+        slots[key] = () => slotChildren
+        slots[key]._ns = true /* non-scoped slot */
+      }
+    }
+  }
+
+  const scopedSlots = props && props.scopedSlots
+  if (scopedSlots) {
+    delete props!.scopedSlots
+    if (slots) {
+      extend(slots, scopedSlots)
+    } else {
+      slots = scopedSlots
+    }
+  }
+
+  if (slots) {
+    normalizeChildren(vnode, slots)
+  }
+
+  return vnode
+}
+
+
+function convertLegacyDirectives(
+  vnode: VNode,
+  props?: LegacyVNodeProps,
+): VNode {
+  if (props && props.directives) {
+    return withDirectives(
+      vnode,
+      props.directives.map(({ name, value, arg, modifiers }) => {
+        return [
+          resolveDirective(name)!,
+          value,
+          arg,
+          modifiers,
+        ] as DirectiveArguments[number]
+      }),
+    )
+  }
+  return vnode
+}
+
+function convertLegacyProps(
+  legacyProps: LegacyVNodeProps | undefined,
+  type: any,
+): (Data & VNodeProps) | null {
+  if (!legacyProps) {
+    return null
+  }
+
+  const converted: Data & VNodeProps = {}
+
+  for (const key in legacyProps) {
+    if (key === 'attrs' || key === 'domProps' || key === 'props') {
+      extend(converted, legacyProps[key])
+    } else if (key === 'on' || key === 'nativeOn') {
+      const listeners = legacyProps[key]
+      for (const event in listeners) {
+        let handlerKey = convertLegacyEventKey(event)
+        if (key === 'nativeOn') handlerKey += `Native`
+        const existing = converted[handlerKey]
+        const incoming = listeners[event]
+        if (existing !== incoming) {
+          if (existing) {
+            converted[handlerKey] = [].concat(existing as any, incoming as any)
+          } else {
+            converted[handlerKey] = incoming
+          }
+        }
+      }
+    } else if (!skipLegacyRootLevelProps(key)) {
+      converted[key] = legacyProps[key as keyof LegacyVNodeProps]
+    }
+  }
+
+  if (legacyProps.staticClass) {
+    converted.class = normalizeClass([legacyProps.staticClass, converted.class])
+  }
+  if (legacyProps.staticStyle) {
+    converted.style = normalizeStyle([legacyProps.staticStyle, converted.style])
+  }
+
+  if (legacyProps.model && isObject(type)) {
+    // v2 compiled component v-model
+    const { prop = 'value', event = 'input' } = (type as any).model || {}
+    converted[prop] = legacyProps.model.value
+    converted[compatModelEventPrefix + event] = legacyProps.model.callback
+  }
+
+  return converted
+}
+
+
+/**
+ * Adds directives to a VNode.
+ */
+export function withDirectives<T extends VNode>(
+  vnode: T,
+  directives: DirectiveArguments,
+): T {
+  if (currentRenderingInstance === null) {
+    __DEV__ && warn(`withDirectives can only be used inside render functions.`)
+    return vnode
+  }
+  const instance = getComponentPublicInstance(currentRenderingInstance)
+  const bindings: DirectiveBinding[] = vnode.dirs || (vnode.dirs = [])
+  for (let i = 0; i < directives.length; i++) {
+    let [dir, value, arg, modifiers = EMPTY_OBJ] = directives[i]
+    if (dir) {
+      if (isFunction(dir)) {
+        dir = {
+          mounted: dir,
+          updated: dir,
+        } as ObjectDirective
+      }
+      if (dir.deep) {
+        traverse(value)
+      }
+      bindings.push({
+        dir,
+        instance,
+        value,
+        oldValue: void 0,
+        arg,
+        modifiers,
+      })
+    }
+  }
+  return vnode
+}
+
+function convertLegacyEventKey(event: string): string {
+  // normalize v2 event prefixes
+  if (event[0] === '&') {
+    event = event.slice(1) + 'Passive'
+  }
+  if (event[0] === '~') {
+    event = event.slice(1) + 'Once'
+  }
+  if (event[0] === '!') {
+    event = event.slice(1) + 'Capture'
+  }
+  return toHandlerKey(event)
+}
+
+/**
+ * @private
+ */
+export function resolveDirective(name: string): Directive | undefined {
+  return resolveAsset(DIRECTIVES, name)
+}
+
+
+function resolve(registry: Record<string, any> | undefined, name: string) {
+  return (
+    registry &&
+    (registry[name] ||
+      registry[camelize(name)] ||
+      registry[capitalize(camelize(name))])
+  )
+}
+
+
+export function forEachElement(
+  node: Node,
+  cb: (el: Element) => void | false,
+): void {
+  // fragment
+  if (isComment(node) && node.data === '[') {
+    let depth = 1
+    let next = node.nextSibling
+    while (next) {
+      if (next.nodeType === DOMNodeTypes.ELEMENT) {
+        const result = cb(next as Element)
+        if (result === false) {
+          break
+        }
+      } else if (isComment(next)) {
+        if (next.data === ']') {
+          if (--depth === 0) break
+        } else if (next.data === '[') {
+          depth++
+        }
+      }
+      next = next.nextSibling
+    }
+  } else {
+    cb(node as Element)
+  }
+}
+
+function defineReactiveSimple(obj: any, key: string, val: any) {
+  val = isObject(val) ? reactive(val) : val
+  Object.defineProperty(obj, key, {
+    enumerable: true,
+    configurable: true,
+    get() {
+      track(obj, TrackOpTypes.GET, key)
+      return val
+    },
+    set(newVal) {
+      val = isObject(newVal) ? reactive(newVal) : newVal
+      trigger(obj, TriggerOpTypes.SET, key, newVal)
+    },
+  })
+}
+
+
+function defineReactive(obj: any, key: string, val: any) {
+  // it's possible for the original object to be mutated after being defined
+  // and expecting reactivity... we are covering it here because this seems to
+  // be a bit more common.
+  if (isObject(val) && !isReactive(val) && !patched.has(val)) {
+    const reactiveVal = reactive(val)
+    if (isArray(val)) {
+      methodsToPatch.forEach((m: any) => {
+        val[m] = (...args: any[]) => {
+          Array.prototype[m].apply(reactiveVal, args)
+        }
+      })
+    } else {
+      Object.keys(val).forEach(key => {
+        try {
+          defineReactiveSimple(val, key, val[key])
+        } catch (e: any) {}
+      })
+    }
+  }
+
+  const i = obj.$
+  if (i && obj === i.proxy) {
+    // target is a Vue instance - define on instance.ctx
+    defineReactiveSimple(i.ctx, key, val)
+    i.accessCache = Object.create(null)
+  } else if (isReactive(obj)) {
+    obj[key] = val
+  } else {
+    defineReactiveSimple(obj, key, val)
+  }
+}
+
+
+// Legacy global Vue constructor
+export function createCompatVue(
+  createApp: CreateAppFunction<Element>,
+  createSingletonApp: CreateAppFunction<Element>,
+): CompatVue {
+  singletonApp = createSingletonApp({})
+
+  const Vue: CompatVue = (singletonCtor = function Vue(
+    options: ComponentOptions = {},
+  ) {
+    return createCompatApp(options, Vue)
+  } as any)
+
+  function createCompatApp(options: ComponentOptions = {}, Ctor: any) {
+    assertCompatEnabled(DeprecationTypes.GLOBAL_MOUNT, null)
+
+    const { data } = options
+    if (
+      data &&
+      !isFunction(data) &&
+      softAssertCompatEnabled(DeprecationTypes.OPTIONS_DATA_FN, null)
+    ) {
+      options.data = () => data
+    }
+
+    const app = createApp(options)
+
+    if (Ctor !== Vue) {
+      applySingletonPrototype(app, Ctor)
+    }
+
+    const vm = app._createRoot!(options)
+    if (options.el) {
+      return (vm as any).$mount(options.el)
+    } else {
+      return vm
+    }
+  }
+
+  Vue.version = `2.6.14-compat:${__VERSION__}`
+  Vue.config = singletonApp.config
+
+  Vue.use = (plugin: Plugin, ...options: any[]) => {
+    if (plugin && isFunction(plugin.install)) {
+      plugin.install(Vue as any, ...options)
+    } else if (isFunction(plugin)) {
+      plugin(Vue as any, ...options)
+    }
+    return Vue
+  }
+
+  Vue.mixin = m => {
+    singletonApp.mixin(m)
+    return Vue
+  }
+
+  Vue.component = ((name: string, comp: Component) => {
+    if (comp) {
+      singletonApp.component(name, comp)
+      return Vue
+    } else {
+      return singletonApp.component(name)
+    }
+  }) as any
+
+  Vue.directive = ((name: string, dir: Directive | LegacyDirective) => {
+    if (dir) {
+      singletonApp.directive(name, dir as Directive)
+      return Vue
+    } else {
+      return singletonApp.directive(name)
+    }
+  }) as any
+
+  Vue.options = { _base: Vue }
+
+  let cid = 1
+  Vue.cid = cid
+
+  Vue.nextTick = nextTick
+
+  const extendCache = new WeakMap()
+
+  function extendCtor(this: any, extendOptions: ComponentOptions = {}) {
+    assertCompatEnabled(DeprecationTypes.GLOBAL_EXTEND, null)
+    if (isFunction(extendOptions)) {
+      extendOptions = extendOptions.options
+    }
+
+    if (extendCache.has(extendOptions)) {
+      return extendCache.get(extendOptions)
+    }
+
+    const Super = this
+    function SubVue(inlineOptions?: ComponentOptions) {
+      if (!inlineOptions) {
+        return createCompatApp(SubVue.options, SubVue)
+      } else {
+        return createCompatApp(
+          mergeOptions(
+            extend({}, SubVue.options),
+            inlineOptions,
+            internalOptionMergeStrats as any,
+          ),
+          SubVue,
+        )
+      }
+    }
+    SubVue.super = Super
+    SubVue.prototype = Object.create(Vue.prototype)
+    SubVue.prototype.constructor = SubVue
+
+    // clone non-primitive base option values for edge case of mutating
+    // extended options
+    const mergeBase: any = {}
+    for (const key in Super.options) {
+      const superValue = Super.options[key]
+      mergeBase[key] = isArray(superValue)
+        ? superValue.slice()
+        : isObject(superValue)
+          ? extend(Object.create(null), superValue)
+          : superValue
+    }
+
+    SubVue.options = mergeOptions(
+      mergeBase,
+      extendOptions,
+      internalOptionMergeStrats as any,
+    )
+
+    SubVue.options._base = SubVue
+    SubVue.extend = extendCtor.bind(SubVue)
+    SubVue.mixin = Super.mixin
+    SubVue.use = Super.use
+    SubVue.cid = ++cid
+
+    extendCache.set(extendOptions, SubVue)
+    return SubVue
+  }
+
+  Vue.extend = extendCtor.bind(Vue) as any
+
+  Vue.set = (target, key, value) => {
+    assertCompatEnabled(DeprecationTypes.GLOBAL_SET, null)
+    target[key] = value
+  }
+
+  Vue.delete = (target, key) => {
+    assertCompatEnabled(DeprecationTypes.GLOBAL_DELETE, null)
+    delete target[key]
+  }
+
+  Vue.observable = (target: any) => {
+    assertCompatEnabled(DeprecationTypes.GLOBAL_OBSERVABLE, null)
+    return reactive(target)
+  }
+
+  Vue.filter = ((name: string, filter?: any) => {
+    if (filter) {
+      singletonApp.filter!(name, filter)
+      return Vue
+    } else {
+      return singletonApp.filter!(name)
+    }
+  }) as any
+
+  // internal utils - these are technically internal but some plugins use it.
+  const util = {
+    warn: __DEV__ ? warn : NOOP,
+    extend,
+    mergeOptions: (parent: any, child: any, vm?: ComponentPublicInstance) =>
+      mergeOptions(
+        parent,
+        child,
+        vm ? undefined : (internalOptionMergeStrats as any),
+      ),
+    defineReactive,
+  }
+  Object.defineProperty(Vue, 'util', {
+    get() {
+      assertCompatEnabled(DeprecationTypes.GLOBAL_PRIVATE_UTIL, null)
+      return util
+    },
+  })
+
+  Vue.configureCompat = configureCompat
+
+  return Vue
+}
+
+
+const _compatUtils: {
+  warnDeprecation: typeof warnDeprecation
+  createCompatVue: typeof createCompatVue
+  isCompatEnabled: typeof isCompatEnabled
+  checkCompatEnabled: typeof checkCompatEnabled
+  softAssertCompatEnabled: typeof softAssertCompatEnabled
+} = {
+  warnDeprecation,
+  createCompatVue,
+  isCompatEnabled,
+  checkCompatEnabled,
+  softAssertCompatEnabled,
+}
+/**
+ * @internal only exposed in compat builds.
+ */
+export const compatUtils = (
+  __COMPAT__ ? _compatUtils : null
+) as typeof _compatUtils
+
+
+export const RuntimeCompiledPublicInstanceProxyHandlers: ProxyHandler<any> =
+  /*@__PURE__*/ extend({}, PublicInstanceProxyHandlers, {
+    get(target: ComponentRenderContext, key: string) {
+      // fast path for unscopables when using `with` block
+      if ((key as any) === Symbol.unscopables) {
+        return
+      }
+      return PublicInstanceProxyHandlers.get!(target, key, target)
+    },
+    has(_: ComponentRenderContext, key: string) {
+      const has = key[0] !== '_' && !isGloballyAllowed(key)
+      if (__DEV__ && !has && PublicInstanceProxyHandlers.has!(_, key)) {
+        warn(
+          `Property ${JSON.stringify(
+            key,
+          )} should not start with _ which is a reserved prefix for Vue internals.`,
+        )
+      }
+      return has
+    },
+  })
+
+  
+/**
+ * For runtime-dom to register the compiler.
+ * Note the exported method uses any to avoid d.ts relying on the compiler types.
+ */
+export function registerRuntimeCompiler(_compile: any): void {
+  compile = _compile
+  installWithProxy = i => {
+    if (i.render!._rc) {
+      i.withProxy = new Proxy(i.ctx, RuntimeCompiledPublicInstanceProxyHandlers)
+    }
+  }
+}
+
+
+
+
+// element
+export function h<K extends keyof HTMLElementTagNameMap>(
+  type: K,
+  children?: RawChildren,
+): VNode
+export function h<K extends keyof HTMLElementTagNameMap>(
+  type: K,
+  props?: (RawProps & HTMLElementEventHandler) | null,
+  children?: RawChildren | RawSlots,
+): VNode
+
+// custom element
+export function h(type: string, children?: RawChildren): VNode
+export function h(
+  type: string,
+  props?: RawProps | null,
+  children?: RawChildren | RawSlots,
+): VNode
+
+// text/comment
+export function h(
+  type: typeof Text | typeof Comment,
+  children?: string | number | boolean,
+): VNode
+export function h(
+  type: typeof Text | typeof Comment,
+  props?: null,
+  children?: string | number | boolean,
+): VNode
+// fragment
+export function h(type: typeof Fragment, children?: VNodeArrayChildren): VNode
+export function h(
+  type: typeof Fragment,
+  props?: RawProps | null,
+  children?: VNodeArrayChildren,
+): VNode
+
+// teleport (target prop is required)
+export function h(
+  type: typeof Teleport,
+  props: RawProps & TeleportProps,
+  children: RawChildren | RawSlots,
+): VNode
+
+// suspense
+export function h(type: typeof Suspense, children?: RawChildren): VNode
+export function h(
+  type: typeof Suspense,
+  props?: (RawProps & SuspenseProps) | null,
+  children?: RawChildren | RawSlots,
+): VNode
+
+// functional component
+export function h<
+  P,
+  E extends EmitsOptions = {},
+  S extends Record<string, any> = any,
+>(
+  type: FunctionalComponent<P, any, S, any>,
+  props?: (RawProps & P) | ({} extends P ? null : never),
+  children?: RawChildren | IfAny<S, RawSlots, S>,
+): VNode
+
+// catch-all for generic component types
+export function h(type: Component, children?: RawChildren): VNode
+
+// concrete component
+export function h<P>(
+  type: ConcreteComponent | string,
+  children?: RawChildren,
+): VNode
+export function h<P>(
+  type: ConcreteComponent<P> | string,
+  props?: (RawProps & P) | ({} extends P ? null : never),
+  children?: RawChildren,
+): VNode
+
+// component without props
+export function h<P>(
+  type: Component<P>,
+  props?: (RawProps & P) | null,
+  children?: RawChildren | RawSlots,
+): VNode
+
+// exclude `defineComponent` constructors
+export function h<P>(
+  type: ComponentOptions<P>,
+  props?: (RawProps & P) | ({} extends P ? null : never),
+  children?: RawChildren | RawSlots,
+): VNode
+
+// fake constructor type returned by `defineComponent` or class component
+export function h(type: Constructor, children?: RawChildren): VNode
+export function h<P>(
+  type: Constructor<P>,
+  props?: (RawProps & P) | ({} extends P ? null : never),
+  children?: RawChildren | RawSlots,
+): VNode
+
+// fake constructor type returned by `defineComponent`
+export function h(type: DefineComponent, children?: RawChildren): VNode
+export function h<P>(
+  type: DefineComponent<P>,
+  props?: (RawProps & P) | ({} extends P ? null : never),
+  children?: RawChildren | RawSlots,
+): VNode
+
+// catch all types
+export function h(type: string | Component, children?: RawChildren): VNode
+export function h<P>(
+  type: string | Component<P>,
+  props?: (RawProps & P) | ({} extends P ? null : never),
+  children?: RawChildren | RawSlots,
+): VNode
+
+// Actual implementation
+export function h(type: any, propsOrChildren?: any, children?: any): VNode {
+  const l = arguments.length
+  if (l === 2) {
+    if (isObject(propsOrChildren) && !isArray(propsOrChildren)) {
+      // single vnode without props
+      if (isVNode(propsOrChildren)) {
+        return createVNode(type, null, [propsOrChildren])
+      }
+      // props without children
+      return createVNode(type, propsOrChildren)
+    } else {
+      // omit props
+      return createVNode(type, null, propsOrChildren)
+    }
+  } else {
+    if (l > 3) {
+      children = Array.prototype.slice.call(arguments, 2)
+    } else if (l === 3 && isVNode(children)) {
+      children = [children]
+    }
+    return createVNode(type, propsOrChildren, children)
   }
 }
