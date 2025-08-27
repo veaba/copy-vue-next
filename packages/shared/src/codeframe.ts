@@ -4,7 +4,7 @@ const range: number = 2
 export function generateCodeFrame(
   source: string,
   start = 0,
-  end = source.length
+  end: number = source.length
 ): string {
   const lines = source.split(/\r?\n/)
   let count = 0

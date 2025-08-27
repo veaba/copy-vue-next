@@ -1,7 +1,7 @@
 
 import type { Node as BabelNode } from '@babel/types'
 import type { ParserPlugin } from '@babel/parser'
-import { isArray, isObject, NOOP, PatchFlags } from '@vue/shared'
+import {  PatchFlags } from '@vue/shared'
 
 export const FRAGMENT: unique symbol = Symbol(__DEV__ ? `Fragment` : ``)
 export const RENDER_SLOT: unique symbol = Symbol(__DEV__ ? `renderSlot` : ``)
@@ -42,14 +42,6 @@ export enum ElementTypes {
   COMPONENT,
   SLOT,
   TEMPLATE,
-}
-
-enum OptionTypes {
-  PROPS = 'Props',
-  DATA = 'Data',
-  COMPUTED = 'Computed',
-  METHODS = 'Methods',
-  INJECT = 'Inject',
 }
 
 
@@ -1018,18 +1010,3 @@ export interface DynamicSlotFnProperty extends Property {
 export interface ForIteratorExpression extends FunctionExpression {
   returns?: BlockCodegenNode
 }
-
-
-function normalizeInject(
-  raw: ComponentInjectOptions | undefined,
-): ObjectInjectOptions | undefined {
-  if (isArray(raw)) {
-    const res: ObjectInjectOptions = {}
-    for (let i = 0; i < raw.length; i++) {
-      res[raw[i]] = raw[i]
-    }
-    return res
-  }
-  return raw
-}
-
