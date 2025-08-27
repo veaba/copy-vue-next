@@ -194,7 +194,7 @@ describe('reactivity/computed', () => {
     ;(plusOne as WritableComputedRef<number>).value++ // Type cast to prevent TS from preventing the error
 
     expect(
-      '操作失败：计算属性的 value 只读',
+      'Write operation failed: computed value is readonly',
     ).toHaveBeenWarnedLast()
   })
 

@@ -8,7 +8,7 @@ import {
   toRaw
 } from '../src/reactive'
 
-describe.skip('reactivity/reactive', () => {
+describe('reactivity/reactive', () => {
   test('Object', () => {
     const original = { foo: 1 }
     const observed = reactive(original)

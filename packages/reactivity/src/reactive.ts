@@ -780,7 +780,7 @@ export class ComputedRefImpl<T = any> implements Subscriber {
     if (this.setter) {
       this.setter(newValue)
     } else if (__DEV__) {
-      warn('操作失败：计算属性的 value 只读')
+      warn('Write operation failed: computed value is readonly')
     }
   }
 
@@ -898,7 +898,7 @@ class MutableReactiveHandler extends BaseReactiveHandler {
         if (isOldValueReadonly) {
           if (__DEV__) {
             warn(
-              `set key "${String(key)}" 失败: target 为只读.`,
+              `Set operation on key "${String(key)}" failed: target is readonly.`,
               target[key],
             )
           }
@@ -970,7 +970,7 @@ class ReadonlyReactiveHandler extends BaseReactiveHandler {
   set(target: object, key: string | symbol) {
     if (__DEV__) {
       warn(
-        `set key "${String(key)}" 操作失败: target is readonly.`,
+        `Set operation on key "${String(key)}" failed: target is readonly.`,
         target,
       )
     }
@@ -979,7 +979,7 @@ class ReadonlyReactiveHandler extends BaseReactiveHandler {
   deleteProperty(target: object, key: string | symbol) {
     if (__DEV__) {
       warn(
-        `delete key "${String(key)}" 操作: target is readonly.`,
+        `Delete operation on key "${String(key)}" failed: target is readonly.`,
         target,
       )
     }
@@ -1085,19 +1085,17 @@ function isDirty(sub: Subscriber): boolean {
 }
 
 
-const mutableHandlers: ProxyHandler<object> = new MutableReactiveHandler()
-const readonlyHandlers: ProxyHandler<object> = new ReadonlyReactiveHandler()
+export const mutableHandlers: ProxyHandler<object> = new MutableReactiveHandler()
+export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(false, false)}
+
+export const readonlyHandlers: ProxyHandler<object> = new ReadonlyReactiveHandler()
+export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(true, false)}
+
 export const shallowReactiveHandlers: MutableReactiveHandler = new MutableReactiveHandler(true)
-export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = {
-  get: createInstrumentationGetter(false, true),
-}
-
+export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(false, true)}
 export const shallowReadonlyHandlers: ReadonlyReactiveHandler = new ReadonlyReactiveHandler(true)
+export const shallowReadonlyCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(true, true)}
 
-export const shallowReadonlyCollectionHandlers: ProxyHandler<CollectionTypes> =
-  {
-    get: createInstrumentationGetter(true, true),
-  }
 export function reactive<T extends object>(target: T): Reactive<T>
 
 export function reactive(target: object): any {
@@ -1296,18 +1294,21 @@ function createReactiveObject(
     target[ReactiveFlags.RAW] &&
     !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
   ) {
+    // console.log('1  createReactiveObject raw && no readonly && no reactive')
     return target
   }
 
   // 只观测到特定值得类型
   const targetType = getTargetType(target)
   if (targetType === TargetType.INVALID) {
+    // console.log('1  createReactiveObject invalid')
     return target
   }
 
   // 已是 proxy
   const existingProxy = proxyMap.get(target)
   if (existingProxy) {
+    // console.log('1  createReactiveObject existingProxy')
     return existingProxy
   }
 
@@ -1316,6 +1317,7 @@ function createReactiveObject(
     target,
     targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
   )
+  // console.log('1  createReactiveObject proxyMap')
   proxyMap.set(target, proxy)
   return proxy
 }
@@ -2046,15 +2048,6 @@ const toReadonly = <T extends unknown>(value: T): DeepReadonly<T> => isObject(va
 const toReactive = <T extends unknown>(value: T): T => isObject(value) ? reactive(value) : value
 
 
-export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
-  get: createInstrumentationGetter(false, false),
-}
-
-
-export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
-  get: createInstrumentationGetter(true, true),
-}
-
 
 // 刷新 computed 
 function refreshComputed(computed: ComputedRefImpl): undefined {
@@ -2080,7 +2073,6 @@ function refreshComputed(computed: ComputedRefImpl): undefined {
   activeSub = computed
   shouldTrack = true
   try {
-    // TODO 干什么？
     prepareDeps(computed)
     const value = computed.fn(computed._value)
     if (dep.version === 0 || hasChanged(value, computed._value)) {
@@ -2834,4 +2826,5 @@ export function getDepFromReactive(
 ): Dep | undefined {
   const depMap = targetMap.get(object)
   return depMap && depMap.get(key)
+
 }

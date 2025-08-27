@@ -37,8 +37,10 @@ private npm packages：
 ### unit tests
 
 - [x] `computed.spec.ts`
-- [x] `reactivity.spec.ts`
+- [x] `reactive.spec.ts`
+- [x] `reactiveArray.spec.ts`
 - [x] `effect.spec.ts`
+- [x] `readonly.spec.ts`
 
 ## runtime-core
 
