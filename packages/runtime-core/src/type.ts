@@ -14,6 +14,11 @@ export type HydrationStrategy = (
 ) => (() => void) | void
 
 export type AsyncComponentResolveResult<T = Component> = T | { default: T } // es modules
+export type PendingCallback = (cancelled?: boolean) => void
+export type CacheKey = PropertyKey | ConcreteComponent
+export type Keys = Set<CacheKey>
+export type MatchPattern = string | RegExp | (string | RegExp)[]
+export type Cache = Map<CacheKey, VNode>
 
 export type AsyncComponentLoader<T = any> = () => Promise<
   AsyncComponentResolveResult<T>
@@ -917,8 +922,6 @@ export type MixinToOptionTypes<T> = T extends ComponentOptionsBase<
   IntersectionMixin<Extends>
   : never
 
-export type MatchPattern = string | RegExp | (string | RegExp)[]
-
 /**
  * This is the same as `CreateComponentPublicInstance` but adds local components,
  * global directives, exposed, and provide inference.
@@ -1308,3 +1311,9 @@ export interface Constructor<P = any> {
   __isSuspense?: never
   new (...args: any[]): { $props: P }
 }
+
+
+export type TransitionHookCaller = <T extends any[] = [el: any]>(
+  hook: Hook<(...args: T) => void> | undefined,
+  args?: T,
+) => void

@@ -1,7 +1,8 @@
 import { DebuggerOptions, ReactiveFlags, ReactiveEffect, EffectScope } from '@vue/reactivity'
 import { SchedulerJobFlags, MoveType, LifecycleHooks } from "./enum"
 import { AsyncComponentLoader, CompatConfig, Component, ComponentCustomElementInterface, ComponentInjectOptions, ComponentOptions, ComponentOptionsMixin, ComponentPropsOptions, ComponentProvideOptions, ComponentPublicInstance, ComponentWatchOptions, ComputedOptions, ConcreteComponent, CreateAppFunction, CreateComponentPublicInstanceWithMixins, Data, DebuggerHook, DefaultFactory, DefineComponent, Directive, DirectiveModifiers, ElementNamespace, EmitFn, EmitsOptions, EmitsToProps, ErrorCapturedHook, Hook, HydrationStrategy, IfAny, InjectionKey, InternalRenderFunction, InternalSlots, IntersectionMixin, LifecycleHook, LooseRequired, MatchPattern, MergedComponentOptions, MethodOptions, MountChildrenFn, MountComponentFn, MoveFn, NextFn, NormalizedPropsOptions, ObjectEmitsOptions, OptionMergeFunction, PatchBlockChildrenFn, PatchChildrenFn, PatchFn, Prettify, PropType, RemoveFn, RenderFunction, RootHydrateFunction, RootRenderFunction, SetupContext, SetupRenderEffectFn, ShortEmitsToObject, Slots, SlotsType, SSRDirectiveHook, UnmountFn, UnwrapMixinsType, VNodeNormalizedChildren, VNodeNormalizedRef, VNodeProps, VNodeTypes } from "./type"
-import type { Plugin } from './type'
+import type { PendingCallback, Plugin } from './type'
+import { enterCbKey, leaveCbKey } from './define'
 
 export interface InjectionConstraint<T> {}
 
@@ -1269,4 +1270,58 @@ export interface WatchAPIOptions<Immediate = boolean> extends WatchEffectOptions
 
 export interface EventRegistry {
   [event: string]: Function[] | undefined
+}
+
+export interface BaseTransitionProps<HostElement = RendererElement> {
+  mode?: 'in-out' | 'out-in' | 'default'
+  appear?: boolean
+
+  // If true, indicates this is a transition that doesn't actually insert/remove
+  // the element, but toggles the show / hidden status instead.
+  // The transition hooks are injected, but will be skipped by the renderer.
+  // Instead, a custom directive can control the transition by calling the
+  // injected hooks (e.g. v-show).
+  persisted?: boolean
+
+  // Hooks. Using camel case for easier usage in render functions & JSX.
+  // In templates these can be written as @before-enter="xxx" as prop names
+  // are camelized.
+  onBeforeEnter?: Hook<(el: HostElement) => void>
+  onEnter?: Hook<(el: HostElement, done: () => void) => void>
+  onAfterEnter?: Hook<(el: HostElement) => void>
+  onEnterCancelled?: Hook<(el: HostElement) => void>
+  // leave
+  onBeforeLeave?: Hook<(el: HostElement) => void>
+  onLeave?: Hook<(el: HostElement, done: () => void) => void>
+  onAfterLeave?: Hook<(el: HostElement) => void>
+  onLeaveCancelled?: Hook<(el: HostElement) => void> // only fired in persisted mode
+  // appear
+  onBeforeAppear?: Hook<(el: HostElement) => void>
+  onAppear?: Hook<(el: HostElement, done: () => void) => void>
+  onAfterAppear?: Hook<(el: HostElement) => void>
+  onAppearCancelled?: Hook<(el: HostElement) => void>
+}
+
+export interface TransitionState {
+  isMounted: boolean
+  isLeaving: boolean
+  isUnmounting: boolean
+  // Track pending leave callbacks for children of the same key.
+  // This is used to force remove leaving a child when a new copy is entering.
+  leavingVNodes: Map<any, Record<string, VNode>>
+}
+
+export interface TransitionElement {
+  // in persisted mode (e.g. v-show), the same element is toggled, so the
+  // pending enter/leave callbacks may need to be cancelled if the state is toggled
+  // before it finishes.
+  [enterCbKey]?: PendingCallback
+  [leaveCbKey]?: PendingCallback
+}
+
+
+export interface KeepAliveProps {
+  include?: MatchPattern
+  exclude?: MatchPattern
+  max?: number | string
 }

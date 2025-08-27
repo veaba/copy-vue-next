@@ -52,6 +52,7 @@ import {
   isBooleanAttr,
   isBuiltInDirective,
   isGloballyAllowed,
+  isRegExp,
   looseToNumber
 } from '@vue/shared'
 import {
@@ -96,7 +97,7 @@ import {
   BooleanFlags,
   OptionTypes
 } from './enum'
-import { compatModelEventPrefix, COMPONENTS, DIRECTIVES, FILTERS } from './define'
+import { BaseTransitionPropsValidators, compatModelEventPrefix, COMPONENTS, DIRECTIVES, enterCbKey, FILTERS } from './define'
 import {
   Fragment,
   isHmrUpdating,
@@ -113,11 +114,15 @@ import type {
   AppConfig,
   AppContext,
   AsyncComponentOptions,
+  BaseTransitionProps,
   ClassComponent,
   ComponentInternalInstance,
   ComponentOptionsBase,
   ComponentRenderContext,
   EventRegistry,
+  KeepAliveProps,
+  TransitionElement,
+  TransitionState,
   WatchEffectOptions
 } from './interface'
 import type {
@@ -149,6 +154,7 @@ import type {
 import type {
   AssetTypes,
   AsyncComponentLoader,
+  CacheKey,
   CompatConfig,
   CompatVue,
   Component,
@@ -156,9 +162,14 @@ import type {
   ComponentOptions,
   ComponentOptionsMixin,
   Constructor,
+  Hook,
   HTMLElementEventHandler,
+  Keys,
+  MatchPattern,
   RawChildren,
-  RawProps
+  RawProps,
+  TransitionHookCaller,
+  Cache,
 } from './type'
 import type {
   ComponentPropsOptions,
@@ -336,6 +347,20 @@ let vnodeArgsTransformer:
 ) => Parameters<typeof _createVNode>)
   | undefined
 
+
+/**
+ * Internal API for registering an arguments transform for createVNode
+ * used for creating stubs in the test-utils
+ * It is *internal* but needs to be exposed for test-utils to pick up proper
+ * typings
+ */
+export function transformVNodeArgs(
+  transformer?: typeof vnodeArgsTransformer,
+): void {
+  vnodeArgsTransformer = transformer
+}
+
+  
 let setInSSRSetupState: (state: boolean) => void
 
 export const blockStack: VNode['dynamicChildren'][] = []
@@ -12815,4 +12840,778 @@ function devtoolsEmit(event: string, ...args: any[]) {
   } else if (!devtoolsNotInstalled) {
     buffer.push({ event, args })
   }
+}
+
+export function useTransitionState(): TransitionState {
+  const state: TransitionState = {
+    isMounted: false,
+    isLeaving: false,
+    isUnmounting: false,
+    leavingVNodes: new Map(),
+  }
+  onMounted(() => {
+    state.isMounted = true
+  })
+  onBeforeUnmount(() => {
+    state.isUnmounting = true
+  })
+  return state
+}
+
+export function getTransitionRawChildren(
+  children: VNode[],
+  keepComment: boolean = false,
+  parentKey?: VNode['key'],
+): VNode[] {
+  let ret: VNode[] = []
+  let keyedFragmentCount = 0
+  for (let i = 0; i < children.length; i++) {
+    let child = children[i]
+    // #5360 inherit parent key in case of <template v-for>
+    const key =
+      parentKey == null
+        ? child.key
+        : String(parentKey) + String(child.key != null ? child.key : i)
+    // handle fragment children case, e.g. v-for
+    if (child.type === Fragment) {
+      if (child.patchFlag & PatchFlags.KEYED_FRAGMENT) keyedFragmentCount++
+      ret = ret.concat(
+        getTransitionRawChildren(child.children as VNode[], keepComment, key),
+      )
+    }
+    // comment placeholders should be skipped, e.g. v-if
+    else if (keepComment || child.type !== Comment) {
+      ret.push(key != null ? cloneVNode(child, { key }) : child)
+    }
+  }
+  // #1126 if a transition children list contains multiple sub fragments, these
+  // fragments will be merged into a flat children array. Since each v-for
+  // fragment may contain different static bindings inside, we need to de-op
+  // these children to force full diffs to ensure correct behavior.
+  if (keyedFragmentCount > 1) {
+    for (let i = 0; i < ret.length; i++) {
+      ret[i].patchFlag = PatchFlags.BAIL
+    }
+  }
+  return ret
+}
+
+
+function findNonCommentChild(children: VNode[]): VNode {
+  let child: VNode = children[0]
+  if (children.length > 1) {
+    let hasFound = false
+    // locate first non-comment child
+    for (const c of children) {
+      if (c.type !== Comment) {
+        if (__DEV__ && hasFound) {
+          // warn more than one non-comment child
+          warn(
+            '<transition> can only be used on a single element or component. ' +
+              'Use <transition-group> for lists.',
+          )
+          break
+        }
+        child = c
+        hasFound = true
+        if (!__DEV__) break
+      }
+    }
+  }
+  return child
+}
+
+
+// the placeholder really only handles one special case: KeepAlive
+// in the case of a KeepAlive in a leave phase we need to return a KeepAlive
+// placeholder with empty content to avoid the KeepAlive instance from being
+// unmounted.
+function emptyPlaceholder(vnode: VNode): VNode | undefined {
+  if (isKeepAlive(vnode)) {
+    vnode = cloneVNode(vnode)
+    vnode.children = null
+    return vnode
+  }
+}
+function getInnerChild(vnode: VNode): VNode | undefined {
+  if (!isKeepAlive(vnode)) {
+    if (isTeleport(vnode.type) && vnode.children) {
+      return findNonCommentChild(vnode.children as VNode[])
+    }
+
+    return vnode
+  }
+  // #7121,#12465 get the component subtree if it's been mounted
+  if (vnode.component) {
+    return vnode.component.subTree
+  }
+
+  const { shapeFlag, children } = vnode
+
+  if (children) {
+    if (shapeFlag & ShapeFlags.ARRAY_CHILDREN) {
+      return (children as VNodeArrayChildren)[0] as VNode
+    }
+
+    if (
+      shapeFlag & ShapeFlags.SLOTS_CHILDREN &&
+      isFunction((children as any).default)
+    ) {
+      return (children as any).default()
+    }
+  }
+}
+
+
+function getInnerChildKeepAlive(vnode: VNode) {
+  return vnode.shapeFlag & ShapeFlags.SUSPENSE ? vnode.ssContent! : vnode
+}
+
+
+// The transition hooks are attached to the vnode as vnode.transition
+// and will be called at appropriate timing in the renderer.
+export function resolveTransitionHooks(
+  vnode: VNode,
+  props: BaseTransitionProps<any>,
+  state: TransitionState,
+  instance: ComponentInternalInstance,
+  postClone?: (hooks: TransitionHooks) => void,
+): TransitionHooks {
+  const {
+    appear,
+    mode,
+    persisted = false,
+    onBeforeEnter,
+    onEnter,
+    onAfterEnter,
+    onEnterCancelled,
+    onBeforeLeave,
+    onLeave,
+    onAfterLeave,
+    onLeaveCancelled,
+    onBeforeAppear,
+    onAppear,
+    onAfterAppear,
+    onAppearCancelled,
+  } = props
+  const key = String(vnode.key)
+  const leavingVNodesCache = getLeavingNodesForType(state, vnode)
+
+  const callHook: TransitionHookCaller = (hook, args) => {
+    hook &&
+      callWithAsyncErrorHandling(
+        hook,
+        instance,
+        ErrorCodes.TRANSITION_HOOK,
+        args,
+      )
+  }
+
+  const callAsyncHook = (
+    hook: Hook<(el: any, done: () => void) => void>,
+    args: [TransitionElement, () => void],
+  ) => {
+    const done = args[1]
+    callHook(hook, args)
+    if (isArray(hook)) {
+      if (hook.every(hook => hook.length <= 1)) done()
+    } else if (hook.length <= 1) {
+      done()
+    }
+  }
+
+  const hooks: TransitionHooks<TransitionElement> = {
+    mode,
+    persisted,
+    beforeEnter(el) {
+      let hook = onBeforeEnter
+      if (!state.isMounted) {
+        if (appear) {
+          hook = onBeforeAppear || onBeforeEnter
+        } else {
+          return
+        }
+      }
+      // for same element (v-show)
+      if (el[leaveCbKey]) {
+        el[leaveCbKey](true /* cancelled */)
+      }
+      // for toggled element with same key (v-if)
+      const leavingVNode = leavingVNodesCache[key]
+      if (
+        leavingVNode &&
+        isSameVNodeType(vnode, leavingVNode) &&
+        (leavingVNode.el as TransitionElement)[leaveCbKey]
+      ) {
+        // force early removal (not cancelled)
+        ;(leavingVNode.el as TransitionElement)[leaveCbKey]!()
+      }
+      callHook(hook, [el])
+    },
+
+    enter(el) {
+      let hook = onEnter
+      let afterHook = onAfterEnter
+      let cancelHook = onEnterCancelled
+      if (!state.isMounted) {
+        if (appear) {
+          hook = onAppear || onEnter
+          afterHook = onAfterAppear || onAfterEnter
+          cancelHook = onAppearCancelled || onEnterCancelled
+        } else {
+          return
+        }
+      }
+      let called = false
+      const done = (el[enterCbKey] = (cancelled?) => {
+        if (called) return
+        called = true
+        if (cancelled) {
+          callHook(cancelHook, [el])
+        } else {
+          callHook(afterHook, [el])
+        }
+        if (hooks.delayedLeave) {
+          hooks.delayedLeave()
+        }
+        el[enterCbKey] = undefined
+      })
+      if (hook) {
+        callAsyncHook(hook, [el, done])
+      } else {
+        done()
+      }
+    },
+
+    leave(el, remove) {
+      const key = String(vnode.key)
+      if (el[enterCbKey]) {
+        el[enterCbKey](true /* cancelled */)
+      }
+      if (state.isUnmounting) {
+        return remove()
+      }
+      callHook(onBeforeLeave, [el])
+      let called = false
+      const done = (el[leaveCbKey] = (cancelled?) => {
+        if (called) return
+        called = true
+        remove()
+        if (cancelled) {
+          callHook(onLeaveCancelled, [el])
+        } else {
+          callHook(onAfterLeave, [el])
+        }
+        el[leaveCbKey] = undefined
+        if (leavingVNodesCache[key] === vnode) {
+          delete leavingVNodesCache[key]
+        }
+      })
+      leavingVNodesCache[key] = vnode
+      if (onLeave) {
+        callAsyncHook(onLeave, [el, done])
+      } else {
+        done()
+      }
+    },
+
+    clone(vnode) {
+      const hooks = resolveTransitionHooks(
+        vnode,
+        props,
+        state,
+        instance,
+        postClone,
+      )
+      if (postClone) postClone(hooks)
+      return hooks
+    },
+  }
+
+  return hooks
+}
+
+
+const recursiveGetSubtree = (instance: ComponentInternalInstance): VNode => {
+  const subTree = instance.subTree
+  return subTree.component ? recursiveGetSubtree(subTree.component) : subTree
+}
+
+const BaseTransitionImpl: ComponentOptions = {
+  name: `BaseTransition`,
+
+  props: BaseTransitionPropsValidators,
+
+  setup(props: BaseTransitionProps, { slots }: SetupContext) {
+    const instance = getCurrentInstance()!
+    const state = useTransitionState()
+
+    return () => {
+      const children =
+        slots.default && getTransitionRawChildren(slots.default(), true)
+      if (!children || !children.length) {
+        return
+      }
+
+      const child: VNode = findNonCommentChild(children)
+      // there's no need to track reactivity for these props so use the raw
+      // props for a bit better perf
+      const rawProps = toRaw(props)
+      const { mode } = rawProps
+      // check mode
+      if (
+        __DEV__ &&
+        mode &&
+        mode !== 'in-out' &&
+        mode !== 'out-in' &&
+        mode !== 'default'
+      ) {
+        warn(`invalid <transition> mode: ${mode}`)
+      }
+
+      if (state.isLeaving) {
+        return emptyPlaceholder(child)
+      }
+
+      // in the case of <transition><keep-alive/></transition>, we need to
+      // compare the type of the kept-alive children.
+      const innerChild = getInnerChild(child)
+      if (!innerChild) {
+        return emptyPlaceholder(child)
+      }
+
+      let enterHooks = resolveTransitionHooks(
+        innerChild,
+        rawProps,
+        state,
+        instance,
+        // #11061, ensure enterHooks is fresh after clone
+        hooks => (enterHooks = hooks),
+      )
+
+      if (innerChild.type !== Comment) {
+        setTransitionHooks(innerChild, enterHooks)
+      }
+
+      let oldInnerChild = instance.subTree && getInnerChild(instance.subTree)
+
+      // handle mode
+      if (
+        oldInnerChild &&
+        oldInnerChild.type !== Comment &&
+        !isSameVNodeType(innerChild, oldInnerChild) &&
+        recursiveGetSubtree(instance).type !== Comment
+      ) {
+        let leavingHooks = resolveTransitionHooks(
+          oldInnerChild,
+          rawProps,
+          state,
+          instance,
+        )
+        // update old tree's hooks in case of dynamic transition
+        setTransitionHooks(oldInnerChild, leavingHooks)
+        // switching between different views
+        if (mode === 'out-in' && innerChild.type !== Comment) {
+          state.isLeaving = true
+          // return placeholder node and queue update when leave finishes
+          leavingHooks.afterLeave = () => {
+            state.isLeaving = false
+            // #6835
+            // it also needs to be updated when active is undefined
+            if (!(instance.job.flags! & SchedulerJobFlags.DISPOSED)) {
+              instance.update()
+            }
+            delete leavingHooks.afterLeave
+            oldInnerChild = undefined
+          }
+          return emptyPlaceholder(child)
+        } else if (mode === 'in-out' && innerChild.type !== Comment) {
+          leavingHooks.delayLeave = (
+            el: TransitionElement,
+            earlyRemove,
+            delayedLeave,
+          ) => {
+            const leavingVNodesCache = getLeavingNodesForType(
+              state,
+              oldInnerChild!,
+            )
+            leavingVNodesCache[String(oldInnerChild!.key)] = oldInnerChild!
+            // early removal callback
+            el[leaveCbKey] = () => {
+              earlyRemove()
+              el[leaveCbKey] = undefined
+              delete enterHooks.delayedLeave
+              oldInnerChild = undefined
+            }
+            enterHooks.delayedLeave = () => {
+              delayedLeave()
+              delete enterHooks.delayedLeave
+              oldInnerChild = undefined
+            }
+          }
+        } else {
+          oldInnerChild = undefined
+        }
+      } else if (oldInnerChild) {
+        oldInnerChild = undefined
+      }
+
+      return child
+    }
+  },
+}
+// export the public type for h/tsx inference
+// also to avoid inline import() in generated d.ts files
+export const BaseTransition = BaseTransitionImpl as unknown as {
+  new (): {
+    $props: BaseTransitionProps<any>
+    $slots: {
+      default(): VNode[]
+    }
+  }
+}
+
+
+function getLeavingNodesForType(
+  state: TransitionState,
+  vnode: VNode,
+): Record<string, VNode> {
+  const { leavingVNodes } = state
+  let leavingVNodesCache = leavingVNodes.get(vnode.type)!
+  if (!leavingVNodesCache) {
+    leavingVNodesCache = Object.create(null)
+    leavingVNodes.set(vnode.type, leavingVNodesCache)
+  }
+  return leavingVNodesCache
+}
+
+
+const KeepAliveImpl: ComponentOptions = {
+  name: `KeepAlive`,
+
+  // Marker for special handling inside the renderer. We are not using a ===
+  // check directly on KeepAlive in the renderer, because importing it directly
+  // would prevent it from being tree-shaken.
+  __isKeepAlive: true,
+
+  props: {
+    include: [String, RegExp, Array],
+    exclude: [String, RegExp, Array],
+    max: [String, Number],
+  },
+
+  setup(props: KeepAliveProps, { slots }: SetupContext) {
+    const instance = getCurrentInstance()!
+    // KeepAlive communicates with the instantiated renderer via the
+    // ctx where the renderer passes in its internals,
+    // and the KeepAlive instance exposes activate/deactivate implementations.
+    // The whole point of this is to avoid importing KeepAlive directly in the
+    // renderer to facilitate tree-shaking.
+    const sharedContext = instance.ctx as KeepAliveContext
+
+    // if the internal renderer is not registered, it indicates that this is server-side rendering,
+    // for KeepAlive, we just need to render its children
+    if (__SSR__ && !sharedContext.renderer) {
+      return () => {
+        const children = slots.default && slots.default()
+        return children && children.length === 1 ? children[0] : children
+      }
+    }
+
+    const cache: Cache = new Map()
+    const keys: Keys = new Set()
+    let current: VNode | null = null
+
+    if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+      ;(instance as any).__v_cache = cache
+    }
+
+    const parentSuspense = instance.suspense
+
+    const {
+      renderer: {
+        p: patch,
+        m: move,
+        um: _unmount,
+        o: { createElement },
+      },
+    } = sharedContext
+    const storageContainer = createElement('div')
+
+    sharedContext.activate = (
+      vnode,
+      container,
+      anchor,
+      namespace,
+      optimized,
+    ) => {
+      const instance = vnode.component!
+      move(vnode, container, anchor, MoveType.ENTER, parentSuspense)
+      // in case props have changed
+      patch(
+        instance.vnode,
+        vnode,
+        container,
+        anchor,
+        instance,
+        parentSuspense,
+        namespace,
+        vnode.slotScopeIds,
+        optimized,
+      )
+      queuePostRenderEffect(() => {
+        instance.isDeactivated = false
+        if (instance.a) {
+          invokeArrayFns(instance.a)
+        }
+        const vnodeHook = vnode.props && vnode.props.onVnodeMounted
+        if (vnodeHook) {
+          invokeVNodeHook(vnodeHook, instance.parent, vnode)
+        }
+      }, parentSuspense)
+
+      if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+        // Update components tree
+        devtoolsComponentAdded(instance)
+      }
+    }
+
+    sharedContext.deactivate = (vnode: VNode) => {
+      const instance = vnode.component!
+      invalidateMount(instance.m)
+      invalidateMount(instance.a)
+
+      move(vnode, storageContainer, null, MoveType.LEAVE, parentSuspense)
+      queuePostRenderEffect(() => {
+        if (instance.da) {
+          invokeArrayFns(instance.da)
+        }
+        const vnodeHook = vnode.props && vnode.props.onVnodeUnmounted
+        if (vnodeHook) {
+          invokeVNodeHook(vnodeHook, instance.parent, vnode)
+        }
+        instance.isDeactivated = true
+      }, parentSuspense)
+
+      if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+        // Update components tree
+        devtoolsComponentAdded(instance)
+      }
+
+      // for e2e test
+      if (__DEV__ && __BROWSER__) {
+        ;(instance as any).__keepAliveStorageContainer = storageContainer
+      }
+    }
+
+    function unmount(vnode: VNode) {
+      // reset the shapeFlag so it can be properly unmounted
+      resetShapeFlag(vnode)
+      _unmount(vnode, instance, parentSuspense, true)
+    }
+
+    function pruneCache(filter: (name: string) => boolean) {
+      cache.forEach((vnode, key) => {
+        const name = getComponentName(vnode.type as ConcreteComponent)
+        if (name && !filter(name)) {
+          pruneCacheEntry(key)
+        }
+      })
+    }
+
+    function pruneCacheEntry(key: CacheKey) {
+      const cached = cache.get(key) as VNode
+      if (cached && (!current || !isSameVNodeType(cached, current))) {
+        unmount(cached)
+      } else if (current) {
+        // current active instance should no longer be kept-alive.
+        // we can't unmount it now but it might be later, so reset its flag now.
+        resetShapeFlag(current)
+      }
+      cache.delete(key)
+      keys.delete(key)
+    }
+
+    // prune cache on include/exclude prop change
+    watchAPI(
+      () => [props.include, props.exclude],
+      ([include, exclude]) => {
+        include && pruneCache(name => matches(include, name))
+        exclude && pruneCache(name => !matches(exclude, name))
+      },
+      // prune post-render after `current` has been updated
+      { flush: 'post', deep: true },
+    )
+
+    // cache sub tree after render
+    let pendingCacheKey: CacheKey | null = null
+    const cacheSubtree = () => {
+      // fix #1621, the pendingCacheKey could be 0
+      if (pendingCacheKey != null) {
+        // if KeepAlive child is a Suspense, it needs to be cached after Suspense resolves
+        // avoid caching vnode that not been mounted
+        if (isSuspense(instance.subTree.type)) {
+          queuePostRenderEffect(() => {
+            cache.set(pendingCacheKey!, getInnerChildKeepAlive(instance.subTree))
+          }, instance.subTree.suspense)
+        } else {
+          cache.set(pendingCacheKey, getInnerChildKeepAlive(instance.subTree))
+        }
+      }
+    }
+    onMounted(cacheSubtree)
+    onUpdated(cacheSubtree)
+
+    onBeforeUnmount(() => {
+      cache.forEach(cached => {
+        const { subTree, suspense } = instance
+        const vnode = getInnerChildKeepAlive(subTree)
+        if (cached.type === vnode.type && cached.key === vnode.key) {
+          // current instance will be unmounted as part of keep-alive's unmount
+          resetShapeFlag(vnode)
+          // but invoke its deactivated hook here
+          const da = vnode.component!.da
+          da && queuePostRenderEffect(da, suspense)
+          return
+        }
+        unmount(cached)
+      })
+    })
+
+    return () => {
+      pendingCacheKey = null
+
+      if (!slots.default) {
+        return (current = null)
+      }
+
+      const children = slots.default()
+      const rawVNode = children[0]
+      if (children.length > 1) {
+        if (__DEV__) {
+          warn(`KeepAlive should contain exactly one component child.`)
+        }
+        current = null
+        return children
+      } else if (
+        !isVNode(rawVNode) ||
+        (!(rawVNode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT) &&
+          !(rawVNode.shapeFlag & ShapeFlags.SUSPENSE))
+      ) {
+        current = null
+        return rawVNode
+      }
+
+      let vnode = getInnerChildKeepAlive(rawVNode)
+      // #6028 Suspense ssContent maybe a comment VNode, should avoid caching it
+      if (vnode.type === Comment) {
+        current = null
+        return vnode
+      }
+
+      const comp = vnode.type as ConcreteComponent
+
+      // for async components, name check should be based in its loaded
+      // inner component if available
+      const name = getComponentName(
+        isAsyncWrapper(vnode)
+          ? (vnode.type as ComponentOptions).__asyncResolved || {}
+          : comp,
+      )
+
+      const { include, exclude, max } = props
+
+      if (
+        (include && (!name || !matches(include, name))) ||
+        (exclude && name && matches(exclude, name))
+      ) {
+        // #11717
+        vnode.shapeFlag &= ~ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
+        current = vnode
+        return rawVNode
+      }
+
+      const key = vnode.key == null ? comp : vnode.key
+      const cachedVNode = cache.get(key)
+
+      // clone vnode if it's reused because we are going to mutate it
+      if (vnode.el) {
+        vnode = cloneVNode(vnode)
+        if (rawVNode.shapeFlag & ShapeFlags.SUSPENSE) {
+          rawVNode.ssContent = vnode
+        }
+      }
+      // #1511 it's possible for the returned vnode to be cloned due to attr
+      // fallthrough or scopeId, so the vnode here may not be the final vnode
+      // that is mounted. Instead of caching it directly, we store the pending
+      // key and cache `instance.subTree` (the normalized vnode) in
+      // mounted/updated hooks.
+      pendingCacheKey = key
+
+      if (cachedVNode) {
+        // copy over mounted state
+        vnode.el = cachedVNode.el
+        vnode.component = cachedVNode.component
+        if (vnode.transition) {
+          // recursively update transition hooks on subTree
+          setTransitionHooks(vnode, vnode.transition!)
+        }
+        // avoid vnode being mounted as fresh
+        vnode.shapeFlag |= ShapeFlags.COMPONENT_KEPT_ALIVE
+        // make this key the freshest
+        keys.delete(key)
+        keys.add(key)
+      } else {
+        keys.add(key)
+        // prune oldest entry
+        if (max && keys.size > parseInt(max as string, 10)) {
+          pruneCacheEntry(keys.values().next().value!)
+        }
+      }
+      // avoid vnode being unmounted
+      vnode.shapeFlag |= ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
+
+      current = vnode
+      return isSuspense(rawVNode.type) ? rawVNode : vnode
+    }
+  },
+}
+
+const decorate = (t: typeof KeepAliveImpl) => {
+  t.__isBuiltIn = true
+  return t
+}
+
+// export the public type for h/tsx inference
+// also to avoid inline import() in generated d.ts files
+export const KeepAlive = (__COMPAT__
+  ? /*@__PURE__*/ decorate(KeepAliveImpl)
+  : KeepAliveImpl) as any as {
+  __isKeepAlive: true
+  new (): {
+    $props: VNodeProps & KeepAliveProps
+    $slots: {
+      default(): VNode[]
+    }
+  }
+}
+
+function resetShapeFlag(vnode: VNode) {
+  // bitwise operations to remove keep alive flags
+  vnode.shapeFlag &= ~ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE
+  vnode.shapeFlag &= ~ShapeFlags.COMPONENT_KEPT_ALIVE
+}
+
+
+function matches(pattern: MatchPattern, name: string): boolean {
+  if (isArray(pattern)) {
+    return pattern.some((p: string | RegExp) => matches(p, name))
+  } else if (isString(pattern)) {
+    return pattern.split(',').includes(name)
+  } else if (isRegExp(pattern)) {
+    pattern.lastIndex = 0
+    return pattern.test(name)
+  }
+  /* v8 ignore next */
+  return false
 }

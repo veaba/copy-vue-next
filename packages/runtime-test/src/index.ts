@@ -1,9 +1,4 @@
-import {
-  // type CreateAppFunction,
-
-  // type VNode,
-  createRenderer,
-} from '@vue/runtime-core'
+import { createRenderer } from '@vue/runtime-core'
 import { type TestElement, nodeOps } from './nodeOps'
 import { patchProp } from './patchProp'
 // import { serializeInner } from './serialize'
@@ -30,3 +25,4 @@ export * from './triggerEvent'
 export * from './nodeOps'
 // export * from '@vue/runtime-core'
 export * from './serialize'
+export * from '@vue/runtime-core'
