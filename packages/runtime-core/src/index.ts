@@ -37,25 +37,230 @@ import {
   EffectScope
 } from '@vue/reactivity'
 import { watch as baseWatch } from '@vue/reactivity'
-import { camelize, capitalize, EMPTY_ARR, EMPTY_OBJ, extend, getEscapedCssVarName, getGlobalThis, hasOwn, IfAny, includeBooleanAttr, isArray, isBooleanAttr, isBuiltInDirective, isGloballyAllowed, } from '@vue/shared'
-import { isFunction, IsKeyValues, isKnownHtmlAttr, isKnownSvgAttr, isModelListener, isObject, isOn, isPlainObject, isPromise, isString, makeMap, NO, NOOP, normalizeCssVarValue, } from '@vue/shared'
-import { NormalizedStyle, PatchFlags, remove, ShapeFlags, SlotFlags, toHandlerKey, toNumber, toRawType } from '@vue/shared'
+import {
+  camelize,
+  capitalize,
+  EMPTY_ARR,
+  EMPTY_OBJ,
+  extend,
+  getEscapedCssVarName,
+  getGlobalThis,
+  hasOwn,
+  IfAny,
+  includeBooleanAttr,
+  isArray,
+  isBooleanAttr,
+  isBuiltInDirective,
+  isGloballyAllowed,
+  looseToNumber
+} from '@vue/shared'
+import {
+  isFunction,
+  IsKeyValues,
+  isKnownHtmlAttr,
+  isKnownSvgAttr,
+  isModelListener,
+  isObject,
+  isOn,
+  isPlainObject,
+  isPromise,
+  isString,
+  makeMap,
+  NO,
+  NOOP,
+  normalizeCssVarValue
+} from '@vue/shared'
+import {
+  NormalizedStyle,
+  PatchFlags,
+  remove,
+  ShapeFlags,
+  SlotFlags,
+  toHandlerKey,
+  toNumber,
+  toRawType
+} from '@vue/shared'
 import { assertNumber, warn } from './warning'
 import { CompilerOptions, ComponentInjectOptions } from '@vue/compile-core'
-import { LifecycleHooks, ErrorCodes, TeleportMoveTypes, MoveType, DeprecationTypes, SchedulerJobFlags, DOMNodeTypes, MismatchTypes, AccessTypes, DevtoolsHooks, BooleanFlags, OptionTypes } from './enum'
-import { compatModelEventPrefix, COMPONENTS, DIRECTIVES, FILTERS, } from './define'
-import { Fragment, isHmrUpdating, leaveCbKey, NULL_DYNAMIC_COMPONENT, ssrContextKey, Static, TeleportEndKey, Text, Comment } from './define'
-import type { App, AppConfig, AppContext, AsyncComponentOptions, ClassComponent, ComponentInternalInstance, ComponentOptionsBase, ComponentRenderContext, WatchEffectOptions, } from './interface'
-import type { DevtoolsHook, DirectiveBinding, FunctionalComponent, HydrationRenderer, KeepAliveContext, LegacyDirective, LegacyVNodeProps, ObjectDirective, PropOptions, } from './interface'
-import type { Renderer, RendererElement, RendererInternals, RendererNode, RendererOptions, SchedulerJob, SuspenseBoundary, SuspenseProps, TeleportProps, TeleportTargetElement, TransitionHooks, VNode, WatchAPIOptions } from './interface'
-import type { AssetTypes, AsyncComponentLoader, CompatConfig, CompatVue, Component, ComponentObjectPropsOptions, ComponentOptions, ComponentOptionsMixin, Constructor, HTMLElementEventHandler, RawChildren, RawProps, } from './type'
-import type { ComponentPropsOptions, ComponentProvideOptions, ComponentPublicInstance, ComponentTypeEmits, ComputedOptions, ConcreteComponent, ContextualRenderFn, CreateAppFunction, } from './type'
-import type { CreateComponentPublicInstanceWithMixins, Data, DebuggerHook, DefineComponent, DefineSetupFnComponent, DevtoolsComponentHook, Directive, DirectiveHook, ElementNamespace, EmitsOptions, } from './type'
-import type { ErrorCapturedHook, ErrorTypes, ExtractDefaultPropTypes, ExtractPropTypes, InjectionKey, InternalRenderFunction, InternalSlots, LifecycleHook, MergedComponentOptions, MethodOptions, MountComponentFn, } from './type'
-import type { NormalizedProps, NormalizedPropsOptions, ObjectEmitsOptions, ObjectWatchOptionItem, OptionMergeFunction, Prop, PublicPropertiesMap, PublicProps, RawSlots, RenderFunction, RootHydrateFunction, RootRenderFunction, } from './type'
-import type { SchedulerJobs, SetupContext, SetupRenderEffectFn, Slot, Slots, SlotsType, TeleportVNode, TypeEmitsToOptions, VNodeArrayChildren, VNodeChild, VNodeHook, VNodeNormalizedChildren, } from './type'
-import type { VNodeNormalizedRef, VNodeNormalizedRefAtom, VNodeProps, VNodeRef, VNodeTypes, WatchCallback } from './type'
-import type { AssertionResult, CompileFunction, ComponentWatchOptionItem, ComponentWatchOptions, CountMap, CreateHook, DeprecationData, DevtoolsPerformanceHook, HMRComponent, LegacyAsyncComponent, LegacyAsyncReturnValue, LegacyVNodeChildren, MountChildrenFn, MoveFn, NextFn, NormalizedProp, ObjectInjectOptions, PatchBlockChildrenFn, PatchChildrenFn, PatchFn, Plugin, ProcessTextOrCommentFn, PropConstructor, RemoveFn, SetRootFn, ToResolvedProps, UnmountChildrenFn, UnmountFn } from './type'
+import {
+  LifecycleHooks,
+  ErrorCodes,
+  TeleportMoveTypes,
+  MoveType,
+  DeprecationTypes,
+  SchedulerJobFlags,
+  DOMNodeTypes,
+  MismatchTypes,
+  AccessTypes,
+  DevtoolsHooks,
+  BooleanFlags,
+  OptionTypes
+} from './enum'
+import { compatModelEventPrefix, COMPONENTS, DIRECTIVES, FILTERS } from './define'
+import {
+  Fragment,
+  isHmrUpdating,
+  leaveCbKey,
+  NULL_DYNAMIC_COMPONENT,
+  ssrContextKey,
+  Static,
+  TeleportEndKey,
+  Text,
+  Comment
+} from './define'
+import type {
+  App,
+  AppConfig,
+  AppContext,
+  AsyncComponentOptions,
+  ClassComponent,
+  ComponentInternalInstance,
+  ComponentOptionsBase,
+  ComponentRenderContext,
+  EventRegistry,
+  WatchEffectOptions
+} from './interface'
+import type {
+  DevtoolsHook,
+  DirectiveBinding,
+  FunctionalComponent,
+  HydrationRenderer,
+  KeepAliveContext,
+  LegacyDirective,
+  LegacyVNodeProps,
+  ObjectDirective,
+  PropOptions
+} from './interface'
+import type {
+  Renderer,
+  RendererElement,
+  RendererInternals,
+  RendererNode,
+  RendererOptions,
+  SchedulerJob,
+  SuspenseBoundary,
+  SuspenseProps,
+  TeleportProps,
+  TeleportTargetElement,
+  TransitionHooks,
+  VNode,
+  WatchAPIOptions
+} from './interface'
+import type {
+  AssetTypes,
+  AsyncComponentLoader,
+  CompatConfig,
+  CompatVue,
+  Component,
+  ComponentObjectPropsOptions,
+  ComponentOptions,
+  ComponentOptionsMixin,
+  Constructor,
+  HTMLElementEventHandler,
+  RawChildren,
+  RawProps
+} from './type'
+import type {
+  ComponentPropsOptions,
+  ComponentProvideOptions,
+  ComponentPublicInstance,
+  ComponentTypeEmits,
+  ComputedOptions,
+  ConcreteComponent,
+  ContextualRenderFn,
+  CreateAppFunction
+} from './type'
+import type {
+  CreateComponentPublicInstanceWithMixins,
+  Data,
+  DebuggerHook,
+  DefineComponent,
+  DefineSetupFnComponent,
+  DevtoolsComponentHook,
+  Directive,
+  DirectiveHook,
+  ElementNamespace,
+  EmitsOptions
+} from './type'
+import type {
+  ErrorCapturedHook,
+  ErrorTypes,
+  ExtractDefaultPropTypes,
+  ExtractPropTypes,
+  InjectionKey,
+  InternalRenderFunction,
+  InternalSlots,
+  LifecycleHook,
+  MergedComponentOptions,
+  MethodOptions,
+  MountComponentFn
+} from './type'
+import type {
+  NormalizedProps,
+  NormalizedPropsOptions,
+  ObjectEmitsOptions,
+  ObjectWatchOptionItem,
+  OptionMergeFunction,
+  Prop,
+  PublicPropertiesMap,
+  PublicProps,
+  RawSlots,
+  RenderFunction,
+  RootHydrateFunction,
+  RootRenderFunction
+} from './type'
+import type {
+  SchedulerJobs,
+  SetupContext,
+  SetupRenderEffectFn,
+  Slot,
+  Slots,
+  SlotsType,
+  TeleportVNode,
+  TypeEmitsToOptions,
+  VNodeArrayChildren,
+  VNodeChild,
+  VNodeHook,
+  VNodeNormalizedChildren
+} from './type'
+import type {
+  VNodeNormalizedRef,
+  VNodeNormalizedRefAtom,
+  VNodeProps,
+  VNodeRef,
+  VNodeTypes,
+  WatchCallback
+} from './type'
+import type {
+  AssertionResult,
+  CompileFunction,
+  ComponentWatchOptionItem,
+  ComponentWatchOptions,
+  CountMap,
+  CreateHook,
+  DeprecationData,
+  DevtoolsPerformanceHook,
+  HMRComponent,
+  LegacyAsyncComponent,
+  LegacyAsyncReturnValue,
+  LegacyVNodeChildren,
+  MountChildrenFn,
+  MoveFn,
+  NextFn,
+  NormalizedProp,
+  ObjectInjectOptions,
+  PatchBlockChildrenFn,
+  PatchChildrenFn,
+  PatchFn,
+  Plugin,
+  ProcessTextOrCommentFn,
+  PropConstructor,
+  RemoveFn,
+  SetRootFn,
+  ToResolvedProps,
+  UnmountChildrenFn,
+  UnmountFn
+} from './type'
 import type { DirectiveArguments } from './type'
 
 
@@ -85,6 +290,10 @@ let accessedAttrs: boolean = false
 const patched = new WeakSet<object>()
 const seenConfigObjects = /*@__PURE__*/ new WeakSet<CompatConfig>()
 const warnedInvalidKeys: Record<string, boolean> = {}
+const eventRegistryMap = /*@__PURE__*/ new WeakMap<
+  ComponentInternalInstance,
+  EventRegistry
+>()
 
 const methodsToPatch = [
   'push',
@@ -93,12 +302,13 @@ const methodsToPatch = [
   'unshift',
   'splice',
   'sort',
-  'reverse',
+  'reverse'
 ]
 
 export function markAttrsAccessed(): void {
   accessedAttrs = true
 }
+
 const instanceWarned: Record<string, true> = Object.create(null)
 const warnCount: Record<string, number> = Object.create(null)
 
@@ -121,9 +331,9 @@ const hyphenateRE = /\B([A-Z])/g
 const classifyRE = /(?:^|[-_])(\w)/g
 let vnodeArgsTransformer:
   | ((
-    args: Parameters<typeof _createVNode>,
-    instance: ComponentInternalInstance | null,
-  ) => Parameters<typeof _createVNode>)
+  args: Parameters<typeof _createVNode>,
+  instance: ComponentInternalInstance | null
+) => Parameters<typeof _createVNode>)
   | undefined
 
 let setInSSRSetupState: (state: boolean) => void
@@ -156,7 +366,7 @@ export const knownTemplateRefs: WeakSet<ShallowRef> = new WeakSet()
 const mixinPropsCache = new WeakMap<ConcreteComponent, NormalizedPropsOptions>()
 
 export const globalCompatConfig: CompatConfig = {
-  MODE: 2,
+  MODE: 2
 }
 
 // Whether we should be tracking dynamic child nodes inside a block.
@@ -164,7 +374,6 @@ export const globalCompatConfig: CompatConfig = {
 // We are not using a simple boolean because this value may need to be
 // incremented/decremented by nested usage of v-once (see below)
 export let isBlockTreeEnabled = 1
-
 
 
 // TODO rename
@@ -184,7 +393,7 @@ const MismatchTypeString: Record<MismatchTypes, string> = {
   [MismatchTypes.CHILDREN]: 'children',
   [MismatchTypes.CLASS]: 'class',
   [MismatchTypes.STYLE]: 'style',
-  [MismatchTypes.ATTRIBUTE]: 'attribute',
+  [MismatchTypes.ATTRIBUTE]: 'attribute'
 } as const
 
 
@@ -219,7 +428,7 @@ export const ErrorTypeStrings: Record<ErrorTypes, string> = {
   [ErrorCodes.ASYNC_COMPONENT_LOADER]: 'async component loader',
   [ErrorCodes.SCHEDULER]: 'scheduler flush',
   [ErrorCodes.COMPONENT_UPDATE]: 'component update',
-  [ErrorCodes.APP_UNMOUNT_CLEANUP]: 'app unmount cleanup function',
+  [ErrorCodes.APP_UNMOUNT_CLEANUP]: 'app unmount cleanup function'
 }
 
 
@@ -238,12 +447,12 @@ const legacyDirectiveHookMap: Partial<
   beforeMount: 'bind',
   mounted: 'inserted',
   updated: ['update', 'componentUpdated'],
-  unmounted: 'unbind',
+  unmounted: 'unbind'
 }
 
 
 const skipLegacyRootLevelProps = /*@__PURE__*/ makeMap(
-  'staticStyle,staticClass,directives,model,hook',
+  'staticStyle,staticClass,directives,model,hook'
 )
 
 
@@ -269,13 +478,13 @@ const attrsProxyHandlers = __DEV__
     deleteProperty() {
       warn(`setupContext.attrs is readonly.`)
       return false
-    },
+    }
   }
   : {
     get(target: Data, key: string) {
       track(target, TrackOpTypes.GET, '')
       return target[key]
-    },
+    }
   }
 
 
@@ -385,14 +594,14 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       if (data !== EMPTY_OBJ && isReservedPrefix(key[0]) && hasOwn(data, key)) {
         warn(
           `Property ${JSON.stringify(
-            key,
+            key
           )} must be accessed via $data because it starts with a reserved ` +
-          `character ("$" or "_") and is not proxied on the render context.`,
+          `character ("$" or "_") and is not proxied on the render context.`
         )
       } else if (instance === currentRenderingInstance) {
         warn(
           `Property ${JSON.stringify(key)} was accessed during render ` +
-          `but is not defined on instance.`,
+          `but is not defined on instance.`
         )
       }
     }
@@ -401,7 +610,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   set(
     { _: instance }: ComponentRenderContext,
     key: string,
-    value: any,
+    value: any
   ): boolean {
     const { data, setupState, ctx } = instance
     if (hasSetupBinding(setupState, key)) {
@@ -423,17 +632,17 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
     }
     if (key[0] === '$' && key.slice(1) in instance) {
       __DEV__ &&
-        warn(
-          `Attempting to mutate public property "${key}". ` +
-          `Properties starting with $ are reserved and readonly.`,
-        )
+      warn(
+        `Attempting to mutate public property "${key}". ` +
+        `Properties starting with $ are reserved and readonly.`
+      )
       return false
     } else {
       if (__DEV__ && key in instance.appContext.config.globalProperties) {
         Object.defineProperty(ctx, key, {
           enumerable: true,
           configurable: true,
-          value,
+          value
         })
       } else {
         ctx[key] = value
@@ -444,9 +653,9 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
 
   has(
     {
-      _: { data, setupState, accessCache, ctx, appContext, propsOptions, type },
+      _: { data, setupState, accessCache, ctx, appContext, propsOptions, type }
     }: ComponentRenderContext,
-    key: string,
+    key: string
   ) {
     let normalizedProps, cssModules
     return !!(
@@ -464,7 +673,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
   defineProperty(
     target: ComponentRenderContext,
     key: string,
-    descriptor: PropertyDescriptor,
+    descriptor: PropertyDescriptor
   ) {
     if (descriptor.get != null) {
       // invalidate key cache of a getter based property #5417
@@ -473,7 +682,7 @@ export const PublicInstanceProxyHandlers: ProxyHandler<any> = {
       this.set!(target, key, descriptor.value, null)
     }
     return Reflect.defineProperty(target, key, descriptor)
-  },
+  }
 }
 
 function hydrateTeleport(
@@ -484,7 +693,7 @@ function hydrateTeleport(
   slotScopeIds: string[] | null,
   optimized: boolean,
   {
-    o: { nextSibling, parentNode, querySelector, insert, createText },
+    o: { nextSibling, parentNode, querySelector, insert, createText }
   }: RendererInternals<Node, Element>,
   hydrateChildren: (
     node: Node | null,
@@ -493,12 +702,12 @@ function hydrateTeleport(
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
     slotScopeIds: string[] | null,
-    optimized: boolean,
-  ) => Node | null,
+    optimized: boolean
+  ) => Node | null
 ): Node | null {
   const target = (vnode.target = resolveTarget<Element>(
     vnode.props,
-    querySelector,
+    querySelector
   ))
   if (target) {
     const disabled = isTeleportDisabled(vnode.props)
@@ -515,7 +724,7 @@ function hydrateTeleport(
           parentComponent,
           parentSuspense,
           slotScopeIds,
-          optimized,
+          optimized
         )
         vnode.targetStart = targetNode
         vnode.targetAnchor = targetNode && nextSibling(targetNode)
@@ -532,8 +741,8 @@ function hydrateTeleport(
               vnode.targetStart = targetAnchor
             } else if ((targetAnchor as Comment).data === 'teleport anchor') {
               vnode.targetAnchor = targetAnchor
-                ; (target as TeleportTargetElement)._lpa =
-                  vnode.targetAnchor && nextSibling(vnode.targetAnchor as Node)
+              ;(target as TeleportTargetElement)._lpa =
+                vnode.targetAnchor && nextSibling(vnode.targetAnchor as Node)
               break
             }
           }
@@ -555,7 +764,7 @@ function hydrateTeleport(
           parentComponent,
           parentSuspense,
           slotScopeIds,
-          optimized,
+          optimized
         )
       }
     }
@@ -570,7 +779,7 @@ function moveTeleport(
   container: RendererElement,
   parentAnchor: RendererNode | null,
   { o: { insert }, m: move }: RendererInternals,
-  moveType: TeleportMoveTypes = TeleportMoveTypes.REORDER,
+  moveType: TeleportMoveTypes = TeleportMoveTypes.REORDER
 ): void {
   // move target anchor if this is a target change.
   if (moveType === TeleportMoveTypes.TARGET_CHANGE) {
@@ -593,7 +802,7 @@ function moveTeleport(
           (children as VNode[])[i],
           container,
           parentAnchor,
-          MoveType.REORDER,
+          MoveType.REORDER
         )
       }
     }
@@ -609,7 +818,7 @@ function prepareAnchor(
   target: RendererElement | null,
   vnode: TeleportVNode,
   createText: RendererOptions['createText'],
-  insert: RendererOptions['insert'],
+  insert: RendererOptions['insert']
 ) {
   const targetStart = (vnode.targetStart = createText(''))
   const targetAnchor = (vnode.targetAnchor = createText(''))
@@ -639,13 +848,13 @@ export const TeleportImpl = {
     namespace: ElementNamespace,
     slotScopeIds: string[] | null,
     optimized: boolean,
-    internals: RendererInternals,
+    internals: RendererInternals
   ): void {
     const {
       mc: mountChildren,
       pc: patchChildren,
       pbc: patchBlockChildren,
-      o: { insert, querySelector, createText, createComment },
+      o: { insert, querySelector, createText, createComment }
     } = internals
 
     const disabled = isTeleportDisabled(n2.props)
@@ -684,7 +893,7 @@ export const TeleportImpl = {
             parentSuspense,
             namespace,
             slotScopeIds,
-            optimized,
+            optimized
           )
         }
       }
@@ -707,7 +916,7 @@ export const TeleportImpl = {
           warn(
             'Invalid Teleport target on mount:',
             target,
-            `(${typeof target})`,
+            `(${typeof target})`
           )
         }
       }
@@ -739,7 +948,7 @@ export const TeleportImpl = {
             namespace,
             slotScopeIds,
             optimized,
-            internals,
+            internals
           )
         }, parentSuspense)
         return
@@ -769,7 +978,7 @@ export const TeleportImpl = {
           parentComponent,
           parentSuspense,
           namespace,
-          slotScopeIds,
+          slotScopeIds
         )
         // even in block tree mode we need to make sure all root-level nodes
         // in the teleport inherit previous DOM references so that they can
@@ -786,7 +995,7 @@ export const TeleportImpl = {
           parentSuspense,
           namespace,
           slotScopeIds,
-          false,
+          false
         )
       }
 
@@ -799,7 +1008,7 @@ export const TeleportImpl = {
             container,
             mainAnchor,
             internals,
-            TeleportMoveTypes.TOGGLE,
+            TeleportMoveTypes.TOGGLE
           )
         } else {
           // #7835
@@ -814,7 +1023,7 @@ export const TeleportImpl = {
         if ((n2.props && n2.props.to) !== (n1.props && n1.props.to)) {
           const nextTarget = (n2.target = resolveTarget(
             n2.props,
-            querySelector,
+            querySelector
           ))
           if (nextTarget) {
             moveTeleport(
@@ -822,13 +1031,13 @@ export const TeleportImpl = {
               nextTarget,
               null,
               internals,
-              TeleportMoveTypes.TARGET_CHANGE,
+              TeleportMoveTypes.TARGET_CHANGE
             )
           } else if (__DEV__) {
             warn(
               'Invalid Teleport target on update:',
               target,
-              `(${typeof target})`,
+              `(${typeof target})`
             )
           }
         } else if (wasDisabled) {
@@ -839,7 +1048,7 @@ export const TeleportImpl = {
             target,
             targetAnchor,
             internals,
-            TeleportMoveTypes.TOGGLE,
+            TeleportMoveTypes.TOGGLE
           )
         }
       }
@@ -852,7 +1061,7 @@ export const TeleportImpl = {
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
     { um: unmount, o: { remove: hostRemove } }: RendererInternals,
-    doRemove: boolean,
+    doRemove: boolean
   ): void {
     const {
       shapeFlag,
@@ -861,7 +1070,7 @@ export const TeleportImpl = {
       targetStart,
       targetAnchor,
       target,
-      props,
+      props
     } = vnode
 
     if (target) {
@@ -880,14 +1089,14 @@ export const TeleportImpl = {
           parentComponent,
           parentSuspense,
           shouldRemove,
-          !!child.dynamicChildren,
+          !!child.dynamicChildren
         )
       }
     }
   },
 
   move: moveTeleport as typeof moveTeleport,
-  hydrate: hydrateTeleport as typeof hydrateTeleport,
+  hydrate: hydrateTeleport as typeof hydrateTeleport
 }
 
 // Force-casted public typing for h and TSX props inference
@@ -922,7 +1131,7 @@ export const SuspenseImpl = {
     slotScopeIds: string[] | null,
     optimized: boolean,
     // platform-specific impl passed from renderer
-    rendererInternals: RendererInternals,
+    rendererInternals: RendererInternals
   ): void {
     if (n1 == null) {
       mountSuspense(
@@ -934,7 +1143,7 @@ export const SuspenseImpl = {
         namespace,
         slotScopeIds,
         optimized,
-        rendererInternals,
+        rendererInternals
       )
     } else {
       // #8678 if the current suspense needs to be patched and parentSuspense has
@@ -964,32 +1173,32 @@ export const SuspenseImpl = {
         namespace,
         slotScopeIds,
         optimized,
-        rendererInternals,
+        rendererInternals
       )
     }
   },
   hydrate: hydrateSuspense as typeof hydrateSuspense,
-  normalize: normalizeSuspenseChildren as typeof normalizeSuspenseChildren,
+  normalize: normalizeSuspenseChildren as typeof normalizeSuspenseChildren
 }
 
 export const Suspense = (__FEATURE_SUSPENSE__
   ? SuspenseImpl
   : null) as unknown as {
-    __isSuspense: true
-    new(): {
-      $props: VNodeProps & SuspenseProps
-      $slots: {
-        default(): VNode[]
-        fallback(): VNode[]
-      }
+  __isSuspense: true
+  new(): {
+    $props: VNodeProps & SuspenseProps
+    $slots: {
+      default(): VNode[]
+      fallback(): VNode[]
     }
   }
+}
 
 /**** render ***/
 export const devtoolsComponentAdded: DevtoolsComponentHook =
   /*@__PURE__*/ createDevtoolsComponentHook(DevtoolsHooks.COMPONENT_ADDED)
 export const devtoolsComponentRemoved = (
-  component: ComponentInternalInstance,
+  component: ComponentInternalInstance
 ): void => {
   if (
     devtools &&
@@ -1001,7 +1210,7 @@ export const devtoolsComponentRemoved = (
   }
 }
 const _devtoolsComponentRemoved = /*@__PURE__*/ createDevtoolsComponentHook(
-  DevtoolsHooks.COMPONENT_REMOVED,
+  DevtoolsHooks.COMPONENT_REMOVED
 )
 
 export function createRenderer<
@@ -1137,7 +1346,7 @@ function baseCreateRenderer(
             optimized
           )
         } else if (shapeFlag & ShapeFlags.TELEPORT) {
-          ; (type as typeof TeleportImpl).process(
+          ;(type as typeof TeleportImpl).process(
             n1 as TeleportVNode,
             n2 as TeleportVNode,
             container,
@@ -1150,7 +1359,7 @@ function baseCreateRenderer(
             internals
           )
         } else if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
-          ; (type as typeof SuspenseImpl).process(
+          ;(type as typeof SuspenseImpl).process(
             n1,
             n2,
             container,
@@ -1240,13 +1449,13 @@ function baseCreateRenderer(
       const anchor = hostNextSibling(n1.anchor!)
       // remove existing
       removeStaticNode(n1)
-        // insert new
-        ;[n2.el, n2.anchor] = hostInsertStaticContent!(
-          n2.children as string,
-          container,
-          anchor,
-          namespace
-        )
+      // insert new
+      ;[n2.el, n2.anchor] = hostInsertStaticContent!(
+        n2.children as string,
+        container,
+        anchor,
+        namespace
+      )
     } else {
       n2.el = n1.el
       n2.anchor = n1.anchor
@@ -1642,15 +1851,15 @@ function baseCreateRenderer(
         // oldVNode may be an errored async setup() component inside Suspense
         // which will not have a mounted element
         oldVNode.el &&
-          // - In the case of a Fragment, we need to provide the actual parent
-          // of the Fragment itself so it can move its children.
-          (oldVNode.type === Fragment ||
-            // - In the case of different nodes, there is going to be a replacement
-            // which also requires the correct parent container
-            !isSameVNodeType(oldVNode, newVNode) ||
-            // - In the case of a component, it could contain anything.
-            oldVNode.shapeFlag &
-            (ShapeFlags.COMPONENT | ShapeFlags.TELEPORT | ShapeFlags.SUSPENSE))
+        // - In the case of a Fragment, we need to provide the actual parent
+        // of the Fragment itself so it can move its children.
+        (oldVNode.type === Fragment ||
+          // - In the case of different nodes, there is going to be a replacement
+          // which also requires the correct parent container
+          !isSameVNodeType(oldVNode, newVNode) ||
+          // - In the case of a component, it could contain anything.
+          oldVNode.shapeFlag &
+          (ShapeFlags.COMPONENT | ShapeFlags.TELEPORT | ShapeFlags.SUSPENSE))
           ? hostParentNode(oldVNode.el)!
           : // In other cases, the parent container is not actually used so we
           // just pass the block element here to avoid a DOM parentNode call.
@@ -1828,7 +2037,7 @@ function baseCreateRenderer(
     n2.slotScopeIds = slotScopeIds
     if (n1 == null) {
       if (n2.shapeFlag & ShapeFlags.COMPONENT_KEPT_ALIVE) {
-        ; (parentComponent!.ctx as KeepAliveContext).activate(
+        ;(parentComponent!.ctx as KeepAliveContext).activate(
           n2,
           container,
           anchor,
@@ -1883,7 +2092,7 @@ function baseCreateRenderer(
 
     // inject renderer internals for keepAlive
     if (isKeepAlive(initialVNode)) {
-      ; (instance.ctx as KeepAliveContext).renderer = internals
+      ;(instance.ctx as KeepAliveContext).renderer = internals
     }
 
     // resolve props and slots for setup context
@@ -1904,7 +2113,7 @@ function baseCreateRenderer(
     // before proceeding
     if (__FEATURE_SUSPENSE__ && instance.asyncDep) {
       parentSuspense &&
-        parentSuspense.registerDep(instance, setupRenderEffect, optimized)
+      parentSuspense.registerDep(instance, setupRenderEffect, optimized)
 
       // Give it a placeholder if this is not hydration
       // TODO handle self-defined fallback
@@ -2030,7 +2239,7 @@ function baseCreateRenderer(
             isAsyncWrapperVNode &&
             (type as ComponentOptions).__asyncHydrate
           ) {
-            ; (type as ComponentOptions).__asyncHydrate!(
+            ;(type as ComponentOptions).__asyncHydrate!(
               el as Element,
               instance,
               hydrateSubTree
@@ -2557,12 +2766,12 @@ function baseCreateRenderer(
       }
     }
 
-    // 4. common sequence + unmount
-    // (a b) c
-    // (a b)
-    // i = 2, e1 = 2, e2 = 1
-    // a (b c)
-    // (b c)
+      // 4. common sequence + unmount
+      // (a b) c
+      // (a b)
+      // i = 2, e1 = 2, e2 = 1
+      // a (b c)
+      // (b c)
     // i = 0, e1 = 0, e2 = -1
     else if (i > e2) {
       while (i <= e1) {
@@ -2571,9 +2780,9 @@ function baseCreateRenderer(
       }
     }
 
-    // 5. unknown sequence
-    // [i ... e1 + 1]: a b [c d e] f g
-    // [i ... e2 + 1]: a b [e d c h] f g
+      // 5. unknown sequence
+      // [i ... e1 + 1]: a b [c d e] f g
+      // [i ... e2 + 1]: a b [e d c h] f g
     // i = 2, e1 = 4, e2 = 5
     else {
       const s1 = i // prev starting index
@@ -2721,7 +2930,7 @@ function baseCreateRenderer(
     }
 
     if (shapeFlag & ShapeFlags.TELEPORT) {
-      ; (type as typeof TeleportImpl).move(vnode, container, anchor, internals)
+      ;(type as typeof TeleportImpl).move(vnode, container, anchor, internals)
       return
     }
 
@@ -2817,7 +3026,7 @@ function baseCreateRenderer(
     }
 
     if (shapeFlag & ShapeFlags.COMPONENT_SHOULD_KEEP_ALIVE) {
-      ; (parentComponent!.ctx as KeepAliveContext).deactivate(vnode)
+      ;(parentComponent!.ctx as KeepAliveContext).deactivate(vnode)
       return
     }
 
@@ -2845,7 +3054,7 @@ function baseCreateRenderer(
       }
 
       if (shapeFlag & ShapeFlags.TELEPORT) {
-        ; (vnode.type as typeof TeleportImpl).remove(
+        ;(vnode.type as typeof TeleportImpl).remove(
           vnode,
           parentComponent,
           parentSuspense,
@@ -2894,7 +3103,7 @@ function baseCreateRenderer(
       queuePostRenderEffect(() => {
         vnodeHook && invokeVNodeHook(vnodeHook, parentComponent, vnode)
         shouldInvokeDirs &&
-          invokeDirectiveHook(vnode, null, parentComponent, 'unmounted')
+        invokeDirectiveHook(vnode, null, parentComponent, 'unmounted')
       }, parentSuspense)
     }
   }
@@ -2909,7 +3118,7 @@ function baseCreateRenderer(
         transition &&
         !transition.persisted
       ) {
-        ; (vnode.children as VNode[]).forEach(child => {
+        ;(vnode.children as VNode[]).forEach(child => {
           if (child.type === Comment) {
             hostRemove(child.el!)
           } else {
@@ -3113,7 +3322,7 @@ export function createDevRenderContext(instance: ComponentInternalInstance) {
   Object.defineProperty(target, `_`, {
     configurable: true,
     enumerable: false,
-    get: () => instance,
+    get: () => instance
   })
 
   // expose public properties
@@ -3124,12 +3333,13 @@ export function createDevRenderContext(instance: ComponentInternalInstance) {
       get: () => publicPropertiesMap[key](instance),
       // intercepted by the proxy so no need for implementation,
       // but needed to prevent set errors
-      set: NOOP,
+      set: NOOP
     })
   })
 
   return target as ComponentRenderContext
 }
+
 export function createAppContext(): AppContext {
   return {
     app: null as any,
@@ -3140,7 +3350,7 @@ export function createAppContext(): AppContext {
       optionMergeStrategies: {},
       errorHandler: undefined,
       warnHandler: undefined,
-      compilerOptions: {},
+      compilerOptions: {}
     },
     mixins: [],
     components: {},
@@ -3148,14 +3358,14 @@ export function createAppContext(): AppContext {
     provides: Object.create(null),
     optionsCache: new WeakMap(),
     propsCache: new WeakMap(),
-    emitsCache: new WeakMap(),
+    emitsCache: new WeakMap()
   }
 }
 
 export function normalizeEmitsOptions(
   comp: ConcreteComponent,
   appContext: AppContext,
-  asMixin = false,
+  asMixin = false
 ): ObjectEmitsOptions | null {
   const cache = appContext.emitsCache
   const cached = cache.get(comp)
@@ -3218,7 +3428,7 @@ function validatePropName(key: string) {
 export function normalizePropsOptions(
   comp: ConcreteComponent,
   appContext: AppContext,
-  asMixin = false,
+  asMixin = false
 ): NormalizedPropsOptions {
   const cache =
     __FEATURE_OPTIONS_API__ && asMixin ? mixinPropsCache : appContext.propsCache
@@ -3324,13 +3534,12 @@ export function normalizePropsOptions(
 }
 
 
-
 const emptyAppContext = createAppContext()
 
 export function createComponentInstance(
   vnode: VNode,
   parent: ComponentInternalInstance | null,
-  suspense: SuspenseBoundary | null,
+  suspense: SuspenseBoundary | null
 ): ComponentInternalInstance {
   const type = vnode.type as ConcreteComponent
   // inherit parent app context - or - if root, adopt from root vnode
@@ -3413,7 +3622,7 @@ export function createComponentInstance(
     rtg: null,
     rtc: null,
     ec: null,
-    sp: null,
+    sp: null
   }
   if (__DEV__) {
     instance.ctx = createDevRenderContext(instance)
@@ -3440,16 +3649,16 @@ export function createComponentInstance(
 export function createHydrationFunctions(
   rendererInternals: RendererInternals<Node, Element>
 ): [
-    RootHydrateFunction,
-    (
-      node: Node,
-      vnode: VNode,
-      parentComponent: ComponentInternalInstance | null,
-      parentSuspense: SuspenseBoundary | null,
-      slotScopeIds: string[] | null,
-      optimized?: boolean
-    ) => Node | null
-  ] {
+  RootHydrateFunction,
+  (
+    node: Node,
+    vnode: VNode,
+    parentComponent: ComponentInternalInstance | null,
+    parentSuspense: SuspenseBoundary | null,
+    slotScopeIds: string[] | null,
+    optimized?: boolean
+  ) => Node | null
+] {
   const {
     mt: mountComponent,
     p: patch,
@@ -3466,11 +3675,11 @@ export function createHydrationFunctions(
 
   const hydrate: RootHydrateFunction = (vnode, container) => {
     if (!container.hasChildNodes()) {
-      ; (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
-        warn(
-          `Attempting to hydrate existing markup but container is empty. ` +
-          `Performing full mount instead.`
-        )
+      ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+      warn(
+        `Attempting to hydrate existing markup but container is empty. ` +
+        `Performing full mount instead.`
+      )
       patch(null, vnode, container)
       flushPostFlushCbs()
       container._vnode = vnode
@@ -3530,17 +3739,17 @@ export function createHydrationFunctions(
           }
         } else {
           if ((node as Text).data !== vnode.children) {
-            ; (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
-              warn(
-                `Hydration text mismatch in`,
-                node.parentNode,
-                `\n  - rendered on server: ${JSON.stringify(
-                  (node as Text).data
-                )}` +
-                `\n  - expected on client: ${JSON.stringify(vnode.children)}`
-              )
+            ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+            warn(
+              `Hydration text mismatch in`,
+              node.parentNode,
+              `\n  - rendered on server: ${JSON.stringify(
+                (node as Text).data
+              )}` +
+              `\n  - expected on client: ${JSON.stringify(vnode.children)}`
+            )
             logMismatchError()
-              ; (node as Text).data = vnode.children as string
+            ;(node as Text).data = vnode.children as string
           }
           nextNode = nextSibling(node)
         }
@@ -3812,13 +4021,13 @@ export function createHydrationFunctions(
         }
         if (el.textContent !== clientText) {
           if (!isMismatchAllowed(el, MismatchTypes.TEXT)) {
-            ; (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
-              warn(
-                `Hydration text content mismatch on`,
-                el,
-                `\n  - rendered on server: ${el.textContent}` +
-                `\n  - expected on client: ${vnode.children as string}`
-              )
+            ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+            warn(
+              `Hydration text content mismatch on`,
+              el,
+              `\n  - rendered on server: ${el.textContent}` +
+              `\n  - expected on client: ${vnode.children as string}`
+            )
             logMismatchError()
           }
 
@@ -3935,7 +4144,7 @@ export function createHydrationFunctions(
               container,
               nextSibling(node)
             )
-              ; (node as Text).data = vnode.children as string
+            ;(node as Text).data = vnode.children as string
           }
         }
         node = hydrateNode(
@@ -4029,18 +4238,18 @@ export function createHydrationFunctions(
     isFragment: boolean
   ): Node | null => {
     if (!isMismatchAllowed(node.parentElement!, MismatchTypes.CHILDREN)) {
-      ; (__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
-        warn(
-          `Hydration node mismatch:\n- rendered on server:`,
-          node,
-          node.nodeType === DOMNodeTypes.TEXT
-            ? `(text)`
-            : isComment(node) && node.data === '['
-              ? `(start of fragment)`
-              : ``,
-          `\n- expected on client:`,
-          vnode.type
-        )
+      ;(__DEV__ || __FEATURE_PROD_HYDRATION_MISMATCH_DETAILS__) &&
+      warn(
+        `Hydration node mismatch:\n- rendered on server:`,
+        node,
+        node.nodeType === DOMNodeTypes.TEXT
+          ? `(text)`
+          : isComment(node) && node.data === '['
+            ? `(start of fragment)`
+            : ``,
+        `\n- expected on client:`,
+        vnode.type
+      )
       logMismatchError()
     }
 
@@ -4148,7 +4357,7 @@ export const isAsyncWrapper = (i: ComponentInternalInstance | VNode): boolean =>
 
 function isMismatchAllowed(
   el: Element | null,
-  allowedType: MismatchTypes,
+  allowedType: MismatchTypes
 ): boolean {
   if (
     allowedType === MismatchTypes.TEXT ||
@@ -4172,13 +4381,15 @@ function isMismatchAllowed(
     return list.includes(MismatchTypeString[allowedType])
   }
 }
+
 export function isVNode(value: any): value is VNode {
   return value ? value.__v_isVNode === true : false
 }
+
 export function isCompatEnabled(
   key: DeprecationTypes,
   instance: ComponentInternalInstance | null,
-  enableForBuiltIn = false,
+  enableForBuiltIn = false
 ): boolean {
   // skip compat for built-in components
   if (!enableForBuiltIn && instance && instance.type.__isBuiltIn) {
@@ -4227,7 +4438,7 @@ export function isSameVNodeType(n1: VNode, n2: VNode): boolean {
 }
 
 export function isStatefulComponent(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): number {
   return instance.vnode.shapeFlag & ShapeFlags.STATEFUL_COMPONENT
 }
@@ -4289,16 +4500,16 @@ function updateCssVars(vnode: VNode, isDisabled: boolean) {
 
 const resolveTarget = <T = RendererElement>(
   props: TeleportProps | null,
-  select: RendererOptions['querySelector'],
+  select: RendererOptions['querySelector']
 ): T | null => {
   const targetSelector = props && props.to
   if (isString(targetSelector)) {
     if (!select) {
       __DEV__ &&
-        warn(
-          `Current renderer does not support string target for Teleports. ` +
-          `(missing querySelector renderer option)`,
-        )
+      warn(
+        `Current renderer does not support string target for Teleports. ` +
+        `(missing querySelector renderer option)`
+      )
       return null
     } else {
       const target = select(targetSelector)
@@ -4307,7 +4518,7 @@ const resolveTarget = <T = RendererElement>(
           `Failed to locate Teleport target with selector "${targetSelector}". ` +
           `Note the target element must exist before the component is mounted - ` +
           `i.e. the target cannot be rendered by the component itself, and ` +
-          `ideally should be outside of the entire Vue component tree.`,
+          `ideally should be outside of the entire Vue component tree.`
         )
       }
       return target as T
@@ -4322,7 +4533,7 @@ const resolveTarget = <T = RendererElement>(
 
 export function getCompatConfigForKey(
   key: DeprecationTypes | 'MODE',
-  instance: ComponentInternalInstance | null,
+  instance: ComponentInternalInstance | null
 ): CompatConfig[DeprecationTypes | 'MODE'] {
   const instanceConfig =
     instance && (instance.type as ComponentOptions).compatConfig
@@ -4344,7 +4555,7 @@ export function normalizeVNode(child: VNodeChild): VNode {
       Fragment,
       null,
       // #3666, avoid reference pollution when reusing vnode
-      child.slice(),
+      child.slice()
     )
   } else if (isVNode(child)) {
     // already vnode, this should be the most common since compiled templates
@@ -4362,16 +4573,16 @@ export function invokeVNodeHook(
   hook: VNodeHook,
   instance: ComponentInternalInstance | null,
   vnode: VNode,
-  prevVNode: VNode | null = null,
+  prevVNode: VNode | null = null
 ): void {
   callWithAsyncErrorHandling(hook, instance, ErrorCodes.VNODE_HOOK, [
     vnode,
-    prevVNode,
+    prevVNode
   ])
 }
 
 const getContainerType = (
-  container: Element | ShadowRoot,
+  container: Element | ShadowRoot
 ): 'svg' | 'mathml' | undefined => {
   if (container.nodeType !== DOMNodeTypes.ELEMENT) return undefined
   if (isSVGContainer(container as Element)) return 'svg'
@@ -4393,21 +4604,21 @@ export const isReservedProp: (key: string) => boolean = /*@__PURE__*/ makeMap(
   ',key,ref,ref_for,ref_key,' +
   'onVnodeBeforeMount,onVnodeMounted,' +
   'onVnodeBeforeUpdate,onVnodeUpdated,' +
-  'onVnodeBeforeUnmount,onVnodeUnmounted',
+  'onVnodeBeforeUnmount,onVnodeUnmounted'
 )
 
 export function cloneIfMounted(child: VNode): VNode {
   return (child.el === null && child.patchFlag !== PatchFlags.CACHED) ||
-    child.memo
+  child.memo
     ? child
     : cloneVNode(child)
 }
 
 const normalizeRef = ({
-  ref,
-  ref_key,
-  ref_for,
-}: VNodeProps): VNodeNormalizedRefAtom | null => {
+                        ref,
+                        ref_key,
+                        ref_for
+                      }: VNodeProps): VNodeNormalizedRefAtom | null => {
   if (typeof ref === 'number') {
     ref = '' + ref
   }
@@ -4419,11 +4630,12 @@ const normalizeRef = ({
       : null
   ) as any
 }
+
 export function cloneVNode<T, U>(
   vnode: VNode<T, U>,
   extraProps?: (Data & VNodeProps) | null,
   mergeRef = false,
-  cloneTransition = false,
+  cloneTransition = false
 ): VNode<T, U> {
   // This is intentionally NOT using spread or extend to avoid the runtime
   // key enumeration cost.
@@ -4486,7 +4698,7 @@ export function cloneVNode<T, U>(
     el: vnode.el,
     anchor: vnode.anchor,
     ctx: vnode.ctx,
-    ce: vnode.ce,
+    ce: vnode.ce
   }
 
   // if the vnode will be replaced by the cloned one, it is necessary
@@ -4495,7 +4707,7 @@ export function cloneVNode<T, U>(
   if (transition && cloneTransition) {
     setTransitionHooks(
       cloned as VNode,
-      transition.clone(cloned as VNode) as TransitionHooks,
+      transition.clone(cloned as VNode) as TransitionHooks
     )
   }
 
@@ -4524,12 +4736,12 @@ export function defineLegacyVNodeProperties(vnode: VNode): void {
     isCompatEnabled(
       DeprecationTypes.RENDER_FUNCTION,
       currentRenderingInstance,
-      true /* enable for built-ins */,
+      true /* enable for built-ins */
     ) &&
     isCompatEnabled(
       DeprecationTypes.PRIVATE_APIS,
       currentRenderingInstance,
-      true /* enable for built-ins */,
+      true /* enable for built-ins */
     )
   ) {
     const context = currentRenderingInstance
@@ -4552,11 +4764,11 @@ export function defineLegacyVNodeProperties(vnode: VNode): void {
             return (componentOptions = {
               Ctor: vnode.type,
               propsData: vnode.props,
-              children: vnode.children,
+              children: vnode.children
             })
           }
-        },
-      },
+        }
+      }
     })
   }
   /* v8 ignore stop */
@@ -4572,14 +4784,14 @@ export function invalidateMount(hooks: LifecycleHook): void {
 
 export const queuePostRenderEffect: (
   fn: SchedulerJobs,
-  suspense: SuspenseBoundary | null,
+  suspense: SuspenseBoundary | null
 ) => void = __FEATURE_SUSPENSE__
-    ? __TEST__
-      ? // vitest can't seem to handle eager circular dependency
-      (fn: Function | Function[], suspense: SuspenseBoundary | null) =>
-        queueEffectWithSuspense(fn, suspense)
-      : queueEffectWithSuspense
-    : queuePostFlushCb
+  ? __TEST__
+    ? // vitest can't seem to handle eager circular dependency
+    (fn: Function | Function[], suspense: SuspenseBoundary | null) =>
+      queueEffectWithSuspense(fn, suspense)
+    : queueEffectWithSuspense
+  : queuePostFlushCb
 
 function isMapEqual(a: Map<string, string>, b: Map<string, string>): boolean {
   if (a.size !== b.size) {
@@ -4609,7 +4821,7 @@ function toStyleMap(str: string): Map<string, string> {
 function resolveCssVars(
   instance: ComponentInternalInstance,
   vnode: VNode,
-  expectedMap: Map<string, string>,
+  expectedMap: Map<string, string>
 ) {
   const root = instance.subTree
   if (
@@ -4639,7 +4851,7 @@ function propHasMismatch(
   key: string,
   clientValue: any,
   vnode: VNode,
-  instance: ComponentInternalInstance | null,
+  instance: ComponentInternalInstance | null
 ): boolean {
   let mismatchType: MismatchTypes | undefined
   let mismatchKey: string | undefined
@@ -4743,7 +4955,7 @@ export const isSuspense = (type: any): boolean => type.__isSuspense
 // both considered matched listeners.
 export function isEmitListener(
   options: ObjectEmitsOptions | null,
-  key: string,
+  key: string
 ): boolean {
   if (!options || !isOn(key)) {
     return false
@@ -4774,7 +4986,7 @@ export const isInternalObject = (obj: object): boolean =>
 
 
 export function guardReactiveProps(
-  props: (Data & VNodeProps) | null,
+  props: (Data & VNodeProps) | null
 ): (Data & VNodeProps) | null {
   if (!props) return null
   return isProxy(props) || isInternalObject(props) ? extend({}, props) : props
@@ -4787,7 +4999,7 @@ function _createVNode(
   children: unknown = null,
   patchFlag: number = 0,
   dynamicProps: string[] | null = null,
-  isBlockNode = false,
+  isBlockNode = false
 ): VNode {
   if (!type || type === NULL_DYNAMIC_COMPONENT) {
     if (__DEV__ && !type) {
@@ -4867,10 +5079,9 @@ function _createVNode(
       `marking the component with \`markRaw\` or using \`shallowRef\` ` +
       `instead of \`ref\`.`,
       `\nComponent that was made reactive: `,
-      type,
+      type
     )
   }
-
 
 
   return createBaseVNode(
@@ -4881,7 +5092,7 @@ function _createVNode(
     dynamicProps,
     shapeFlag,
     isBlockNode,
-    true,
+    true
   )
 }
 
@@ -4891,7 +5102,7 @@ const createVNodeWithArgsTransform = (
   return _createVNode(
     ...(vnodeArgsTransformer
       ? vnodeArgsTransformer(args, currentRenderingInstance)
-      : args),
+      : args)
   )
 }
 
@@ -4907,7 +5118,7 @@ function createBaseVNode(
   dynamicProps: string[] | null = null,
   shapeFlag: number = type === Fragment ? 0 : ShapeFlags.ELEMENT,
   isBlockNode = false,
-  needFullChildrenNormalization = false,
+  needFullChildrenNormalization = false
 ): VNode {
   const vnode = {
     __v_isVNode: true,
@@ -4936,14 +5147,14 @@ function createBaseVNode(
     dynamicProps,
     dynamicChildren: null,
     appContext: null,
-    ctx: currentRenderingInstance,
+    ctx: currentRenderingInstance
   } as VNode
 
   if (needFullChildrenNormalization) {
     normalizeChildren(vnode, children)
     // normalize suspense children
     if (__FEATURE_SUSPENSE__ && shapeFlag & ShapeFlags.SUSPENSE) {
-      ; (type as typeof SuspenseImpl).normalize(vnode)
+      ;(type as typeof SuspenseImpl).normalize(vnode)
     }
   } else if (children) {
     // compiled element vnode - if children is passed, only possible types are
@@ -4984,6 +5195,7 @@ function createBaseVNode(
 
   return vnode
 }
+
 export function normalizeClass(value: unknown): string {
   let res = ''
   if (isString(value)) {
@@ -5006,7 +5218,7 @@ export function normalizeClass(value: unknown): string {
 }
 
 export function normalizeStyle(
-  value: unknown,
+  value: unknown
 ): NormalizedStyle | string | undefined {
   if (isArray(value)) {
     const res: NormalizedStyle = {}
@@ -5061,7 +5273,7 @@ export function mergeProps(...args: (Data & VNodeProps)[]): Data {
 
 
 let internalSetCurrentInstance: (
-  instance: ComponentInternalInstance | null,
+  instance: ComponentInternalInstance | null
 ) => void
 
 
@@ -5089,7 +5301,7 @@ if (__SSR__) {
   }
   internalSetCurrentInstance = registerGlobalSetter(
     `__VUE_INSTANCE_SETTERS__`,
-    v => (currentInstance = v),
+    v => (currentInstance = v)
   )
   // also make `isInSSRComponentSetup` sharable across copies of Vue.
   // this is needed in the SFC playground when SSRing async components, since
@@ -5097,7 +5309,7 @@ if (__SSR__) {
   // contain duplicated copies of Vue runtime code.
   setInSSRSetupState = registerGlobalSetter(
     `__VUE_SSR_SETTERS__`,
-    v => (isInSSRComponentSetup = v),
+    v => (isInSSRComponentSetup = v)
   )
 } else {
   internalSetCurrentInstance = i => {
@@ -5109,14 +5321,13 @@ if (__SSR__) {
 }
 
 
-
 function resolvePropValue(
   options: NormalizedProps,
   props: Data,
   key: string,
   value: unknown,
   instance: ComponentInternalInstance,
-  isAbsent: boolean,
+  isAbsent: boolean
 ) {
   const opt = options[key]
   if (opt != null) {
@@ -5136,10 +5347,10 @@ function resolvePropValue(
           const reset = setCurrentInstance(instance)
           value = propsDefaults[key] = defaultValue.call(
             __COMPAT__ &&
-              isCompatEnabled(DeprecationTypes.PROPS_DEFAULT_THIS, instance)
+            isCompatEnabled(DeprecationTypes.PROPS_DEFAULT_THIS, instance)
               ? createPropsDefaultThis(instance, props, key)
               : null,
-            props,
+            props
           )
           reset()
         }
@@ -5165,13 +5376,14 @@ function resolvePropValue(
   }
   return value
 }
+
 export const getCurrentInstance: () => ComponentInternalInstance | null = () =>
   currentInstance || currentRenderingInstance
 
 
 export function provide<T, K = InjectionKey<T> | string | number>(
   key: K,
-  value: K extends InjectionKey<infer V> ? V : T,
+  value: K extends InjectionKey<infer V> ? V : T
 ): void {
   if (!currentInstance) {
     if (__DEV__) {
@@ -5198,17 +5410,17 @@ export function inject<T>(key: InjectionKey<T> | string): T | undefined
 export function inject<T>(
   key: InjectionKey<T> | string,
   defaultValue: T,
-  treatDefaultAsFactory?: false,
+  treatDefaultAsFactory?: false
 ): T
 export function inject<T>(
   key: InjectionKey<T> | string,
   defaultValue: T | (() => T),
-  treatDefaultAsFactory: true,
+  treatDefaultAsFactory: true
 ): T
 export function inject(
   key: InjectionKey<any> | string,
   defaultValue?: unknown,
-  treatDefaultAsFactory = false,
+  treatDefaultAsFactory = false
 ) {
   // fallback to `currentRenderingInstance` so that this can be called in
   // a functional component
@@ -5246,7 +5458,6 @@ export function inject(
 }
 
 
-
 function isInHmrContext(instance: ComponentInternalInstance | null) {
   while (instance) {
     if (instance.type.__hmrId) return true
@@ -5258,12 +5469,12 @@ export function updateProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
   rawPrevProps: Data | null,
-  optimized: boolean,
+  optimized: boolean
 ): void {
   const {
     props,
     attrs,
-    vnode: { patchFlag },
+    vnode: { patchFlag }
   } = instance
   const rawCurrentProps = toRaw(props)
   const [options] = instance.propsOptions
@@ -5305,7 +5516,7 @@ export function updateProps(
               camelizedKey,
               value,
               instance,
-              false /* isAbsent */,
+              false /* isAbsent */
             )
           }
         } else {
@@ -5354,7 +5565,7 @@ export function updateProps(
               key,
               undefined,
               instance,
-              true /* isAbsent */,
+              true /* isAbsent */
             )
           }
         } else {
@@ -5405,29 +5616,29 @@ const normalizeSlotValue = (value: unknown): VNode[] =>
 const normalizeSlot = (
   key: string,
   rawSlot: Function,
-  ctx: ComponentInternalInstance | null | undefined,
+  ctx: ComponentInternalInstance | null | undefined
 ): Slot => {
   if ((rawSlot as any)._n) {
     // already normalized - #5353
     return rawSlot as Slot
   }
   const normalized = withCtx((...args: any[]) => {
-    if (
-      __DEV__ &&
-      currentInstance &&
-      !(ctx === null && currentRenderingInstance) &&
-      !(ctx && ctx.root !== currentInstance.root)
-    ) {
-      warn(
-        `Slot "${key}" invoked outside of the render function: ` +
-        `this will not track dependencies used in the slot. ` +
-        `Invoke the slot function inside the render function instead.`,
-      )
-    }
-    return normalizeSlotValue(rawSlot(...args))
-  }, ctx) as Slot
+      if (
+        __DEV__ &&
+        currentInstance &&
+        !(ctx === null && currentRenderingInstance) &&
+        !(ctx && ctx.root !== currentInstance.root)
+      ) {
+        warn(
+          `Slot "${key}" invoked outside of the render function: ` +
+          `this will not track dependencies used in the slot. ` +
+          `Invoke the slot function inside the render function instead.`
+        )
+      }
+      return normalizeSlotValue(rawSlot(...args))
+    }, ctx) as Slot
     // NOT a compiled slot
-    ; (normalized as ContextualRenderFn)._c = false
+  ;(normalized as ContextualRenderFn)._c = false
   return normalized
 }
 
@@ -5435,7 +5646,7 @@ const normalizeSlot = (
 const normalizeObjectSlots = (
   rawSlots: RawSlots,
   slots: InternalSlots,
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ) => {
   const ctx = rawSlots._ctx
   for (const key in rawSlots) {
@@ -5453,7 +5664,7 @@ const normalizeObjectSlots = (
       ) {
         warn(
           `Non-function value encountered for slot "${key}". ` +
-          `Prefer function slots for better performance.`,
+          `Prefer function slots for better performance.`
         )
       }
       const normalized = normalizeSlotValue(value)
@@ -5465,7 +5676,7 @@ const normalizeObjectSlots = (
 const assignSlots = (
   slots: InternalSlots,
   children: Slots,
-  optimized: boolean,
+  optimized: boolean
 ) => {
   for (const key in children) {
     // #2893
@@ -5480,7 +5691,7 @@ const assignSlots = (
 
 const normalizeVNodeSlots = (
   instance: ComponentInternalInstance,
-  children: VNodeNormalizedChildren,
+  children: VNodeNormalizedChildren
 ) => {
   if (
     __DEV__ &&
@@ -5489,7 +5700,7 @@ const normalizeVNodeSlots = (
   ) {
     warn(
       `Non-function value encountered for default slot. ` +
-      `Prefer function slots for better performance.`,
+      `Prefer function slots for better performance.`
     )
   }
   const normalized = normalizeSlotValue(children)
@@ -5499,7 +5710,7 @@ const normalizeVNodeSlots = (
 export const updateSlots = (
   instance: ComponentInternalInstance,
   children: VNodeNormalizedChildren,
-  optimized: boolean,
+  optimized: boolean
 ): void => {
   const { vnode, slots } = instance
   let needDeletionCheck = true
@@ -5546,7 +5757,7 @@ export const updateSlots = (
 
 function toggleRecurse(
   { effect, job }: ComponentInternalInstance,
-  allowed: boolean,
+  allowed: boolean
 ) {
   if (allowed) {
     effect.flags |= EffectFlags.ALLOW_RECURSE
@@ -5573,7 +5784,7 @@ const getFunctionalFallthrough = (attrs: Data): Data | undefined => {
   let res: Data | undefined
   for (const key in attrs) {
     if (key === 'class' || key === 'style' || isOn(key)) {
-      ; (res || (res = {}))[key] = attrs[key]
+      ;(res || (res = {}))[key] = attrs[key]
     }
   }
   return res
@@ -5616,7 +5827,7 @@ const getChildRoot = (vnode: VNode): [VNode, SetRootFn] => {
 
 
 export function renderComponentRoot(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): VNode {
   const {
     type: Component,
@@ -5633,7 +5844,7 @@ export function renderComponentRoot(
     data,
     setupState,
     ctx,
-    inheritAttrs,
+    inheritAttrs
   } = instance
   const prev = setCurrentRenderingInstance(instance)
 
@@ -5656,11 +5867,11 @@ export function renderComponentRoot(
             get(target, key, receiver) {
               warn(
                 `Property '${String(
-                  key,
-                )}' was accessed via 'this'. Avoid using 'this' in templates.`,
+                  key
+                )}' was accessed via 'this'. Avoid using 'this' in templates.`
               )
               return Reflect.get(target, key, receiver)
-            },
+            }
           })
           : proxyToUse
       result = normalizeVNode(
@@ -5671,8 +5882,8 @@ export function renderComponentRoot(
           __DEV__ ? shallowReadonly(props) : props,
           setupState,
           data,
-          ctx,
-        ),
+          ctx
+        )
       )
       fallthroughAttrs = attrs
     } else {
@@ -5693,14 +5904,14 @@ export function renderComponentRoot(
                   return shallowReadonly(attrs)
                 },
                 slots,
-                emit,
+                emit
               }
-              : { attrs, slots, emit },
+              : { attrs, slots, emit }
           )
           : render(
             __DEV__ ? shallowReadonly(props) : props,
-            null as any /* we know it doesn't need it */,
-          ),
+            null as any /* we know it doesn't need it */
+          )
       )
       fallthroughAttrs = Component.props
         ? attrs
@@ -5738,7 +5949,7 @@ export function renderComponentRoot(
           // related: #1543, #1643, #1989
           fallthroughAttrs = filterModelListeners(
             fallthroughAttrs,
-            propsOptions,
+            propsOptions
           )
         }
         root = cloneVNode(root, fallthroughAttrs, false, true)
@@ -5764,7 +5975,7 @@ export function renderComponentRoot(
             `Extraneous non-props attributes (` +
             `${extraAttrs.join(', ')}) ` +
             `were passed to component but could not be automatically inherited ` +
-            `because component renders fragment or text or teleport root nodes.`,
+            `because component renders fragment or text or teleport root nodes.`
           )
         }
         if (eventAttrs.length) {
@@ -5774,7 +5985,7 @@ export function renderComponentRoot(
             `were passed to component but could not be automatically inherited ` +
             `because component renders fragment or text root nodes. ` +
             `If the listener is intended to be a component custom event listener only, ` +
-            `declare it using the "emits" option.`,
+            `declare it using the "emits" option.`
           )
         }
       }
@@ -5793,17 +6004,17 @@ export function renderComponentRoot(
         warnDeprecation(
           DeprecationTypes.INSTANCE_ATTRS_CLASS_STYLE,
           instance,
-          getComponentName(instance.type),
+          getComponentName(instance.type)
         )
       }
       root = cloneVNode(
         root,
         {
           class: cls,
-          style: style,
+          style: style
         },
         false,
-        true,
+        true
       )
     }
   }
@@ -5813,7 +6024,7 @@ export function renderComponentRoot(
     if (__DEV__ && !isElementRoot(root)) {
       warn(
         `Runtime directive used on component with non-element root node. ` +
-        `The directives will not function as intended.`,
+        `The directives will not function as intended.`
       )
     }
     // clone before mutating since the root may be a hoisted vnode
@@ -5825,7 +6036,7 @@ export function renderComponentRoot(
     if (__DEV__ && !isElementRoot(root)) {
       warn(
         `Component inside <Transition> renders non-element root node ` +
-        `that cannot be animated.`,
+        `that cannot be animated.`
       )
     }
     setTransitionHooks(root, vnode.transition)
@@ -5859,7 +6070,7 @@ const isElementRoot = (vnode: VNode) => {
  * ```
  */
 export function setCurrentRenderingInstance(
-  instance: ComponentInternalInstance | null,
+  instance: ComponentInternalInstance | null
 ): ComponentInternalInstance | null {
   const prev = currentRenderingInstance
   currentRenderingInstance = instance
@@ -5873,7 +6084,7 @@ export function setCurrentRenderingInstance(
 
 export function startMeasure(
   instance: ComponentInternalInstance,
-  type: string,
+  type: string
 ): void {
   if (instance.appContext.config.performance && isSupported()) {
     perf.mark(`vue-${type}-${instance.uid}`)
@@ -5901,15 +6112,16 @@ export const def = (
   obj: object,
   key: string | symbol,
   value: any,
-  writable = false,
+  writable = false
 ): void => {
   Object.defineProperty(obj, key, {
     configurable: true,
     enumerable: false,
     writable,
-    value,
+    value
   })
 }
+
 export function unregisterHMR(instance: ComponentInternalInstance): void {
   map.get(instance.type.__hmrId!)!.instances.delete(instance)
 }
@@ -5930,10 +6142,10 @@ export function parseStringStyle(cssText: string): NormalizedStyle {
 }
 
 function createDevtoolsPerformanceHook(
-  hook: DevtoolsHooks,
+  hook: DevtoolsHooks
 ): DevtoolsPerformanceHook {
   return (component: ComponentInternalInstance, type: string, time: number) => {
-    emit(hook, component.appContext.app, component.uid, component, type, time)
+    devtoolsEmit(hook, component.appContext.app, component.uid, component, type, time)
   }
 }
 
@@ -5941,7 +6153,7 @@ export function callWithErrorHandling(
   fn: Function,
   instance: ComponentInternalInstance | null | undefined,
   type: ErrorTypes,
-  args?: unknown[],
+  args?: unknown[]
 ): any {
   try {
     return args ? fn(...args) : fn()
@@ -5954,7 +6166,7 @@ export function callWithAsyncErrorHandling(
   fn: Function | Function[],
   instance: ComponentInternalInstance | null,
   type: ErrorTypes,
-  args?: unknown[],
+  args?: unknown[]
 ): any {
   if (isFunction(fn)) {
     const res = callWithErrorHandling(fn, instance, type, args)
@@ -5974,7 +6186,7 @@ export function callWithAsyncErrorHandling(
     return values
   } else if (__DEV__) {
     warn(
-      `Invalid value type passed to callWithAsyncErrorHandling(): ${typeof fn}`,
+      `Invalid value type passed to callWithAsyncErrorHandling(): ${typeof fn}`
     )
   }
 }
@@ -5988,7 +6200,7 @@ export function invokeDirectiveHook(
   vnode: VNode,
   prevVNode: VNode | null,
   instance: ComponentInternalInstance | null,
-  name: keyof ObjectDirective,
+  name: keyof ObjectDirective
 ): void {
   const bindings = vnode.dirs!
   const oldBindings = prevVNode && prevVNode.dirs!
@@ -6009,7 +6221,7 @@ export function invokeDirectiveHook(
         vnode.el,
         binding,
         vnode,
-        prevVNode,
+        prevVNode
       ])
       resetTracking()
     }
@@ -6025,7 +6237,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
     message:
       `The global app bootstrapping API has changed: vm.$mount() and the "el" ` +
       `option have been removed. Use createApp(RootComponent).mount() instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#mounting-app-instance`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#mounting-app-instance`
   },
 
   [DeprecationTypes.GLOBAL_MOUNT_CONTAINER]: {
@@ -6033,72 +6245,72 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `Vue detected directives on the mount container. ` +
       `In Vue 3, the container is no longer considered part of the template ` +
       `and will not be processed/replaced.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/mount-changes.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/mount-changes.html`
   },
 
   [DeprecationTypes.GLOBAL_EXTEND]: {
     message:
       `Vue.extend() has been removed in Vue 3. ` +
       `Use defineComponent() instead.`,
-    link: `https://vuejs.org/api/general.html#definecomponent`,
+    link: `https://vuejs.org/api/general.html#definecomponent`
   },
 
   [DeprecationTypes.GLOBAL_PROTOTYPE]: {
     message:
       `Vue.prototype is no longer available in Vue 3. ` +
       `Use app.config.globalProperties instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#vue-prototype-replaced-by-config-globalproperties`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#vue-prototype-replaced-by-config-globalproperties`
   },
 
   [DeprecationTypes.GLOBAL_SET]: {
     message:
       `Vue.set() has been removed as it is no longer needed in Vue 3. ` +
-      `Simply use native JavaScript mutations.`,
+      `Simply use native JavaScript mutations.`
   },
 
   [DeprecationTypes.GLOBAL_DELETE]: {
     message:
       `Vue.delete() has been removed as it is no longer needed in Vue 3. ` +
-      `Simply use native JavaScript mutations.`,
+      `Simply use native JavaScript mutations.`
   },
 
   [DeprecationTypes.GLOBAL_OBSERVABLE]: {
     message:
       `Vue.observable() has been removed. ` +
       `Use \`import { reactive } from "vue"\` from Composition API instead.`,
-    link: `https://vuejs.org/api/reactivity-core.html#reactive`,
+    link: `https://vuejs.org/api/reactivity-core.html#reactive`
   },
 
   [DeprecationTypes.GLOBAL_PRIVATE_UTIL]: {
     message:
       `Vue.util has been removed. Please refactor to avoid its usage ` +
-      `since it was an internal API even in Vue 2.`,
+      `since it was an internal API even in Vue 2.`
   },
 
   [DeprecationTypes.CONFIG_SILENT]: {
     message:
       `config.silent has been removed because it is not good practice to ` +
       `intentionally suppress warnings. You can use your browser console's ` +
-      `filter features to focus on relevant messages.`,
+      `filter features to focus on relevant messages.`
   },
 
   [DeprecationTypes.CONFIG_DEVTOOLS]: {
     message:
       `config.devtools has been removed. To enable devtools for ` +
       `production, configure the __VUE_PROD_DEVTOOLS__ compile-time flag.`,
-    link: `https://github.com/vuejs/core/tree/main/packages/vue#bundler-build-feature-flags`,
+    link: `https://github.com/vuejs/core/tree/main/packages/vue#bundler-build-feature-flags`
   },
 
   [DeprecationTypes.CONFIG_KEY_CODES]: {
     message:
       `config.keyCodes has been removed. ` +
       `In Vue 3, you can directly use the kebab-case key names as v-on modifiers.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/keycode-modifiers.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/keycode-modifiers.html`
   },
 
   [DeprecationTypes.CONFIG_PRODUCTION_TIP]: {
     message: `config.productionTip has been removed.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#config-productiontip-removed`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#config-productiontip-removed`
   },
 
   [DeprecationTypes.CONFIG_IGNORED_ELEMENTS]: {
@@ -6111,7 +6323,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       }
       return msg
     },
-    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#config-ignoredelements-is-now-config-iscustomelement`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/global-api.html#config-ignoredelements-is-now-config-iscustomelement`
   },
 
   [DeprecationTypes.CONFIG_WHITESPACE]: {
@@ -6120,37 +6332,37 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
     message:
       `Vue 3 compiler's whitespace option will default to "condense" instead of ` +
       `"preserve". To suppress this warning, provide an explicit value for ` +
-      `\`config.compilerOptions.whitespace\`.`,
+      `\`config.compilerOptions.whitespace\`.`
   },
 
   [DeprecationTypes.CONFIG_OPTION_MERGE_STRATS]: {
     message:
       `config.optionMergeStrategies no longer exposes internal strategies. ` +
-      `Use custom merge functions instead.`,
+      `Use custom merge functions instead.`
   },
 
   [DeprecationTypes.INSTANCE_SET]: {
     message:
       `vm.$set() has been removed as it is no longer needed in Vue 3. ` +
-      `Simply use native JavaScript mutations.`,
+      `Simply use native JavaScript mutations.`
   },
 
   [DeprecationTypes.INSTANCE_DELETE]: {
     message:
       `vm.$delete() has been removed as it is no longer needed in Vue 3. ` +
-      `Simply use native JavaScript mutations.`,
+      `Simply use native JavaScript mutations.`
   },
 
   [DeprecationTypes.INSTANCE_DESTROY]: {
     message: `vm.$destroy() has been removed. Use app.unmount() instead.`,
-    link: `https://vuejs.org/api/application.html#app-unmount`,
+    link: `https://vuejs.org/api/application.html#app-unmount`
   },
 
   [DeprecationTypes.INSTANCE_EVENT_EMITTER]: {
     message:
       `vm.$on/$once/$off() have been removed. ` +
       `Use an external event emitter library instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/events-api.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/events-api.html`
   },
 
   [DeprecationTypes.INSTANCE_EVENT_HOOKS]: {
@@ -6160,14 +6372,14 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `should be changed to @vue:${event.slice(5)}. ` +
       `From JavaScript, use Composition API to dynamically register lifecycle ` +
       `hooks.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/vnode-lifecycle-events.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/vnode-lifecycle-events.html`
   },
 
   [DeprecationTypes.INSTANCE_CHILDREN]: {
     message:
       `vm.$children has been removed. Consider refactoring your logic ` +
       `to avoid relying on direct access to child components.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/children.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/children.html`
   },
 
   [DeprecationTypes.INSTANCE_LISTENERS]: {
@@ -6176,12 +6388,12 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `included in vm.$attrs and it is no longer necessary to separately use ` +
       `v-on="$listeners" if you are already using v-bind="$attrs". ` +
       `(Note: the Vue 3 behavior only applies if this compat config is disabled)`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/listeners-removed.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/listeners-removed.html`
   },
 
   [DeprecationTypes.INSTANCE_SCOPED_SLOTS]: {
     message: `vm.$scopedSlots has been removed. Use vm.$slots instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/slots-unification.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/slots-unification.html`
   },
 
   [DeprecationTypes.INSTANCE_ATTRS_CLASS_STYLE]: {
@@ -6195,29 +6407,29 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `If you are binding $attrs to a non-root element and expecting ` +
       `class/style to fallthrough on root, you will need to now manually bind ` +
       `them on root via :class="$attrs.class".`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/attrs-includes-class-style.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/attrs-includes-class-style.html`
   },
 
   [DeprecationTypes.OPTIONS_DATA_FN]: {
     message:
       `The "data" option can no longer be a plain object. ` +
       `Always use a function.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/data-option.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/data-option.html`
   },
 
   [DeprecationTypes.OPTIONS_DATA_MERGE]: {
     message: (key: string) =>
       `Detected conflicting key "${key}" when merging data option values. ` +
       `In Vue 3, data keys are merged shallowly and will override one another.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/data-option.html#mixin-merge-behavior-change`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/data-option.html#mixin-merge-behavior-change`
   },
 
   [DeprecationTypes.OPTIONS_BEFORE_DESTROY]: {
-    message: `\`beforeDestroy\` has been renamed to \`beforeUnmount\`.`,
+    message: `\`beforeDestroy\` has been renamed to \`beforeUnmount\`.`
   },
 
   [DeprecationTypes.OPTIONS_DESTROYED]: {
-    message: `\`destroyed\` has been renamed to \`unmounted\`.`,
+    message: `\`destroyed\` has been renamed to \`unmounted\`.`
   },
 
   [DeprecationTypes.WATCH_ARRAY]: {
@@ -6227,7 +6439,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `If current usage is intended, you can disable the compat behavior and ` +
       `suppress this warning with:` +
       `\n\n  configureCompat({ ${DeprecationTypes.WATCH_ARRAY}: false })\n`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/watch.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/watch.html`
   },
 
   [DeprecationTypes.PROPS_DEFAULT_THIS]: {
@@ -6235,21 +6447,21 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `props default value function no longer has access to "this". The compat ` +
       `build only offers access to this.$options.` +
       `(found in prop "${key}")`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/props-default-this.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/props-default-this.html`
   },
 
   [DeprecationTypes.CUSTOM_DIR]: {
     message: (legacyHook: string, newHook: string) =>
       `Custom directive hook "${legacyHook}" has been removed. ` +
       `Use "${newHook}" instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/custom-directives.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/custom-directives.html`
   },
 
   [DeprecationTypes.V_ON_KEYCODE_MODIFIER]: {
     message:
       `Using keyCode as v-on modifier is no longer supported. ` +
       `Use kebab-case key name modifiers instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/keycode-modifiers.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/keycode-modifiers.html`
   },
 
   [DeprecationTypes.ATTR_FALSE_VALUE]: {
@@ -6259,7 +6471,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `use \`null\` or \`undefined\` instead. If the usage is intended, ` +
       `you can disable the compat behavior and suppress this warning with:` +
       `\n\n  configureCompat({ ${DeprecationTypes.ATTR_FALSE_VALUE}: false })\n`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/attribute-coercion.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/attribute-coercion.html`
   },
 
   [DeprecationTypes.ATTR_ENUMERATED_COERCION]: {
@@ -6271,11 +6483,11 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `If the usage is intended, ` +
       `you can disable the compat behavior and suppress this warning with:` +
       `\n\n  configureCompat({ ${DeprecationTypes.ATTR_ENUMERATED_COERCION}: false })\n`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/attribute-coercion.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/attribute-coercion.html`
   },
 
   [DeprecationTypes.TRANSITION_CLASSES]: {
-    message: ``, // this feature cannot be runtime-detected
+    message: `` // this feature cannot be runtime-detected
   },
 
   [DeprecationTypes.TRANSITION_GROUP_ROOT]: {
@@ -6285,7 +6497,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `for styling, you can disable the compat behavior and suppress this ` +
       `warning with:` +
       `\n\n  configureCompat({ ${DeprecationTypes.TRANSITION_GROUP_ROOT}: false })\n`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/transition-group.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/transition-group.html`
   },
 
   [DeprecationTypes.COMPONENT_ASYNC]: {
@@ -6302,7 +6514,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
         `\n\n  configureCompat({ ${DeprecationTypes.COMPONENT_ASYNC}: false })\n`
       )
     },
-    link: `https://v3-migration.vuejs.org/breaking-changes/async-components.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/async-components.html`
   },
 
   [DeprecationTypes.COMPONENT_FUNCTIONAL]: {
@@ -6317,7 +6529,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
         `been disabled.`
       )
     },
-    link: `https://v3-migration.vuejs.org/breaking-changes/functional-components.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/functional-components.html`
   },
 
   [DeprecationTypes.COMPONENT_V_MODEL]: {
@@ -6342,7 +6554,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
         `"update:modelValue" event. You can update the usage and then ${configMsg}`
       )
     },
-    link: `https://v3-migration.vuejs.org/breaking-changes/v-model.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/v-model.html`
   },
 
   [DeprecationTypes.RENDER_FUNCTION]: {
@@ -6351,7 +6563,7 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `You can opt-in to the new API with:` +
       `\n\n  configureCompat({ ${DeprecationTypes.RENDER_FUNCTION}: false })\n` +
       `\n  (This can also be done per-component via the "compatConfig" option.)`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/render-function-api.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/render-function-api.html`
   },
 
   [DeprecationTypes.FILTERS]: {
@@ -6359,15 +6571,15 @@ export const deprecationData: Record<DeprecationTypes, DeprecationData> = {
       `filters have been removed in Vue 3. ` +
       `The "|" symbol will be treated as native JavaScript bitwise OR operator. ` +
       `Use method calls or computed properties instead.`,
-    link: `https://v3-migration.vuejs.org/breaking-changes/filters.html`,
+    link: `https://v3-migration.vuejs.org/breaking-changes/filters.html`
   },
 
   [DeprecationTypes.PRIVATE_APIS]: {
     message: name =>
       `"${name}" is a Vue 2 private API that no longer exists in Vue 3. ` +
       `If you are seeing this warning only due to a dependency, you can ` +
-      `suppress this warning via { PRIVATE_APIS: 'suppress-warning' }.`,
-  },
+      `suppress this warning via { PRIVATE_APIS: 'suppress-warning' }.`
+  }
 }
 
 
@@ -6417,12 +6629,12 @@ export function warnDeprecation(
   const { message, link } = deprecationData[key]
   warn(
     `(deprecation ${key}) ${typeof message === 'function' ? message(...args) : message
-    }${link ? `\n  Details: ${link}` : ``}`,
+    }${link ? `\n  Details: ${link}` : ``}`
   )
   if (!isCompatEnabled(key, instance, true)) {
     console.error(
       `^ The above deprecation's compat behavior is disabled and will likely ` +
-      `lead to runtime errors.`,
+      `lead to runtime errors.`
     )
   }
 }
@@ -6446,7 +6658,7 @@ export function softAssertCompatEnabled(
 export function mapCompatDirectiveHook(
   name: keyof ObjectDirective,
   dir: ObjectDirective & LegacyDirective,
-  instance: ComponentInternalInstance | null,
+  instance: ComponentInternalInstance | null
 ): DirectiveHook | DirectiveHook[] | undefined {
   const mappedName = legacyDirectiveHookMap[name]
   if (mappedName) {
@@ -6459,7 +6671,7 @@ export function mapCompatDirectiveHook(
             DeprecationTypes.CUSTOM_DIR,
             instance,
             mapped,
-            name,
+            name
           )
           hook.push(mappedHook)
         }
@@ -6471,7 +6683,7 @@ export function mapCompatDirectiveHook(
           DeprecationTypes.CUSTOM_DIR,
           instance,
           mappedName,
-          name,
+          name
         )
       }
       return dir[mappedName]
@@ -6482,7 +6694,7 @@ export function mapCompatDirectiveHook(
 
 export function queueEffectWithSuspense(
   fn: Function | Function[],
-  suspense: SuspenseBoundary | null,
+  suspense: SuspenseBoundary | null
 ): void {
   if (suspense && suspense.pendingBranch) {
     if (isArray(fn)) {
@@ -6545,7 +6757,7 @@ function flushJobs(seen?: CountMap) {
         callWithErrorHandling(
           job,
           job.i,
-          job.i ? ErrorCodes.COMPONENT_UPDATE : ErrorCodes.SCHEDULER,
+          job.i ? ErrorCodes.COMPONENT_UPDATE : ErrorCodes.SCHEDULER
         )
         if (!(job.flags! & SchedulerJobFlags.ALLOW_RECURSE)) {
           job.flags! &= ~SchedulerJobFlags.QUEUED
@@ -6581,7 +6793,7 @@ const getId = (job: SchedulerJob): number =>
 export function flushPostFlushCbs(seen?: CountMap): void {
   if (pendingPostFlushCbs.length) {
     const deduped = [...new Set(pendingPostFlushCbs)].sort(
-      (a, b) => getId(a) - getId(b),
+      (a, b) => getId(a) - getId(b)
     )
     pendingPostFlushCbs.length = 0
 
@@ -6615,9 +6827,10 @@ export function flushPostFlushCbs(seen?: CountMap): void {
     postFlushIndex = 0
   }
 }
+
 export function getComponentName(
   Component: ConcreteComponent,
-  includeInferred = true,
+  includeInferred = true
 ): string | false | undefined {
   return isFunction(Component)
     ? Component.displayName || Component.name
@@ -6628,11 +6841,11 @@ export function handleError(
   err: unknown,
   instance: ComponentInternalInstance | null | undefined,
   type: ErrorTypes,
-  throwInDev = true,
+  throwInDev = true
 ): void {
   const contextVNode = instance ? instance.vnode : null
   const { errorHandler, throwUnhandledErrorInProduction } =
-    (instance && instance.appContext.config) || EMPTY_OBJ
+  (instance && instance.appContext.config) || EMPTY_OBJ
   if (instance) {
     let cur = instance.parent
     // the exposed instance is the render proxy to keep it consistent with 2.x
@@ -6660,7 +6873,7 @@ export function handleError(
       callWithErrorHandling(errorHandler, null, ErrorCodes.APP_ERROR_HANDLER, [
         err,
         exposedInstance,
-        errorInfo,
+        errorInfo
       ])
       resetTracking()
       return
@@ -6682,6 +6895,7 @@ const filterModelListeners = (attrs: Data, props: NormalizedProps): Data => {
 export function popWarningContext(): void {
   stack.pop()
 }
+
 export function pushWarningContext(vnode: VNode): void {
   stack.push(vnode)
 }
@@ -6691,7 +6905,7 @@ function logError(
   type: ErrorTypes,
   contextVNode: VNode | null,
   throwInDev = true,
-  throwInProd = false,
+  throwInProd = false
 ) {
   if (__DEV__) {
     const info = ErrorTypeStrings[type]
@@ -6730,7 +6944,7 @@ function checkRecursiveUpdates(seen: CountMap, fn: SchedulerJob) {
       `include component template, render function, updated hook or ` +
       `watcher source function.`,
       null,
-      ErrorCodes.APP_ERROR_HANDLER,
+      ErrorCodes.APP_ERROR_HANDLER
     )
     return true
   }
@@ -6739,7 +6953,7 @@ function checkRecursiveUpdates(seen: CountMap, fn: SchedulerJob) {
 }
 
 export function stringifyStyle(
-  styles: NormalizedStyle | string | undefined,
+  styles: NormalizedStyle | string | undefined
 ): string {
   if (!styles) return ''
   if (isString(styles)) return styles
@@ -6755,9 +6969,11 @@ export function stringifyStyle(
   }
   return ret
 }
+
 function toClassSet(str: string): Set<string> {
   return new Set(str.trim().split(/\s+/))
 }
+
 const cacheStringFunction = <T extends (str: string) => string>(fn: T): T => {
   const cache: Record<string, string> = Object.create(null)
   return ((str: string) => {
@@ -6770,12 +6986,12 @@ const cacheStringFunction = <T extends (str: string) => string>(fn: T): T => {
  * @private
  */
 export const hyphenate: (str: string) => string = cacheStringFunction(
-  (str: string) => str.replace(hyphenateRE, '-$1').toLowerCase(),
+  (str: string) => str.replace(hyphenateRE, '-$1').toLowerCase()
 )
 
 export function endMeasure(
   instance: ComponentInternalInstance,
-  type: string,
+  type: string
 ): void {
   if (instance.appContext.config.performance && isSupported()) {
     const startTag = `vue-${type}-${instance.uid}`
@@ -6800,7 +7016,7 @@ const classify = (str: string): string =>
 export function formatComponentName(
   instance: ComponentInternalInstance | null,
   Component: ConcreteComponent,
-  isRoot = false,
+  isRoot = false
 ): string {
   let name = getComponentName(Component)
   if (!name && Component.__file) {
@@ -6822,7 +7038,7 @@ export function formatComponentName(
     name =
       inferFromRegistry(
         instance.components ||
-        (instance.parent.type as ComponentOptions).components,
+        (instance.parent.type as ComponentOptions).components
       ) || inferFromRegistry(instance.appContext.components)
   }
 
@@ -6833,11 +7049,11 @@ export const legacySlotProxyHandlers: ProxyHandler<InternalSlots> = {
   get(target, key: string) {
     const slot = target[key]
     return slot && slot()
-  },
+  }
 }
 
 export function convertLegacyFunctionalComponent(
-  comp: ComponentOptions,
+  comp: ComponentOptions
 ): FunctionalComponent {
   if (normalizedFunctionalComponentMap.has(comp)) {
     return normalizedFunctionalComponentMap.get(comp)!
@@ -6867,7 +7083,7 @@ export function convertLegacyFunctionalComponent(
           return injections
         }
         return {}
-      },
+      }
     }
     return legacyFn(compatH, legacyCtx)
   }
@@ -6887,7 +7103,7 @@ export const devtoolsPerfEnd: DevtoolsPerformanceHook =
 
 export function convertLegacyComponent(
   comp: any,
-  instance: ComponentInternalInstance | null,
+  instance: ComponentInternalInstance | null
 ): Component {
   if (comp.__isBuiltIn) {
     return comp
@@ -6924,7 +7140,7 @@ export function convertLegacyComponent(
     softAssertCompatEnabled(
       DeprecationTypes.COMPONENT_FUNCTIONAL,
       instance,
-      comp,
+      comp
     )
   ) {
     return convertLegacyFunctionalComponent(comp)
@@ -6958,16 +7174,16 @@ export function normalizeChildren(vnode: VNode, children: unknown): void {
       if (!slotFlag && !isInternalObject(children)) {
         // if slots are not normalized, attach context instance
         // (compiled / normalized slots already have context)
-        ; (children as RawSlots)._ctx = currentRenderingInstance
+        ;(children as RawSlots)._ctx = currentRenderingInstance
       } else if (slotFlag === SlotFlags.FORWARDED && currentRenderingInstance) {
         // a child component receives forwarded slots from the parent.
         // its slot type is determined by its parent's slot type.
         if (
           (currentRenderingInstance.slots as RawSlots)._ === SlotFlags.STABLE
         ) {
-          ; (children as RawSlots)._ = SlotFlags.STABLE
+          ;(children as RawSlots)._ = SlotFlags.STABLE
         } else {
-          ; (children as RawSlots)._ = SlotFlags.DYNAMIC
+          ;(children as RawSlots)._ = SlotFlags.DYNAMIC
           vnode.patchFlag |= PatchFlags.DYNAMIC_SLOTS
         }
       }
@@ -6996,7 +7212,7 @@ export function normalizeChildren(vnode: VNode, children: unknown): void {
 function validateProps(
   rawProps: Data,
   props: Data,
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ) {
   const resolvedValues = toRaw(props)
   const options = instance.propsOptions[0]
@@ -7009,7 +7225,7 @@ function validateProps(
       resolvedValues[key],
       opt,
       __DEV__ ? shallowReadonly(resolvedValues) : resolvedValues,
-      !camelizePropsKey.includes(key),
+      !camelizePropsKey.includes(key)
     )
   }
 }
@@ -7033,6 +7249,7 @@ function styleValue(value: unknown, type: string): string {
 function isBoolean(...args: string[]): boolean {
   return args.some(elem => elem.toLowerCase() === 'boolean')
 }
+
 /**
  * dev only
  */
@@ -7047,7 +7264,7 @@ function isExplicable(type: string): boolean {
 function getInvalidTypeMessage(
   name: string,
   value: unknown,
-  expectedTypes: string[],
+  expectedTypes: string[]
 ): string {
   if (expectedTypes.length === 0) {
     return (
@@ -7087,7 +7304,7 @@ function validateProp(
   value: unknown,
   prop: PropOptions,
   props: Data,
-  isAbsent: boolean,
+  isAbsent: boolean
 ) {
   const { type, required, validator, skipCheck } = prop
   // required!
@@ -7125,14 +7342,14 @@ function validateProp(
 export function createPropsDefaultThis(
   instance: ComponentInternalInstance,
   rawProps: Data,
-  propKey: string,
+  propKey: string
 ): object {
   return new Proxy(
     {},
     {
       get(_, key: string) {
         __DEV__ &&
-          warnDeprecation(DeprecationTypes.PROPS_DEFAULT_THIS, null, propKey)
+        warnDeprecation(DeprecationTypes.PROPS_DEFAULT_THIS, null, propKey)
         // $options
         if (key === '$options') {
           return resolveMergedOptions(instance)
@@ -7152,15 +7369,15 @@ export function createPropsDefaultThis(
             return inject(key)
           }
         }
-      },
-    },
+      }
+    }
   )
 }
 
 
 export function createAppAPI<HostElement>(
   render: RootRenderFunction<HostElement>,
-  hydrate?: RootHydrateFunction,
+  hydrate?: RootHydrateFunction
 ): CreateAppFunction<HostElement> {
   return function createApp(rootComponent, rootProps = null) {
     if (!isFunction(rootComponent)) {
@@ -7196,7 +7413,7 @@ export function createAppAPI<HostElement>(
       set config(v) {
         if (__DEV__) {
           warn(
-            `app.config cannot be replaced. Modify individual options instead.`,
+            `app.config cannot be replaced. Modify individual options instead.`
           )
         }
       },
@@ -7213,7 +7430,7 @@ export function createAppAPI<HostElement>(
         } else if (__DEV__) {
           warn(
             `A plugin must either be a function or an object with an "install" ` +
-            `function.`,
+            `function.`
           )
         }
         return app
@@ -7226,7 +7443,7 @@ export function createAppAPI<HostElement>(
           } else if (__DEV__) {
             warn(
               'Mixin has already been applied to target app' +
-              (mixin.name ? `: ${mixin.name}` : ''),
+              (mixin.name ? `: ${mixin.name}` : '')
             )
           }
         } else if (__DEV__) {
@@ -7267,7 +7484,7 @@ export function createAppAPI<HostElement>(
       mount(
         rootContainer: HostElement,
         isHydrate?: boolean,
-        namespace?: boolean | ElementNamespace,
+        namespace?: boolean | ElementNamespace
       ): any {
         if (!isMounted) {
           // #5571
@@ -7275,7 +7492,7 @@ export function createAppAPI<HostElement>(
             warn(
               `There is already an app instance mounted on the host container.\n` +
               ` If you want to mount another app on the same host container,` +
-              ` you need to unmount the previous app by calling \`app.unmount()\` first.`,
+              ` you need to unmount the previous app by calling \`app.unmount()\` first.`
             )
           }
 
@@ -7309,8 +7526,8 @@ export function createAppAPI<HostElement>(
           }
           isMounted = true
           app._container = rootContainer
-            // for devtools and telemetry
-            ; (rootContainer as any).__vue_app__ = app
+          // for devtools and telemetry
+          ;(rootContainer as any).__vue_app__ = app
 
           if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
             app._instance = vnode.component
@@ -7323,7 +7540,7 @@ export function createAppAPI<HostElement>(
             `App has already been mounted.\n` +
             `If you want to remount the same app, move your app creation logic ` +
             `into a factory function and create fresh app instances for each ` +
-            `mount - e.g. \`const createMyApp = () => createApp(App)\``,
+            `mount - e.g. \`const createMyApp = () => createApp(App)\``
           )
         }
       },
@@ -7332,7 +7549,7 @@ export function createAppAPI<HostElement>(
         if (__DEV__ && typeof cleanupFn !== 'function') {
           warn(
             `Expected function as first argument to app.onUnmount(), ` +
-            `but got ${typeof cleanupFn}`,
+            `but got ${typeof cleanupFn}`
           )
         }
         pluginCleanupFns.push(cleanupFn)
@@ -7343,7 +7560,7 @@ export function createAppAPI<HostElement>(
           callWithAsyncErrorHandling(
             pluginCleanupFns,
             app._instance,
-            ErrorCodes.APP_UNMOUNT_CLEANUP,
+            ErrorCodes.APP_UNMOUNT_CLEANUP
           )
           render(null, app._container)
           if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
@@ -7361,13 +7578,13 @@ export function createAppAPI<HostElement>(
           if (hasOwn(context.provides, key as string | symbol)) {
             warn(
               `App already provides property with key "${String(key)}". ` +
-              `It will be overwritten with the new value.`,
+              `It will be overwritten with the new value.`
             )
           } else {
             // #13212, context.provides can inherit the provides object from parent on custom elements
             warn(
               `App already provides property with key "${String(key)}" inherited from its parent element. ` +
-              `It will be overwritten with the new value.`,
+              `It will be overwritten with the new value.`
             )
           }
         }
@@ -7385,7 +7602,7 @@ export function createAppAPI<HostElement>(
         } finally {
           currentApp = lastApp
         }
-      },
+      }
     })
 
     if (__COMPAT__) {
@@ -7395,25 +7612,156 @@ export function createAppAPI<HostElement>(
     return app
   }
 }
+
 export function devtoolsInitApp(app: App, version: string): void {
-  emit(DevtoolsHooks.APP_INIT, app, version, {
+  devtoolsEmit(DevtoolsHooks.APP_INIT, app, version, {
     Fragment,
     Text,
     Comment,
-    Static,
+    Static
   })
 }
 
 
 export function devtoolsUnmountApp(app: App): void {
-  emit(DevtoolsHooks.APP_UNMOUNT, app)
+  devtoolsEmit(DevtoolsHooks.APP_UNMOUNT, app)
 }
 
-function emit(event: string, ...args: any[]) {
-  if (devtools) {
-    devtools.emit(event, ...args)
-  } else if (!devtoolsNotInstalled) {
-    buffer.push({ event, args })
+export function emit(
+  instance: ComponentInternalInstance,
+  event: string,
+  ...rawArgs: any[]
+): ComponentPublicInstance | null | undefined {
+  if (instance.isUnmounted) return
+  const props = instance.vnode.props || EMPTY_OBJ
+
+  if (__DEV__) {
+    const {
+      emitsOptions,
+      propsOptions: [propsOptions]
+    } = instance
+    if (emitsOptions) {
+      if (
+        !(event in emitsOptions) &&
+        !(
+          __COMPAT__ &&
+          (event.startsWith('hook:') ||
+            event.startsWith(compatModelEventPrefix))
+        )
+      ) {
+        if (!propsOptions || !(toHandlerKey(camelize(event)) in propsOptions)) {
+          warn(
+            `Component emitted event "${event}" but it is neither declared in ` +
+            `the emits option nor as an "${toHandlerKey(camelize(event))}" prop.`
+          )
+        }
+      } else {
+        const validator = emitsOptions[event]
+        if (isFunction(validator)) {
+          const isValid = validator(...rawArgs)
+          if (!isValid) {
+            warn(
+              `Invalid event arguments: event validation failed for event "${event}".`
+            )
+          }
+        }
+      }
+    }
+  }
+
+
+  let args = rawArgs
+
+  const getModelModifiers = (
+    props: Record<string, any>,
+    modelName: string
+  ): Record<string, boolean> | undefined => {
+    return modelName === 'modelValue' || modelName === 'model-value'
+      ? props.modelModifiers
+      : props[`${modelName}Modifiers`] ||
+      props[`${camelize(modelName)}Modifiers`] ||
+      props[`${hyphenate(modelName)}Modifiers`]
+  }
+
+
+  const isCompatModelListener =
+    __COMPAT__ && compatModelEventPrefix + event in props
+  const isModelListener = isCompatModelListener || event.startsWith('update:')
+  const modifiers = isCompatModelListener
+    ? props.modelModifiers
+    : isModelListener && getModelModifiers(props, event.slice(7))
+
+  // for v-model update:xxx events, apply modifiers on args
+  if (modifiers) {
+    if (modifiers.trim) {
+      args = rawArgs.map(a => (isString(a) ? a.trim() : a))
+    }
+    if (modifiers.number) {
+      args = rawArgs.map(looseToNumber)
+    }
+  }
+
+  if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
+    devtoolsComponentEmit(instance, event, args)
+  }
+
+  if (__DEV__) {
+    const lowerCaseEvent = event.toLowerCase()
+    if (lowerCaseEvent !== event && props[toHandlerKey(lowerCaseEvent)]) {
+      warn(
+        `Event "${lowerCaseEvent}" is emitted in component ` +
+        `${formatComponentName(
+          instance,
+          instance.type
+        )} but the handler is registered for "${event}". ` +
+        `Note that HTML attributes are case-insensitive and you cannot use ` +
+        `v-on to listen to camelCase events when using in-DOM templates. ` +
+        `You should probably use "${hyphenate(
+          event
+        )}" instead of "${event}".`
+      )
+    }
+  }
+
+  let handlerName
+  let handler =
+    props[(handlerName = toHandlerKey(event))] ||
+    // also try camelCase event handler (#2249)
+    props[(handlerName = toHandlerKey(camelize(event)))]
+  // for v-model update:xxx events, also trigger kebab-case equivalent
+  // for props passed via kebab-case
+  if (!handler && isModelListener) {
+    handler = props[(handlerName = toHandlerKey(hyphenate(event)))]
+  }
+
+  if (handler) {
+    callWithAsyncErrorHandling(
+      handler,
+      instance,
+      ErrorCodes.COMPONENT_EVENT_HANDLER,
+      args
+    )
+  }
+
+  const onceHandler = props[handlerName + `Once`]
+  if (onceHandler) {
+    if (!instance.emitted) {
+      instance.emitted = {}
+    } else if (instance.emitted[handlerName]) {
+      return
+    }
+    instance.emitted[handlerName] = true
+    callWithAsyncErrorHandling(
+      onceHandler,
+      instance,
+      ErrorCodes.COMPONENT_EVENT_HANDLER,
+      args
+    )
+  }
+
+  if (__COMPAT__) {
+    compatModelEmit(instance, event, args)
+    return compatInstanceEmit(instance, event, args)
   }
 }
 
@@ -7423,7 +7771,7 @@ function emit(event: string, ...args: any[]) {
  * public $parent chains, skip functional ones and go to the parent instead.
  */
 const getPublicInstance = (
-  i: ComponentInternalInstance | null,
+  i: ComponentInternalInstance | null
 ): ComponentPublicInstance | ComponentInternalInstance['exposed'] | null => {
   if (!i) return null
   if (isStatefulComponent(i)) return getComponentPublicInstance(i)
@@ -7487,14 +7835,14 @@ function findInsertionIndex(id: number) {
  * instances.
  */
 export function resolveMergedOptions(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): MergedComponentOptions {
   const base = instance.type as ComponentOptions
   const { mixins, extends: extendsOptions } = base
   const {
     mixins: globalMixins,
     optionsCache: cache,
-    config: { optionMergeStrategies },
+    config: { optionMergeStrategies }
   } = instance.appContext
   const cached = cache.get(base)
 
@@ -7517,7 +7865,7 @@ export function resolveMergedOptions(
     resolved = {}
     if (globalMixins.length) {
       globalMixins.forEach(m =>
-        mergeOptions(resolved, m, optionMergeStrategies, true),
+        mergeOptions(resolved, m, optionMergeStrategies, true)
       )
     }
     mergeOptions(resolved, base, optionMergeStrategies)
@@ -7533,17 +7881,17 @@ type MaybeUndefined<T, I> = I extends true ? T | undefined : T
 export type MultiWatchSources = (WatchSource<unknown> | object)[]
 type MapSources<T, Immediate> = {
   [K in keyof T]: T[K] extends WatchSource<infer V>
-  ? MaybeUndefined<V, Immediate>
-  : T[K] extends object
-  ? MaybeUndefined<T[K], Immediate>
-  : never
+    ? MaybeUndefined<V, Immediate>
+    : T[K] extends object
+      ? MaybeUndefined<T[K], Immediate>
+      : never
 }
 
 // overload: single source + cb
 export function watchAPI<T, Immediate extends Readonly<boolean> = false>(
   source: WatchSource<T>,
   cb: WatchCallback<T, MaybeUndefined<T, Immediate>>,
-  options?: WatchOptions<Immediate>,
+  options?: WatchOptions<Immediate>
 ): WatchHandle
 
 // overload: reactive array or tuple of multiple sources + cb
@@ -7555,7 +7903,7 @@ export function watchAPI<
   cb: [T] extends [ReactiveMarker]
     ? WatchCallback<T, MaybeUndefined<T, Immediate>>
     : WatchCallback<MapSources<T, false>, MapSources<T, Immediate>>,
-  options?: WatchOptions<Immediate>,
+  options?: WatchOptions<Immediate>
 ): WatchHandle
 
 // overload: array of multiple sources + cb
@@ -7565,7 +7913,7 @@ export function watchAPI<
 >(
   sources: [...T],
   cb: WatchCallback<MapSources<T, false>, MapSources<T, Immediate>>,
-  options?: WatchOptions<Immediate>,
+  options?: WatchOptions<Immediate>
 ): WatchHandle
 
 // overload: watching reactive object w/ cb
@@ -7575,20 +7923,20 @@ export function watchAPI<
 >(
   source: T,
   cb: WatchCallback<T, MaybeUndefined<T, Immediate>>,
-  options?: WatchOptions<Immediate>,
+  options?: WatchOptions<Immediate>
 ): WatchHandle
 
 // implementation
 export function watchAPI<T = any, Immediate extends Readonly<boolean> = false>(
   source: T | WatchSource<T>,
   cb: any,
-  options?: WatchOptions<Immediate>,
+  options?: WatchOptions<Immediate>
 ): WatchHandle {
   if (__DEV__ && !isFunction(cb)) {
     warn(
       `\`watch(fn, options?)\` signature has been moved to a separate API. ` +
       `Use \`watchEffect(fn, options?)\` instead. \`watch\` now only ` +
-      `supports \`watch(source, cb, options?) signature.`,
+      `supports \`watch(source, cb, options?) signature.`
     )
   }
   return doWatch(source as any, cb, options)
@@ -7598,7 +7946,7 @@ export function watchAPI<T = any, Immediate extends Readonly<boolean> = false>(
 // Simple effect.
 export function watchEffect(
   effect: WatchEffect,
-  options?: WatchEffectOptions,
+  options?: WatchEffectOptions
 ): WatchHandle {
   return doWatch(effect, null, options)
 }
@@ -7608,7 +7956,7 @@ export function instanceWatch(
   this: ComponentInternalInstance,
   source: string | Function,
   value: WatchCallback | ObjectWatchOptionItem,
-  options?: WatchAPIOptions,
+  options?: WatchAPIOptions
 ): WatchHandle {
   const publicThis = this.proxy as any
   const getter = isString(source)
@@ -7652,11 +8000,11 @@ export const publicPropertiesMap: PublicPropertiesMap =
       queueJob(i.update)
     }),
   $nextTick: i => i.n || (i.n = nextTick.bind(i.proxy!)),
-  $watch: i => (__FEATURE_OPTIONS_API__ ? instanceWatch.bind(i) : NOOP),
+  $watch: i => (__FEATURE_OPTIONS_API__ ? instanceWatch.bind(i) : NOOP)
 } as PublicPropertiesMap)
 
 export function getComponentPublicInstance(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): ComponentPublicInstance | ComponentInternalInstance['exposed'] | null {
   if (instance.exposed) {
     return (
@@ -7671,7 +8019,7 @@ export function getComponentPublicInstance(
         },
         has(target, key: string) {
           return key in target || key in publicPropertiesMap
-        },
+        }
       }))
     )
   } else {
@@ -7681,7 +8029,7 @@ export function getComponentPublicInstance(
 
 export function updateHOCHostEl(
   { vnode, parent }: ComponentInternalInstance,
-  el: typeof vnode.el, // HostNode
+  el: typeof vnode.el // HostNode
 ): void {
   while (parent) {
     const root = parent.subTree
@@ -7689,7 +8037,7 @@ export function updateHOCHostEl(
       root.el = vnode.el
     }
     if (root === vnode) {
-      ; (vnode = parent.vnode).el = el
+      ;(vnode = parent.vnode).el = el
       parent = parent.parent
     } else {
       break
@@ -7702,7 +8050,7 @@ export function flushPreFlushCbs(
   instance?: ComponentInternalInstance,
   seen?: CountMap,
   // skip the current job
-  i: number = flushIndex + 1,
+  i: number = flushIndex + 1
 ): void {
   if (__DEV__) {
     seen = seen || new Map()
@@ -7736,18 +8084,17 @@ export function validateDirectiveName(name: string): void {
 }
 
 
-
 /*! #__NO_SIDE_EFFECTS__ */
 function createDevtoolsComponentHook(
-  hook: DevtoolsHooks,
+  hook: DevtoolsHooks
 ): DevtoolsComponentHook {
   return (component: ComponentInternalInstance) => {
-    emit(
+    devtoolsEmit(
       hook,
       component.appContext.app,
       component.uid,
       component.parent ? component.parent.uid : undefined,
-      component,
+      component
     )
   }
 }
@@ -7788,7 +8135,7 @@ export function setBlockTracking(value: number, inVOnce = false): void {
 export function withCtx(
   fn: Function,
   ctx: ComponentInternalInstance | null = currentRenderingInstance,
-  isNonScopedSlot?: boolean, // __COMPAT__ only
+  isNonScopedSlot?: boolean // __COMPAT__ only
 ): Function {
   if (!ctx) return fn
 
@@ -7850,7 +8197,7 @@ export function convertLegacyVModelProps(vnode: VNode): void {
         // this is a special case where we want to use the vnode component's
         // compat config instead of the current rendering instance (which is the
         // parent of the component that exposes v-model)
-        { type } as any,
+        { type } as any
       )
     ) {
       return
@@ -7906,7 +8253,7 @@ function applyModelFromMixins(model: any, mixins?: ComponentOptions[]) {
 export function traverseStaticChildren(
   n1: VNode,
   n2: VNode,
-  shallow = false,
+  shallow = false
 ): void {
   const ch1 = n1.children
   const ch2 = n2.children
@@ -7948,14 +8295,14 @@ export function traverseStaticChildren(
 
 function resolveChildrenNamespace(
   { type, props }: VNode,
-  currentNamespace: ElementNamespace,
+  currentNamespace: ElementNamespace
 ): ElementNamespace {
   return (currentNamespace === 'svg' && type === 'foreignObject') ||
-    (currentNamespace === 'mathml' &&
-      type === 'annotation-xml' &&
-      props &&
-      props.encoding &&
-      props.encoding.includes('html'))
+  (currentNamespace === 'mathml' &&
+    type === 'annotation-xml' &&
+    props &&
+    props.encoding &&
+    props.encoding.includes('html'))
     ? undefined
     : currentNamespace
 }
@@ -7963,7 +8310,7 @@ function resolveChildrenNamespace(
 export const initSlots = (
   instance: ComponentInternalInstance,
   children: VNodeNormalizedChildren,
-  optimized: boolean,
+  optimized: boolean
 ): void => {
   const slots = (instance.slots = createInternalObject())
   if (instance.vnode.shapeFlag & ShapeFlags.SLOTS_CHILDREN) {
@@ -7985,7 +8332,7 @@ export const initSlots = (
 export function setupComponent(
   instance: ComponentInternalInstance,
   isSSR = false,
-  optimized = false,
+  optimized = false
 ): Promise<void> | undefined {
   isSSR && setInSSRSetupState(isSSR)
 
@@ -8007,7 +8354,7 @@ export function initProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
   isStateful: number, // result of bitwise flag comparison
-  isSSR = false,
+  isSSR = false
 ): void {
   const props: Data = {}
   const attrs: Data = createInternalObject()
@@ -8048,7 +8395,7 @@ function setFullProps(
   instance: ComponentInternalInstance,
   rawProps: Data | null,
   props: Data,
-  attrs: Data,
+  attrs: Data
 ) {
   const [options, needCastKeys] = instance.propsOptions
   let hasAttrsChanged = false
@@ -8065,7 +8412,7 @@ function setFullProps(
           softAssertCompatEnabled(
             DeprecationTypes.INSTANCE_EVENT_HOOKS,
             instance,
-            key.slice(2).toLowerCase(),
+            key.slice(2).toLowerCase()
           )
         }
         if (key === 'inline-template') {
@@ -8081,7 +8428,7 @@ function setFullProps(
         if (!needCastKeys || !needCastKeys.includes(camelKey)) {
           props[camelKey] = value
         } else {
-          ; (rawCastValues || (rawCastValues = {}))[camelKey] = value
+          ;(rawCastValues || (rawCastValues = {}))[camelKey] = value
         }
       } else if (!isEmitListener(instance.emitsOptions, key)) {
         // Any non-declared (either as a prop or an emitted event) props are put
@@ -8113,7 +8460,7 @@ function setFullProps(
         key,
         castValues[key],
         instance,
-        !hasOwn(castValues, key),
+        !hasOwn(castValues, key)
       )
     }
   }
@@ -8129,7 +8476,7 @@ export function setRef(
   oldRawRef: VNodeNormalizedRef | null,
   parentSuspense: SuspenseBoundary | null,
   vnode: VNode,
-  isUnmount = false,
+  isUnmount = false
 ): void {
   if (isArray(rawRef)) {
     rawRef.forEach((r, i) =>
@@ -8138,8 +8485,8 @@ export function setRef(
         oldRawRef && (isArray(oldRawRef) ? oldRawRef[i] : oldRawRef),
         parentSuspense,
         vnode,
-        isUnmount,
-      ),
+        isUnmount
+      )
     )
     return
   }
@@ -8170,7 +8517,7 @@ export function setRef(
   if (__DEV__ && !owner) {
     warn(
       `Missing ref owner context. ref cannot be used on hoisted vnodes. ` +
-      `A vnode with ref must be created inside the render function.`,
+      `A vnode with ref must be created inside the render function.`
     )
     return
   }
@@ -8186,7 +8533,7 @@ export function setRef(
           if (hasOwn(rawSetupState, key) && !isRef(rawSetupState[key])) {
             warn(
               `Template ref "${key}" used on a non-ref value. ` +
-              `It will not work in the production build.`,
+              `It will not work in the production build.`
             )
           }
 
@@ -8273,7 +8620,7 @@ export function setRef(
         // #1789: for non-null values, set them after render
         // null values means this is unmount and it should not overwrite another
         // ref with the same key
-        ; (doSet as SchedulerJob).id = -1
+        ;(doSet as SchedulerJob).id = -1
         queuePostRenderEffect(doSet, parentSuspense)
       } else {
         doSet()
@@ -8287,7 +8634,7 @@ export function setRef(
 
 export function filterSingleRoot(
   children: VNodeArrayChildren,
-  recurse = true,
+  recurse = true
 ): VNode | undefined {
   let singleRoot
   for (let i = 0; i < children.length; i++) {
@@ -8319,7 +8666,7 @@ export function filterSingleRoot(
 
 
 function locateNonHydratedAsyncRoot(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): ComponentInternalInstance | undefined {
   const subComponent = instance.subTree.component
   if (subComponent) {
@@ -8333,7 +8680,7 @@ function locateNonHydratedAsyncRoot(
 
 export function needTransition(
   parentSuspense: SuspenseBoundary | null,
-  transition: TransitionHooks | null,
+  transition: TransitionHooks | null
 ): boolean | null {
   return (
     (!parentSuspense || (parentSuspense && !parentSuspense.pendingBranch)) &&
@@ -8346,7 +8693,7 @@ export function needTransition(
 export function shouldUpdateComponent(
   prevVNode: VNode,
   nextVNode: VNode,
-  optimized?: boolean,
+  optimized?: boolean
 ): boolean {
   const { props: prevProps, children: prevChildren, component } = prevVNode
   const { props: nextProps, children: nextChildren, patchFlag } = nextVNode
@@ -8428,7 +8775,7 @@ function createRecord(id: string, initialDef: HMRComponent): boolean {
   }
   map.set(id, {
     initialDef: normalizeClassComponent(initialDef),
-    instances: new Set(),
+    instances: new Set()
   })
   return true
 }
@@ -8454,10 +8801,10 @@ export const useSSRContext = <T = Record<string, any>>(): T | undefined => {
     const ctx = inject<T>(ssrContextKey)
     if (!ctx) {
       __DEV__ &&
-        warn(
-          `Server rendering context not provided. Make sure to only call ` +
-          `useSSRContext() conditionally in the server build.`,
-        )
+      warn(
+        `Server rendering context not provided. Make sure to only call ` +
+        `useSSRContext() conditionally in the server build.`
+      )
     }
     return ctx
   } else if (__DEV__) {
@@ -8469,7 +8816,7 @@ export const useSSRContext = <T = Record<string, any>>(): T | undefined => {
 function doWatch(
   source: WatchSource | WatchSource[] | WatchEffect | object,
   cb: WatchCallback | null,
-  options: WatchAPIOptions = EMPTY_OBJ,
+  options: WatchAPIOptions = EMPTY_OBJ
 ): WatchHandle {
   const { immediate, deep, flush, once } = options
 
@@ -8477,19 +8824,19 @@ function doWatch(
     if (immediate !== undefined) {
       warn(
         `watch() "immediate" option is only respected when using the ` +
-        `watch(source, callback, options?) signature.`,
+        `watch(source, callback, options?) signature.`
       )
     }
     if (deep !== undefined) {
       warn(
         `watch() "deep" option is only respected when using the ` +
-        `watch(source, callback, options?) signature.`,
+        `watch(source, callback, options?) signature.`
       )
     }
     if (once !== undefined) {
       warn(
         `watch() "once" option is only respected when using the ` +
-        `watch(source, callback, options?) signature.`,
+        `watch(source, callback, options?) signature.`
       )
     }
   }
@@ -8497,8 +8844,6 @@ function doWatch(
   const baseWatchOptions: BaseWatchOptions = extend({}, options)
 
   if (__DEV__) baseWatchOptions.onWarn = warn
-
-
 
 
   // immediate watcher or watchEffect
@@ -8509,7 +8854,8 @@ function doWatch(
       const ctx = useSSRContext()!
       ssrCleanup = ctx.__watcherHandles || (ctx.__watcherHandles = [])
     } else if (!runsImmediately) {
-      const watchStopHandle = () => { }
+      const watchStopHandle = () => {
+      }
       watchStopHandle.stop = NOOP
       watchStopHandle.resume = NOOP
       watchStopHandle.pause = NOOP
@@ -8549,7 +8895,7 @@ function doWatch(
       job.flags! |= SchedulerJobFlags.PRE
       if (instance) {
         job.id = instance.uid
-          ; (job as SchedulerJob).i = instance
+        ;(job as SchedulerJob).i = instance
       }
     }
   }
@@ -8577,7 +8923,7 @@ function patchSuspense(
   namespace: ElementNamespace,
   slotScopeIds: string[] | null,
   optimized: boolean,
-  { p: patch, um: unmount, o: { createElement } }: RendererInternals,
+  { p: patch, um: unmount, o: { createElement } }: RendererInternals
 ) {
   const suspense = (n2.suspense = n1.suspense)!
   suspense.vnode = n2
@@ -8599,7 +8945,7 @@ function patchSuspense(
         suspense,
         namespace,
         slotScopeIds,
-        optimized,
+        optimized
       )
       if (suspense.deps <= 0) {
         suspense.resolve()
@@ -8620,7 +8966,7 @@ function patchSuspense(
             null, // fallback tree will not have suspense context
             namespace,
             slotScopeIds,
-            optimized,
+            optimized
           )
           setActiveBranch(suspense, newFallback)
         }
@@ -8656,7 +9002,7 @@ function patchSuspense(
           suspense,
           namespace,
           slotScopeIds,
-          optimized,
+          optimized
         )
         if (suspense.deps <= 0) {
           suspense.resolve()
@@ -8670,7 +9016,7 @@ function patchSuspense(
             null, // fallback tree will not have suspense context
             namespace,
             slotScopeIds,
-            optimized,
+            optimized
           )
           setActiveBranch(suspense, newFallback)
         }
@@ -8685,7 +9031,7 @@ function patchSuspense(
           suspense,
           namespace,
           slotScopeIds,
-          optimized,
+          optimized
         )
         // force resolve
         suspense.resolve(true)
@@ -8700,7 +9046,7 @@ function patchSuspense(
           suspense,
           namespace,
           slotScopeIds,
-          optimized,
+          optimized
         )
         if (suspense.deps <= 0) {
           suspense.resolve()
@@ -8719,7 +9065,7 @@ function patchSuspense(
         suspense,
         namespace,
         slotScopeIds,
-        optimized,
+        optimized
       )
       setActiveBranch(suspense, newBranch)
     } else {
@@ -8742,7 +9088,7 @@ function patchSuspense(
         suspense,
         namespace,
         slotScopeIds,
-        optimized,
+        optimized
       )
       if (suspense.deps <= 0) {
         // incoming branch has no async deps, resolve now.
@@ -8785,7 +9131,7 @@ function setActiveBranch(suspense: SuspenseBoundary, branch: VNode) {
 
 function triggerEvent(
   vnode: VNode,
-  name: 'onResolve' | 'onPending' | 'onFallback',
+  name: 'onResolve' | 'onPending' | 'onFallback'
 ) {
   const eventListener = vnode.props && vnode.props[name]
   if (isFunction(eventListener)) {
@@ -8797,7 +9143,7 @@ export function mergeOptions(
   to: any,
   from: any,
   strats: Record<string, OptionMergeFunction>,
-  asMixin = false,
+  asMixin = false
 ): any {
   if (__COMPAT__ && isFunction(from)) {
     from = from.options
@@ -8810,17 +9156,17 @@ export function mergeOptions(
   }
   if (mixins) {
     mixins.forEach((m: ComponentOptionsMixin) =>
-      mergeOptions(to, m, strats, true),
+      mergeOptions(to, m, strats, true)
     )
   }
 
   for (const key in from) {
     if (asMixin && key === 'expose') {
       __DEV__ &&
-        warn(
-          `"expose" option is ignored when declared in mixins or extends. ` +
-          `It should only be declared in the base component itself.`,
-        )
+      warn(
+        `"expose" option is ignored when declared in mixins or extends. ` +
+        `It should only be declared in the base component itself.`
+      )
     } else {
       const strat = internalOptionMergeStrats[key] || (strats && strats[key])
       to[key] = strat ? strat(to[key], from[key]) : from[key]
@@ -8843,22 +9189,22 @@ function mergeDataFn(to: any, from: any) {
         : extend
     )(
       isFunction(to) ? to.call(this, this) : to,
-      isFunction(from) ? from.call(this, this) : from,
+      isFunction(from) ? from.call(this, this) : from
     )
   }
 }
 
 function mergeEmitsOrPropsOptions(
   to: EmitsOptions | undefined,
-  from: EmitsOptions | undefined,
+  from: EmitsOptions | undefined
 ): EmitsOptions | undefined
 function mergeEmitsOrPropsOptions(
   to: ComponentPropsOptions | undefined,
-  from: ComponentPropsOptions | undefined,
+  from: ComponentPropsOptions | undefined
 ): ComponentPropsOptions | undefined
 function mergeEmitsOrPropsOptions(
   to: ComponentPropsOptions | EmitsOptions | undefined,
-  from: ComponentPropsOptions | EmitsOptions | undefined,
+  from: ComponentPropsOptions | EmitsOptions | undefined
 ) {
   if (to) {
     if (isArray(to) && isArray(from)) {
@@ -8867,7 +9213,7 @@ function mergeEmitsOrPropsOptions(
     return extend(
       Object.create(null),
       normalizePropsOrEmits(to),
-      normalizePropsOrEmits(from ?? {}),
+      normalizePropsOrEmits(from ?? {})
     )
   } else {
     return from
@@ -8878,12 +9224,12 @@ function mergeEmitsOrPropsOptions(
  * @internal
  */
 export function normalizePropsOrEmits(
-  props: ComponentPropsOptions | EmitsOptions,
+  props: ComponentPropsOptions | EmitsOptions
 ): ComponentObjectPropsOptions | ObjectEmitsOptions {
   return isArray(props)
     ? props.reduce(
       (normalized, p) => ((normalized[p] = null), normalized),
-      {} as ComponentObjectPropsOptions | ObjectEmitsOptions,
+      {} as ComponentObjectPropsOptions | ObjectEmitsOptions
     )
     : props
 }
@@ -8895,9 +9241,10 @@ function mergeObjectOptions(to: object | undefined, from: object | undefined) {
 function mergeAsArray<T = Function>(to: T[] | T | undefined, from: T | T[]) {
   return to ? [...new Set([].concat(to as any, from as any))] : from
 }
+
 function mergeWatchOptions(
   to: ComponentWatchOptions | undefined,
-  from: ComponentWatchOptions | undefined,
+  from: ComponentWatchOptions | undefined
 ) {
   if (!to) return from
   if (!from) return to
@@ -8907,15 +9254,16 @@ function mergeWatchOptions(
   }
   return merged
 }
+
 function mergeInject(
   to: ComponentInjectOptions | undefined,
-  from: ComponentInjectOptions,
+  from: ComponentInjectOptions
 ) {
   return mergeObjectOptions(normalizeInject(to), normalizeInject(from))
 }
 
 function normalizeInject(
-  raw: ComponentInjectOptions | undefined,
+  raw: ComponentInjectOptions | undefined
 ): ObjectInjectOptions | undefined {
   if (isArray(raw)) {
     const res: ObjectInjectOptions = {}
@@ -8956,7 +9304,7 @@ export const internalOptionMergeStrats: Record<string, Function> = {
   watch: mergeWatchOptions,
   // provide / inject
   provide: mergeDataFn,
-  inject: mergeInject,
+  inject: mergeInject
 }
 
 
@@ -8986,7 +9334,7 @@ export function initFeatureFlags(): void {
       `which expects these compile-time feature flags to be globally injected ` +
       `via the bundler config in order to get better tree-shaking in the ` +
       `production bundle.\n\n` +
-      `For more details, see https://link.vuejs.org/feature-flags.`,
+      `For more details, see https://link.vuejs.org/feature-flags.`
     )
   }
 }
@@ -9030,7 +9378,6 @@ export function setDevtoolsHook(hook: DevtoolsHook, target: any): void {
 }
 
 
-
 function mountSuspense(
   vnode: VNode,
   container: RendererElement,
@@ -9040,11 +9387,11 @@ function mountSuspense(
   namespace: ElementNamespace,
   slotScopeIds: string[] | null,
   optimized: boolean,
-  rendererInternals: RendererInternals,
+  rendererInternals: RendererInternals
 ) {
   const {
     p: patch,
-    o: { createElement },
+    o: { createElement }
   } = rendererInternals
   const hiddenContainer = createElement('div')
   const suspense = (vnode.suspense = createSuspenseBoundary(
@@ -9057,7 +9404,7 @@ function mountSuspense(
     namespace,
     slotScopeIds,
     optimized,
-    rendererInternals,
+    rendererInternals
   ))
 
   // start mounting the content subtree in an off-dom container
@@ -9069,7 +9416,7 @@ function mountSuspense(
     parentComponent,
     suspense,
     namespace,
-    slotScopeIds,
+    slotScopeIds
   )
   // now check if we have encountered any async deps
   if (suspense.deps > 0) {
@@ -9087,7 +9434,7 @@ function mountSuspense(
       parentComponent,
       null, // fallback tree will not have suspense context
       namespace,
-      slotScopeIds,
+      slotScopeIds
     )
     setActiveBranch(suspense, vnode.ssFallback!)
   } else {
@@ -9108,7 +9455,7 @@ function createSuspenseBoundary(
   slotScopeIds: string[] | null,
   optimized: boolean,
   rendererInternals: RendererInternals,
-  isHydrating = false,
+  isHydrating = false
 ): SuspenseBoundary {
   /* v8 ignore start */
   if (__DEV__ && !__TEST__ && !hasWarned) {
@@ -9116,7 +9463,7 @@ function createSuspenseBoundary(
     // @ts-expect-error `console.info` cannot be null error
     // eslint-disable-next-line no-console
     console[console.info ? 'info' : 'log'](
-      `<Suspense> is an experimental feature and its API will likely change.`,
+      `<Suspense> is an experimental feature and its API will likely change.`
     )
   }
   /* v8 ignore stop */
@@ -9126,7 +9473,7 @@ function createSuspenseBoundary(
     m: move,
     um: unmount,
     n: next,
-    o: { parentNode, remove },
+    o: { parentNode, remove }
   } = rendererInternals
 
   // if set `suspensible: true`, set the current suspense as a dep of parent suspense
@@ -9166,12 +9513,12 @@ function createSuspenseBoundary(
       if (__DEV__) {
         if (!resume && !suspense.pendingBranch) {
           throw new Error(
-            `suspense.resolve() is called without a pending branch.`,
+            `suspense.resolve() is called without a pending branch.`
           )
         }
         if (suspense.isUnmounted) {
           throw new Error(
-            `suspense.resolve() is called on an already unmounted suspense boundary.`,
+            `suspense.resolve() is called on an already unmounted suspense boundary.`
           )
         }
       }
@@ -9182,7 +9529,7 @@ function createSuspenseBoundary(
         pendingId,
         effects,
         parentComponent,
-        container,
+        container
       } = suspense
 
       // if there's a transition happening we need to wait it to finish.
@@ -9201,7 +9548,7 @@ function createSuspenseBoundary(
                 pendingBranch!,
                 container,
                 anchor === initialAnchor ? next(activeBranch!) : anchor,
-                MoveType.ENTER,
+                MoveType.ENTER
               )
               queuePostFlushCb(effects)
             }
@@ -9298,7 +9645,7 @@ function createSuspenseBoundary(
           null, // fallback tree will not have suspense context
           namespace,
           slotScopeIds,
-          optimized,
+          optimized
         )
         setActiveBranch(suspense, fallbackVNode)
       }
@@ -9315,7 +9662,7 @@ function createSuspenseBoundary(
         activeBranch!,
         parentComponent,
         null, // no suspense so unmount hooks fire now
-        true, // shouldRemove
+        true // shouldRemove
       )
 
       if (!delayEnter) {
@@ -9325,7 +9672,7 @@ function createSuspenseBoundary(
 
     move(container, anchor, type) {
       suspense.activeBranch &&
-        move(suspense.activeBranch, container, anchor, type)
+      move(suspense.activeBranch, container, anchor, type)
       suspense.container = container
     },
 
@@ -9341,8 +9688,8 @@ function createSuspenseBoundary(
       const hydratedEl = instance.vnode.el
       instance
         .asyncDep!.catch(err => {
-          handleError(err, instance, ErrorCodes.SETUP_FUNCTION)
-        })
+        handleError(err, instance, ErrorCodes.SETUP_FUNCTION)
+      })
         .then(asyncSetupResult => {
           // retry when the setup() promise resolves.
           // component may have been unmounted before resolve.
@@ -9378,7 +9725,7 @@ function createSuspenseBoundary(
             hydratedEl ? null : next(instance.subTree),
             suspense,
             namespace,
-            optimized,
+            optimized
           )
           if (placeholder) {
             remove(placeholder)
@@ -9401,7 +9748,7 @@ function createSuspenseBoundary(
           suspense.activeBranch,
           parentComponent,
           parentSuspense,
-          doRemove,
+          doRemove
         )
       }
       if (suspense.pendingBranch) {
@@ -9409,10 +9756,10 @@ function createSuspenseBoundary(
           suspense.pendingBranch,
           parentComponent,
           parentSuspense,
-          doRemove,
+          doRemove
         )
       }
-    },
+    }
   }
 
   return suspense
@@ -9434,8 +9781,8 @@ function hydrateSuspense(
     parentComponent: ComponentInternalInstance | null,
     parentSuspense: SuspenseBoundary | null,
     slotScopeIds: string[] | null,
-    optimized: boolean,
-  ) => Node | null,
+    optimized: boolean
+  ) => Node | null
 ): Node | null {
   const suspense = (vnode.suspense = createSuspenseBoundary(
     vnode,
@@ -9449,7 +9796,7 @@ function hydrateSuspense(
     slotScopeIds,
     optimized,
     rendererInternals,
-    true /* hydrating */,
+    true /* hydrating */
   ))
   // there are two possible scenarios for server-rendered suspense:
   // - success: ssr content should be fully resolved
@@ -9463,7 +9810,7 @@ function hydrateSuspense(
     parentComponent,
     suspense,
     slotScopeIds,
-    optimized,
+    optimized
   )
   if (suspense.deps === 0) {
     suspense.resolve(false, true)
@@ -9476,7 +9823,7 @@ function normalizeSuspenseChildren(vnode: VNode): void {
   const { shapeFlag, children } = vnode
   const isSlotChildren = shapeFlag & ShapeFlags.SLOTS_CHILDREN
   vnode.ssContent = normalizeSuspenseSlot(
-    isSlotChildren ? (children as Slots).default : children,
+    isSlotChildren ? (children as Slots).default : children
   )
 
   vnode.ssFallback = isSlotChildren
@@ -9562,6 +9909,7 @@ function getSequence(arr: number[]): number[] {
   }
   return result
 }
+
 const normalizedAsyncComponentMap = new WeakMap<
   LegacyAsyncComponent,
   Component
@@ -9583,7 +9931,7 @@ export function defineAsyncComponent<
     hydrate: hydrateStrategy,
     timeout, // undefined = never times out
     suspensible = true,
-    onError: userOnError,
+    onError: userOnError
   } = source
 
   let pendingRequest: Promise<ConcreteComponent> | null = null
@@ -9621,7 +9969,7 @@ export function defineAsyncComponent<
             if (__DEV__ && !comp) {
               warn(
                 `Async component loader resolved to undefined. ` +
-                `If you are using retry(), make sure to return its return value.`,
+                `If you are using retry(), make sure to return its return value.`
               )
             }
             // interop module default
@@ -9647,14 +9995,14 @@ export function defineAsyncComponent<
 
     __asyncHydrate(el, instance, hydrate) {
       let patched = false
-        ; (instance.bu || (instance.bu = [])).push(() => (patched = true))
+      ;(instance.bu || (instance.bu = [])).push(() => (patched = true))
       const performHydrate = () => {
         // skip hydration if the component has been patched
         if (patched) {
           if (__DEV__) {
             warn(
               `Skipping lazy hydration for component '${getComponentName(resolvedComp!) || resolvedComp!.__file}': ` +
-              `it was updated before lazy hydration performed.`,
+              `it was updated before lazy hydration performed.`
             )
           }
           return
@@ -9664,10 +10012,10 @@ export function defineAsyncComponent<
       const doHydrate = hydrateStrategy
         ? () => {
           const teardown = hydrateStrategy(performHydrate, cb =>
-            forEachElement(el, cb),
+            forEachElement(el, cb)
           )
           if (teardown) {
-            ; (instance.bum || (instance.bum = [])).push(teardown)
+            ;(instance.bum || (instance.bum = [])).push(teardown)
           }
         }
         : performHydrate
@@ -9697,7 +10045,7 @@ export function defineAsyncComponent<
           err,
           instance,
           ErrorCodes.ASYNC_COMPONENT_LOADER,
-          !errorComponent /* do not throw in dev if user provided error component */,
+          !errorComponent /* do not throw in dev if user provided error component */
         )
       }
 
@@ -9716,7 +10064,7 @@ export function defineAsyncComponent<
 
               return errorComponent
                 ? createVNode(errorComponent as ConcreteComponent, {
-                  error: err,
+                  error: err
                 })
                 : null
             }
@@ -9737,7 +10085,7 @@ export function defineAsyncComponent<
         setTimeout(() => {
           if (!loaded.value && !error.value) {
             const err = new Error(
-              `Async component timed out after ${timeout}ms.`,
+              `Async component timed out after ${timeout}ms.`
             )
             onError(err)
             error.value = err
@@ -9765,20 +10113,20 @@ export function defineAsyncComponent<
         } else if (error.value && errorComponent) {
 
           return createVNode(errorComponent, {
-            error: error.value,
+            error: error.value
           })
         } else if (loadingComponent && !delayed.value) {
 
           return createVNode(loadingComponent)
         }
       }
-    },
+    }
   }) as T
 }
 
 
 export function convertLegacyAsyncComponent(
-  comp: LegacyAsyncComponent,
+  comp: LegacyAsyncComponent
 ): Component {
   if (normalizedAsyncComponentMap.has(comp)) {
     return normalizedAsyncComponentMap.get(comp)!
@@ -9789,7 +10137,7 @@ export function convertLegacyAsyncComponent(
   let resolve: (res: LegacyAsyncReturnValue) => void
   let reject: (reason?: any) => void
   const fallbackPromise = new Promise<Component>((r, rj) => {
-    ; (resolve = r), (reject = rj)
+    ;(resolve = r), (reject = rj)
   })
 
   const res = comp(resolve!, reject!)
@@ -9803,7 +10151,7 @@ export function convertLegacyAsyncComponent(
       loadingComponent: res.loading,
       errorComponent: res.error,
       delay: res.delay,
-      timeout: res.timeout,
+      timeout: res.timeout
     })
   } else if (res == null) {
     converted = defineAsyncComponent(() => fallbackPromise)
@@ -9835,7 +10183,7 @@ export function checkCompatEnabled(
 // run tests in v3 mode by default
 if (__TEST__) {
   configureCompat({
-    MODE: 3,
+    MODE: 3
   })
 }
 
@@ -9851,7 +10199,7 @@ export function configureCompat(config: CompatConfig): void {
 // dev only
 export function validateCompatConfig(
   config: CompatConfig,
-  instance?: ComponentInternalInstance,
+  instance?: ComponentInternalInstance
 ): void {
   if (seenConfigObjects.has(config)) {
     return
@@ -9870,7 +10218,7 @@ export function validateCompatConfig(
             `Deprecation config "${key}" is compiler-specific and you are ` +
             `running a runtime-only build of Vue. This deprecation should be ` +
             `configured via compiler options in your build setup instead.\n` +
-            `Details: https://v3-migration.vuejs.org/breaking-changes/migration-build.html`,
+            `Details: https://v3-migration.vuejs.org/breaking-changes/migration-build.html`
           )
         }
       } else {
@@ -9882,7 +10230,7 @@ export function validateCompatConfig(
 
   if (instance && config[DeprecationTypes.OPTIONS_DATA_MERGE] != null) {
     warn(
-      `Deprecation config "${DeprecationTypes.OPTIONS_DATA_MERGE}" can only be configured globally.`,
+      `Deprecation config "${DeprecationTypes.OPTIONS_DATA_MERGE}" can only be configured globally.`
     )
   }
 }
@@ -9890,7 +10238,7 @@ export function validateCompatConfig(
 
 function createInnerComp(
   comp: ConcreteComponent,
-  parent: ComponentInternalInstance,
+  parent: ComponentInternalInstance
 ) {
   const { ref, props, children, ce } = parent.vnode
 
@@ -9918,7 +10266,7 @@ export function markAsyncBoundary(instance: ComponentInternalInstance): void {
 
 export function shouldSkipAttr(
   key: string,
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): boolean {
   if (key === 'is') {
     return true
@@ -9944,7 +10292,7 @@ export function shouldSkipAttr(
 
 
 export function getCompatListeners(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): Record<string, Function | Function[]> {
   assertCompatEnabled(DeprecationTypes.INSTANCE_LISTENERS, instance)
 
@@ -9981,11 +10329,11 @@ const isBuiltInTag = /*@__PURE__*/ makeMap('slot,component')
 
 export function validateComponentName(
   name: string,
-  { isNativeTag }: AppConfig,
+  { isNativeTag }: AppConfig
 ): void {
   if (isBuiltInTag(name) || isNativeTag(name)) {
     warn(
-      'Do not use built-in or reserved HTML elements as component id: ' + name,
+      'Do not use built-in or reserved HTML elements as component id: ' + name
     )
   }
 }
@@ -9998,7 +10346,7 @@ export const unsetCurrentInstance = (): void => {
 
 function setupStatefulComponent(
   instance: ComponentInternalInstance,
-  isSSR: boolean,
+  isSSR: boolean
 ) {
   const Component = instance.type as ComponentOptions
 
@@ -10022,7 +10370,7 @@ function setupStatefulComponent(
       warn(
         `"compilerOptions" is only supported when using a build of Vue that ` +
         `includes the runtime compiler. Since you are using a runtime-only ` +
-        `build, the options should be passed via your build tool config instead.`,
+        `build, the options should be passed via your build tool config instead.`
       )
     }
   }
@@ -10046,8 +10394,8 @@ function setupStatefulComponent(
       ErrorCodes.SETUP_FUNCTION,
       [
         __DEV__ ? shallowReadonly(instance.props) : instance.props,
-        setupContext,
-      ],
+        setupContext
+      ]
     )
     const isAsyncSetup = isPromise(setupResult)
     resetTracking()
@@ -10079,13 +10427,13 @@ function setupStatefulComponent(
             `Component <${name}>: setup function returned a promise, but no ` +
             `<Suspense> boundary was found in the parent component tree. ` +
             `A component with async setup() must be nested in a <Suspense> ` +
-            `in order to be rendered.`,
+            `in order to be rendered.`
           )
         }
       } else if (__DEV__) {
         warn(
           `setup() returned a Promise, but the version of Vue you are using ` +
-          `does not support it yet.`,
+          `does not support it yet.`
         )
       }
     } else {
@@ -10099,7 +10447,7 @@ function setupStatefulComponent(
 export function finishComponentSetup(
   instance: ComponentInternalInstance,
   isSSR: boolean,
-  skipOptions?: boolean,
+  skipOptions?: boolean
 ): void {
   const Component = instance.type as ComponentOptions
 
@@ -10134,11 +10482,11 @@ export function finishComponentSetup(
           extend(
             {
               isCustomElement,
-              delimiters,
+              delimiters
             },
-            compilerOptions,
+            compilerOptions
           ),
-          componentCompilerOptions,
+          componentCompilerOptions
         )
         if (__COMPAT__) {
           // pass runtime compat config into the compiler
@@ -10191,7 +10539,7 @@ export function finishComponentSetup(
             ? ` Use "vue.esm-browser.js" instead.`
             : __GLOBAL__
               ? ` Use "vue.global.js" instead.`
-              : ``) /* should not happen */,
+              : ``) /* should not happen */
       )
       /* v8 ignore stop */
     } else {
@@ -10204,7 +10552,7 @@ const createHook =
   <T extends Function = () => any>(lifecycle: LifecycleHooks) =>
     (
       hook: T,
-      target: ComponentInternalInstance | null = currentInstance,
+      target: ComponentInternalInstance | null = currentInstance
     ): void => {
       // post-create lifecycle registrations are noops during SSR (except for serverPrefetch)
       if (
@@ -10219,7 +10567,7 @@ export function injectHook(
   type: LifecycleHooks,
   hook: Function & { __weh?: Function },
   target: ComponentInternalInstance | null = currentInstance,
-  prepend: boolean = false,
+  prepend: boolean = false
 ): Function | undefined {
   if (target) {
     const hooks = target[type] || (target[type] = [])
@@ -10256,7 +10604,7 @@ export function injectHook(
       (__FEATURE_SUSPENSE__
         ? ` If you are using async setup(), make sure to register lifecycle ` +
         `hooks before the first await statement.`
-        : ``),
+        : ``)
     )
   }
 }
@@ -10264,37 +10612,41 @@ export function injectHook(
 export const onBeforeMount: CreateHook = createHook(LifecycleHooks.BEFORE_MOUNT)
 export const onMounted: CreateHook = createHook(LifecycleHooks.MOUNTED)
 export const onBeforeUpdate: CreateHook = createHook(
-  LifecycleHooks.BEFORE_UPDATE,
+  LifecycleHooks.BEFORE_UPDATE
 )
 export const onUpdated: CreateHook = createHook(LifecycleHooks.UPDATED)
+
 export function onActivated(
   hook: Function,
-  target?: ComponentInternalInstance | null,
+  target?: ComponentInternalInstance | null
 ): void {
   registerKeepAliveHook(hook, LifecycleHooks.ACTIVATED, target)
 }
+
 export function onDeactivated(
   hook: Function,
-  target?: ComponentInternalInstance | null,
+  target?: ComponentInternalInstance | null
 ): void {
   registerKeepAliveHook(hook, LifecycleHooks.DEACTIVATED, target)
 }
+
 export function onErrorCaptured<TError = Error>(
   hook: ErrorCapturedHook<TError>,
-  target: ComponentInternalInstance | null = currentInstance,
+  target: ComponentInternalInstance | null = currentInstance
 ): void {
   injectHook(LifecycleHooks.ERROR_CAPTURED, hook, target)
 }
+
 export const onRenderTracked: CreateHook<DebuggerHook> =
   createHook<DebuggerHook>(LifecycleHooks.RENDER_TRACKED)
 export const onRenderTriggered: CreateHook<DebuggerHook> =
   createHook<DebuggerHook>(LifecycleHooks.RENDER_TRIGGERED)
 export const onBeforeUnmount: CreateHook = createHook(
-  LifecycleHooks.BEFORE_UNMOUNT,
+  LifecycleHooks.BEFORE_UNMOUNT
 )
 export const onUnmounted: CreateHook = createHook(LifecycleHooks.UNMOUNTED)
 export const onServerPrefetch: CreateHook = createHook(
-  LifecycleHooks.SERVER_PREFETCH,
+  LifecycleHooks.SERVER_PREFETCH
 )
 
 export function applyOptions(instance: ComponentInternalInstance): void {
@@ -10342,7 +10694,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
     // assets
     components,
     directives,
-    filters,
+    filters
   } = options
 
   const checkDuplicateProperties = __DEV__ ? createDuplicateChecker() : null
@@ -10380,7 +10732,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
             value: methodHandler.bind(publicThis),
             configurable: true,
             enumerable: true,
-            writable: true,
+            writable: true
           })
         } else {
           ctx[key] = methodHandler.bind(publicThis)
@@ -10391,7 +10743,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
       } else if (__DEV__) {
         warn(
           `Method "${key}" has type "${typeof methodHandler}" in the component definition. ` +
-          `Did you reference the function correctly?`,
+          `Did you reference the function correctly?`
         )
       }
     }
@@ -10401,7 +10753,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
     if (__DEV__ && !isFunction(dataOptions)) {
       warn(
         `The data option must be a function. ` +
-        `Plain object usage is no longer supported.`,
+        `Plain object usage is no longer supported.`
       )
     }
     const data = dataOptions.call(publicThis, publicThis)
@@ -10409,7 +10761,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
       warn(
         `data() returned a Promise - note data() cannot be async; If you ` +
         `intend to perform data fetching before component renders, use ` +
-        `async setup() + <Suspense>.`,
+        `async setup() + <Suspense>.`
       )
     }
     if (!isObject(data)) {
@@ -10425,7 +10777,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
               configurable: true,
               enumerable: true,
               get: () => data[key],
-              set: NOOP,
+              set: NOOP
             })
           }
         }
@@ -10453,19 +10805,19 @@ export function applyOptions(instance: ComponentInternalInstance): void {
           : __DEV__
             ? () => {
               warn(
-                `Write operation failed: computed property "${key}" is readonly.`,
+                `Write operation failed: computed property "${key}" is readonly.`
               )
             }
             : NOOP
       const c = computed({
         get,
-        set,
+        set
       })
       Object.defineProperty(ctx, key, {
         enumerable: true,
         configurable: true,
         get: () => c.value,
-        set: v => (c.value = v),
+        set: v => (c.value = v)
       })
       if (__DEV__) {
         checkDuplicateProperties!(OptionTypes.COMPUTED, key)
@@ -10494,7 +10846,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
 
   function registerLifecycleHook(
     register: Function,
-    hook?: Function | Function[],
+    hook?: Function | Function[]
   ) {
     if (isArray(hook)) {
       hook.forEach(_hook => register(_hook.bind(publicThis)))
@@ -10538,7 +10890,7 @@ export function applyOptions(instance: ComponentInternalInstance): void {
         Object.defineProperty(exposed, key, {
           get: () => publicThis[key],
           set: val => (publicThis[key] = val),
-          enumerable: true,
+          enumerable: true
         })
       })
     } else if (!instance.exposed) {
@@ -10576,7 +10928,7 @@ export function createWatcher(
   raw: ComponentWatchOptionItem,
   ctx: Data,
   publicThis: ComponentPublicInstance,
-  key: string,
+  key: string
 ): void {
   let getter = key.includes('.')
     ? createPathGetter(publicThis, key)
@@ -10648,7 +11000,7 @@ export function createWatcher(
 function hasPropsChanged(
   prevProps: Data,
   nextProps: Data,
-  emitsOptions: ComponentInternalInstance['emitsOptions'],
+  emitsOptions: ComponentInternalInstance['emitsOptions']
 ): boolean {
   const nextKeys = Object.keys(nextProps)
   if (nextKeys.length !== Object.keys(prevProps).length) {
@@ -10665,6 +11017,7 @@ function hasPropsChanged(
   }
   return false
 }
+
 function installFilterMethod(app: App, context: AppContext) {
   context.filters = {}
   app.filter = (name: string, filter?: Function): any => {
@@ -10690,21 +11043,21 @@ export function installLegacyOptionMergeStrats(config: AppConfig): void {
         key in internalOptionMergeStrats &&
         softAssertCompatEnabled(
           DeprecationTypes.CONFIG_OPTION_MERGE_STRATS,
-          null,
+          null
         )
       ) {
         return internalOptionMergeStrats[
           key as keyof typeof internalOptionMergeStrats
-        ]
+          ]
       }
-    },
+    }
   })
 }
 
 function installCompatMount(
   app: App,
   context: AppContext,
-  render: RootRenderFunction,
+  render: RootRenderFunction
 ) {
   let isMounted = false
 
@@ -10721,7 +11074,8 @@ function installCompatMount(
 
     const hasNoRender =
       !isFunction(component) && !component.render && !component.template
-    const emptyRender = () => { }
+    const emptyRender = () => {
+    }
 
     // create root instance
     const instance = createComponentInstance(vnode, null, null)
@@ -10752,9 +11106,9 @@ function installCompatMount(
         const result = document.querySelector(selectorOrEl)
         if (!result) {
           __DEV__ &&
-            warn(
-              `Failed to mount root instance: selector "${selectorOrEl}" returned null.`,
-            )
+          warn(
+            `Failed to mount root instance: selector "${selectorOrEl}" returned null.`
+          )
           return
         }
         container = result
@@ -10796,7 +11150,7 @@ function installCompatMount(
           }
         }
         instance.render = null
-          ; (component as ComponentOptions).template = container.innerHTML
+        ;(component as ComponentOptions).template = container.innerHTML
         finishComponentSetup(instance, false, true /* skip options */)
       }
 
@@ -10813,8 +11167,8 @@ function installCompatMount(
 
       isMounted = true
       app._container = container
-        // for devtools and telemetry
-        ; (container as any).__vue_app__ = app
+      // for devtools and telemetry
+      ;(container as any).__vue_app__ = app
       if (__DEV__ || __FEATURE_PROD_DEVTOOLS__) {
         devtoolsInitApp(app, version)
       }
@@ -10864,7 +11218,7 @@ function installLegacyAPIs(app: App) {
       get() {
         __DEV__ && warnDeprecation(DeprecationTypes.GLOBAL_PROTOTYPE, null)
         return app.config.globalProperties
-      },
+      }
     },
     nextTick: { value: nextTick },
     extend: { value: singletonCtor.extend },
@@ -10874,18 +11228,18 @@ function installLegacyAPIs(app: App) {
     util: {
       get() {
         return singletonCtor.util
-      },
-    },
+      }
+    }
   })
 }
 
 function applySingletonAppMutations(app: App) {
   // copy over asset registries and deopt flag
   app._context.mixins = [...singletonApp._context.mixins]
-    ;['components', 'directives', 'filters'].forEach(key => {
-      // @ts-expect-error
-      app._context[key] = Object.create(singletonApp._context[key])
-    })
+  ;['components', 'directives', 'filters'].forEach(key => {
+    // @ts-expect-error
+    app._context[key] = Object.create(singletonApp._context[key])
+  })
 
   // copy over global config mutations
   isCopyingConfig = true
@@ -10924,7 +11278,7 @@ export function installLegacyConfigWarnings(config: AppConfig): void {
     devtools: DeprecationTypes.CONFIG_DEVTOOLS,
     ignoredElements: DeprecationTypes.CONFIG_IGNORED_ELEMENTS,
     keyCodes: DeprecationTypes.CONFIG_KEY_CODES,
-    productionTip: DeprecationTypes.CONFIG_PRODUCTION_TIP,
+    productionTip: DeprecationTypes.CONFIG_PRODUCTION_TIP
   }
 
   Object.keys(legacyConfigOptions).forEach(key => {
@@ -10939,7 +11293,7 @@ export function installLegacyConfigWarnings(config: AppConfig): void {
           warnDeprecation(legacyConfigOptions[key], null)
         }
         val = newVal
-      },
+      }
     })
   })
 }
@@ -10947,7 +11301,7 @@ export function installLegacyConfigWarnings(config: AppConfig): void {
 export function installAppCompatProperties(
   app: App,
   context: AppContext,
-  render: RootRenderFunction<any>,
+  render: RootRenderFunction<any>
 ): void {
   installFilterMethod(app, context)
   installLegacyOptionMergeStrats(app.config)
@@ -10978,7 +11332,7 @@ function applySingletonPrototype(app: App, Ctor: Function) {
         Object.defineProperty(
           app.config.globalProperties,
           key,
-          Object.getOwnPropertyDescriptor(Ctor.prototype, key)!,
+          Object.getOwnPropertyDescriptor(Ctor.prototype, key)!
         )
       }
     }
@@ -10991,7 +11345,7 @@ function applySingletonPrototype(app: App, Ctor: Function) {
 //
 export function nextTick<T = void, R = void>(
   this: T,
-  fn?: (this: T) => R,
+  fn?: (this: T) => R
 ): Promise<Awaited<R>> {
   const p = currentFlushPromise || resolvedPromise
   return fn ? p.then(this ? fn.bind(this) : fn) : p
@@ -11020,7 +11374,7 @@ function isVNodeSuspensible(vnode: VNode) {
 export function handleSetupResult(
   instance: ComponentInternalInstance,
   setupResult: unknown,
-  isSSR: boolean,
+  isSSR: boolean
 ): void {
   if (isFunction(setupResult)) {
     // setup returned an inline render function
@@ -11035,7 +11389,7 @@ export function handleSetupResult(
     if (__DEV__ && isVNode(setupResult)) {
       warn(
         `setup() should not return VNodes directly - ` +
-        `return a render function instead.`,
+        `return a render function instead.`
       )
     }
     // setup returned bindings.
@@ -11050,7 +11404,7 @@ export function handleSetupResult(
   } else if (__DEV__ && setupResult !== undefined) {
     warn(
       `setup() should return an object. Received: ${setupResult === null ? 'null' : typeof setupResult
-      }`,
+      }`
     )
   }
   finishComponentSetup(instance, isSSR)
@@ -11058,7 +11412,7 @@ export function handleSetupResult(
 
 // dev only
 export function exposeSetupStateOnRenderContext(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): void {
   const { ctx, setupState } = instance
   Object.keys(toRaw(setupState)).forEach(key => {
@@ -11066,9 +11420,9 @@ export function exposeSetupStateOnRenderContext(
       if (isReservedPrefix(key[0])) {
         warn(
           `setup() return property ${JSON.stringify(
-            key,
+            key
           )} should not start with "$" or "_" ` +
-          `which are reserved prefixes for Vue internals.`,
+          `which are reserved prefixes for Vue internals.`
         )
         return
       }
@@ -11076,7 +11430,7 @@ export function exposeSetupStateOnRenderContext(
         enumerable: true,
         configurable: true,
         get: () => setupState[key],
-        set: NOOP,
+        set: NOOP
       })
     }
   })
@@ -11084,11 +11438,11 @@ export function exposeSetupStateOnRenderContext(
 
 
 export function exposePropsOnRenderContext(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): void {
   const {
     ctx,
-    propsOptions: [propsOptions],
+    propsOptions: [propsOptions]
   } = instance
   if (propsOptions) {
     Object.keys(propsOptions).forEach(key => {
@@ -11096,14 +11450,14 @@ export function exposePropsOnRenderContext(
         enumerable: true,
         configurable: true,
         get: () => instance.props[key],
-        set: NOOP,
+        set: NOOP
       })
     })
   }
 }
 
 export function createSetupContext(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): SetupContext {
   const expose: SetupContext['expose'] = exposed => {
     if (__DEV__) {
@@ -11121,7 +11475,7 @@ export function createSetupContext(
         }
         if (exposedType !== 'object') {
           warn(
-            `expose() should be passed a plain object, received ${exposedType}.`,
+            `expose() should be passed a plain object, received ${exposedType}.`
           )
         }
       }
@@ -11147,14 +11501,14 @@ export function createSetupContext(
       get emit() {
         return (event: string, ...args: any[]) => instance.emit(event, ...args)
       },
-      expose,
+      expose
     })
   } else {
     return {
       attrs: new Proxy(instance.attrs, attrsProxyHandlers),
       slots: instance.slots,
       emit: instance.emit,
-      expose,
+      expose
     }
   }
 }
@@ -11168,14 +11522,14 @@ function getSlotsProxy(instance: ComponentInternalInstance): Slots {
     get(target, key: string) {
       track(instance, TrackOpTypes.GET, '$slots')
       return target[key]
-    },
+    }
   })
 }
 
 function registerKeepAliveHook(
   hook: Function & { __wdc?: Function },
   type: LifecycleHooks,
-  target: ComponentInternalInstance | null = currentInstance,
+  target: ComponentInternalInstance | null = currentInstance
 ) {
   // cache the deactivate branch check wrapper for injected hooks so the same
   // hook can be properly deduped by the scheduler. "__wdc" stands for "with
@@ -11213,14 +11567,14 @@ function registerKeepAliveHook(
 function callHook(
   hook: Function,
   instance: ComponentInternalInstance,
-  type: LifecycleHooks,
+  type: LifecycleHooks
 ) {
   callWithAsyncErrorHandling(
     isArray(hook)
       ? hook.map(h => h.bind(instance.proxy!))
       : hook.bind(instance.proxy!),
     instance,
-    type,
+    type
   )
 }
 
@@ -11238,7 +11592,7 @@ function createDuplicateChecker() {
 export function resolveInjections(
   injectOptions: ComponentInjectOptions,
   ctx: any,
-  checkDuplicateProperties = NOOP as any,
+  checkDuplicateProperties = NOOP as any
 ): void {
   if (isArray(injectOptions)) {
     injectOptions = normalizeInject(injectOptions)!
@@ -11251,7 +11605,7 @@ export function resolveInjections(
         injected = inject(
           opt.from || key,
           opt.default,
-          true /* treat default function as factory */,
+          true /* treat default function as factory */
         )
       } else {
         injected = inject(opt.from || key)
@@ -11265,7 +11619,7 @@ export function resolveInjections(
         enumerable: true,
         configurable: true,
         get: () => (injected as Ref).value,
-        set: v => ((injected as Ref).value = v),
+        set: v => ((injected as Ref).value = v)
       })
     } else {
       ctx[key] = injected
@@ -11286,7 +11640,6 @@ export function createTextVNode(text: string = ' ', flag: number = 0): VNode {
 }
 
 
-
 // defineComponent is a utility that is primarily used for type inference
 // when declaring components. Type inference is provided in the component
 // options (provided as the argument). The returned value has artificial types
@@ -11302,13 +11655,13 @@ export function defineComponent<
 >(
   setup: (
     props: Props,
-    ctx: SetupContext<E, S>,
+    ctx: SetupContext<E, S>
   ) => RenderFunction | Promise<RenderFunction>,
   options?: Pick<ComponentOptions, 'name' | 'inheritAttrs'> & {
     props?: (keyof Props)[]
     emits?: E | EE[]
     slots?: S
-  },
+  }
 ): DefineSetupFnComponent<Props, E, S>
 export function defineComponent<
   Props extends Record<string, any>,
@@ -11318,21 +11671,20 @@ export function defineComponent<
 >(
   setup: (
     props: Props,
-    ctx: SetupContext<E, S>,
+    ctx: SetupContext<E, S>
   ) => RenderFunction | Promise<RenderFunction>,
   options?: Pick<ComponentOptions, 'name' | 'inheritAttrs'> & {
     props?: ComponentObjectPropsOptions<Props>
     emits?: E | EE[]
     slots?: S
-  },
+  }
 ): DefineSetupFnComponent<Props, E, S>
 
 // overload 2: defineComponent with options object, infer props from options
 export function defineComponent<
   // props
   TypeProps,
-  RuntimePropsOptions extends
-  ComponentObjectPropsOptions = ComponentObjectPropsOptions,
+  RuntimePropsOptions extends ComponentObjectPropsOptions = ComponentObjectPropsOptions,
   RuntimePropsKeys extends string = string,
   // emits
   TypeEmits extends ComponentTypeEmits = {},
@@ -11354,15 +11706,15 @@ export function defineComponent<
   Provide extends ComponentProvideOptions = ComponentProvideOptions,
   // resolved types
   ResolvedEmits extends EmitsOptions = {} extends RuntimeEmitsOptions
-  ? TypeEmitsToOptions<TypeEmits>
-  : RuntimeEmitsOptions,
+    ? TypeEmitsToOptions<TypeEmits>
+    : RuntimeEmitsOptions,
   InferredProps = IsKeyValues<TypeProps> extends true
-  ? TypeProps
-  : string extends RuntimePropsKeys
-  ? ComponentObjectPropsOptions extends RuntimePropsOptions
-  ? {}
-  : ExtractPropTypes<RuntimePropsOptions>
-  : { [key in RuntimePropsKeys]?: any },
+    ? TypeProps
+    : string extends RuntimePropsKeys
+      ? ComponentObjectPropsOptions extends RuntimePropsOptions
+        ? {}
+        : ExtractPropTypes<RuntimePropsOptions>
+      : { [key in RuntimePropsKeys]?: any },
   TypeRefs extends Record<string, unknown> = {},
   TypeEl extends Element = any,
 >(
@@ -11422,7 +11774,7 @@ export function defineComponent<
         Directives,
         Exposed
       >
-    >,
+    >
 ): DefineComponent<
   InferredProps,
   SetupBindings,
@@ -11452,23 +11804,22 @@ export function defineComponent<
 /*! #__NO_SIDE_EFFECTS__ */
 export function defineComponent(
   options: unknown,
-  extraOptions?: ComponentOptions,
+  extraOptions?: ComponentOptions
 ) {
   return isFunction(options)
     ? // #8236: extend call and options.name access are considered side-effects
       // by Rollup, so we have to wrap it in a pure-annotated IIFE.
-      /*@__PURE__*/ (() =>
+    /*@__PURE__*/ (() =>
       extend({ name: options.name }, extraOptions, { setup: options }))()
     : options
 }
-
 
 
 function injectToKeepAliveRoot(
   hook: Function & { __weh?: Function },
   type: LifecycleHooks,
   target: ComponentInternalInstance,
-  keepAliveRoot: ComponentInternalInstance,
+  keepAliveRoot: ComponentInternalInstance
 ) {
   // injectHook wraps the original for error handling, so make sure to remove
   // the wrapped version.
@@ -11490,18 +11841,18 @@ export function openBlock(disableTracking = false): void {
 
 export function compatH(
   type: string | Component,
-  children?: LegacyVNodeChildren,
+  children?: LegacyVNodeChildren
 ): VNode
 export function compatH(
   type: string | Component,
   props?: Data & LegacyVNodeProps,
-  children?: LegacyVNodeChildren,
+  children?: LegacyVNodeChildren
 ): VNode
 
 export function compatH(
   type: any,
   propsOrChildren?: any,
-  children?: any,
+  children?: any
 ): VNode {
   if (!type) {
     type = Comment
@@ -11533,8 +11884,8 @@ export function compatH(
       return convertLegacySlots(
         convertLegacyDirectives(
           createVNode(type, convertLegacyProps(propsOrChildren, type)),
-          propsOrChildren,
-        ),
+          propsOrChildren
+        )
       )
     } else {
 
@@ -11549,14 +11900,14 @@ export function compatH(
     return convertLegacySlots(
       convertLegacyDirectives(
         createVNode(type, convertLegacyProps(propsOrChildren, type), children),
-        propsOrChildren,
-      ),
+        propsOrChildren
+      )
     )
   }
 }
 
 const isSimpleType = /*@__PURE__*/ makeMap(
-  'String,Number,Boolean,Function,Symbol,BigInt',
+  'String,Number,Boolean,Function,Symbol,BigInt'
 )
 
 /**
@@ -11564,7 +11915,7 @@ const isSimpleType = /*@__PURE__*/ makeMap(
  */
 function assertType(
   value: unknown,
-  type: PropConstructor | null,
+  type: PropConstructor | null
 ): AssertionResult {
   let valid
   const expectedType = getType(type)
@@ -11586,7 +11937,7 @@ function assertType(
   }
   return {
     valid,
-    expectedType,
+    expectedType
   }
 }
 
@@ -11615,7 +11966,7 @@ function getType(ctor: Prop<any> | null): string {
 }
 
 export function convertLegacyRenderFn(
-  instance: ComponentInternalInstance,
+  instance: ComponentInternalInstance
 ): void {
   const Component = instance.type as ComponentOptions
   const render = Component.render as InternalRenderFunction | undefined
@@ -11666,12 +12017,12 @@ function resolveAsset(
   type: typeof COMPONENTS,
   name: string,
   warnMissing?: boolean,
-  maybeSelfReference?: boolean,
+  maybeSelfReference?: boolean
 ): ConcreteComponent | undefined
 // overload 2: directives
 function resolveAsset(
   type: typeof DIRECTIVES,
-  name: string,
+  name: string
 ): Directive | undefined
 // implementation
 // overload 3: filters (compat only)
@@ -11681,7 +12032,7 @@ function resolveAsset(
   type: AssetTypes,
   name: string,
   warnMissing = true,
-  maybeSelfReference = false,
+  maybeSelfReference = false
 ) {
   const instance = currentRenderingInstance || currentInstance
   if (instance) {
@@ -11691,7 +12042,7 @@ function resolveAsset(
     if (type === COMPONENTS) {
       const selfName = getComponentName(
         Component,
-        false /* do not include inferred name to avoid breaking existing code */,
+        false /* do not include inferred name to avoid breaking existing code */
       )
       if (
         selfName &&
@@ -11728,7 +12079,7 @@ function resolveAsset(
   } else if (__DEV__) {
     warn(
       `resolve${capitalize(type.slice(0, -1))} ` +
-      `can only be used in render() or setup().`,
+      `can only be used in render() or setup().`
     )
   }
 }
@@ -11782,7 +12133,7 @@ function convertLegacySlots(vnode: VNode): VNode {
 
 function convertLegacyDirectives(
   vnode: VNode,
-  props?: LegacyVNodeProps,
+  props?: LegacyVNodeProps
 ): VNode {
   if (props && props.directives) {
     return withDirectives(
@@ -11792,9 +12143,9 @@ function convertLegacyDirectives(
           resolveDirective(name)!,
           value,
           arg,
-          modifiers,
+          modifiers
         ] as DirectiveArguments[number]
-      }),
+      })
     )
   }
   return vnode
@@ -11802,7 +12153,7 @@ function convertLegacyDirectives(
 
 function convertLegacyProps(
   legacyProps: LegacyVNodeProps | undefined,
-  type: any,
+  type: any
 ): (Data & VNodeProps) | null {
   if (!legacyProps) {
     return null
@@ -11856,7 +12207,7 @@ function convertLegacyProps(
  */
 export function withDirectives<T extends VNode>(
   vnode: T,
-  directives: DirectiveArguments,
+  directives: DirectiveArguments
 ): T {
   if (currentRenderingInstance === null) {
     __DEV__ && warn(`withDirectives can only be used inside render functions.`)
@@ -11870,7 +12221,7 @@ export function withDirectives<T extends VNode>(
       if (isFunction(dir)) {
         dir = {
           mounted: dir,
-          updated: dir,
+          updated: dir
         } as ObjectDirective
       }
       if (dir.deep) {
@@ -11882,7 +12233,7 @@ export function withDirectives<T extends VNode>(
         value,
         oldValue: void 0,
         arg,
-        modifiers,
+        modifiers
       })
     }
   }
@@ -11923,7 +12274,7 @@ function resolve(registry: Record<string, any> | undefined, name: string) {
 
 export function forEachElement(
   node: Node,
-  cb: (el: Element) => void | false,
+  cb: (el: Element) => void | false
 ): void {
   // fragment
   if (isComment(node) && node.data === '[') {
@@ -11961,7 +12312,7 @@ function defineReactiveSimple(obj: any, key: string, val: any) {
     set(newVal) {
       val = isObject(newVal) ? reactive(newVal) : newVal
       trigger(obj, TriggerOpTypes.SET, key, newVal)
-    },
+    }
   })
 }
 
@@ -11982,7 +12333,8 @@ function defineReactive(obj: any, key: string, val: any) {
       Object.keys(val).forEach(key => {
         try {
           defineReactiveSimple(val, key, val[key])
-        } catch (e: any) { }
+        } catch (e: any) {
+        }
       })
     }
   }
@@ -12003,12 +12355,12 @@ function defineReactive(obj: any, key: string, val: any) {
 // Legacy global Vue constructor
 export function createCompatVue(
   createApp: CreateAppFunction<Element>,
-  createSingletonApp: CreateAppFunction<Element>,
+  createSingletonApp: CreateAppFunction<Element>
 ): CompatVue {
   singletonApp = createSingletonApp({})
 
   const Vue: CompatVue = (singletonCtor = function Vue(
-    options: ComponentOptions = {},
+    options: ComponentOptions = {}
   ) {
     return createCompatApp(options, Vue)
   } as any)
@@ -12094,6 +12446,7 @@ export function createCompatVue(
     }
 
     const Super = this
+
     function SubVue(inlineOptions?: ComponentOptions) {
       if (!inlineOptions) {
         return createCompatApp(SubVue.options, SubVue)
@@ -12102,12 +12455,13 @@ export function createCompatVue(
           mergeOptions(
             extend({}, SubVue.options),
             inlineOptions,
-            internalOptionMergeStrats as any,
+            internalOptionMergeStrats as any
           ),
-          SubVue,
+          SubVue
         )
       }
     }
+
     SubVue.super = Super
     SubVue.prototype = Object.create(Vue.prototype)
     SubVue.prototype.constructor = SubVue
@@ -12127,7 +12481,7 @@ export function createCompatVue(
     SubVue.options = mergeOptions(
       mergeBase,
       extendOptions,
-      internalOptionMergeStrats as any,
+      internalOptionMergeStrats as any
     )
 
     SubVue.options._base = SubVue
@@ -12174,15 +12528,15 @@ export function createCompatVue(
       mergeOptions(
         parent,
         child,
-        vm ? undefined : (internalOptionMergeStrats as any),
+        vm ? undefined : (internalOptionMergeStrats as any)
       ),
-    defineReactive,
+    defineReactive
   }
   Object.defineProperty(Vue, 'util', {
     get() {
       assertCompatEnabled(DeprecationTypes.GLOBAL_PRIVATE_UTIL, null)
       return util
-    },
+    }
   })
 
   Vue.configureCompat = configureCompat
@@ -12202,7 +12556,7 @@ const _compatUtils: {
   createCompatVue,
   isCompatEnabled,
   checkCompatEnabled,
-  softAssertCompatEnabled,
+  softAssertCompatEnabled
 }
 /**
  * @internal only exposed in compat builds.
@@ -12226,12 +12580,12 @@ export const RuntimeCompiledPublicInstanceProxyHandlers: ProxyHandler<any> =
     if (__DEV__ && !has && PublicInstanceProxyHandlers.has!(_, key)) {
       warn(
         `Property ${JSON.stringify(
-          key,
-        )} should not start with _ which is a reserved prefix for Vue internals.`,
+          key
+        )} should not start with _ which is a reserved prefix for Vue internals.`
       )
     }
     return has
-  },
+  }
 })
 
 
@@ -12249,17 +12603,15 @@ export function registerRuntimeCompiler(_compile: any): void {
 }
 
 
-
-
 // element
 export function h<K extends keyof HTMLElementTagNameMap>(
   type: K,
-  children?: RawChildren,
+  children?: RawChildren
 ): VNode
 export function h<K extends keyof HTMLElementTagNameMap>(
   type: K,
   props?: (RawProps & HTMLElementEventHandler) | null,
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // custom element
@@ -12267,32 +12619,32 @@ export function h(type: string, children?: RawChildren): VNode
 export function h(
   type: string,
   props?: RawProps | null,
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // text/comment
 export function h(
   type: typeof Text | typeof Comment,
-  children?: string | number | boolean,
+  children?: string | number | boolean
 ): VNode
 export function h(
   type: typeof Text | typeof Comment,
   props?: null,
-  children?: string | number | boolean,
+  children?: string | number | boolean
 ): VNode
 // fragment
 export function h(type: typeof Fragment, children?: VNodeArrayChildren): VNode
 export function h(
   type: typeof Fragment,
   props?: RawProps | null,
-  children?: VNodeArrayChildren,
+  children?: VNodeArrayChildren
 ): VNode
 
 // teleport (target prop is required)
 export function h(
   type: typeof Teleport,
   props: RawProps & TeleportProps,
-  children: RawChildren | RawSlots,
+  children: RawChildren | RawSlots
 ): VNode
 
 // suspense
@@ -12300,7 +12652,7 @@ export function h(type: typeof Suspense, children?: RawChildren): VNode
 export function h(
   type: typeof Suspense,
   props?: (RawProps & SuspenseProps) | null,
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // functional component
@@ -12311,7 +12663,7 @@ export function h<
 >(
   type: FunctionalComponent<P, any, S, any>,
   props?: (RawProps & P) | ({} extends P ? null : never),
-  children?: RawChildren | IfAny<S, RawSlots, S>,
+  children?: RawChildren | IfAny<S, RawSlots, S>
 ): VNode
 
 // catch-all for generic component types
@@ -12320,26 +12672,26 @@ export function h(type: Component, children?: RawChildren): VNode
 // concrete component
 export function h<P>(
   type: ConcreteComponent | string,
-  children?: RawChildren,
+  children?: RawChildren
 ): VNode
 export function h<P>(
   type: ConcreteComponent<P> | string,
   props?: (RawProps & P) | ({} extends P ? null : never),
-  children?: RawChildren,
+  children?: RawChildren
 ): VNode
 
 // component without props
 export function h<P>(
   type: Component<P>,
   props?: (RawProps & P) | null,
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // exclude `defineComponent` constructors
 export function h<P>(
   type: ComponentOptions<P>,
   props?: (RawProps & P) | ({} extends P ? null : never),
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // fake constructor type returned by `defineComponent` or class component
@@ -12347,7 +12699,7 @@ export function h(type: Constructor, children?: RawChildren): VNode
 export function h<P>(
   type: Constructor<P>,
   props?: (RawProps & P) | ({} extends P ? null : never),
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // fake constructor type returned by `defineComponent`
@@ -12355,7 +12707,7 @@ export function h(type: DefineComponent, children?: RawChildren): VNode
 export function h<P>(
   type: DefineComponent<P>,
   props?: (RawProps & P) | ({} extends P ? null : never),
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // catch all types
@@ -12363,7 +12715,7 @@ export function h(type: string | Component, children?: RawChildren): VNode
 export function h<P>(
   type: string | Component<P>,
   props?: (RawProps & P) | ({} extends P ? null : never),
-  children?: RawChildren | RawSlots,
+  children?: RawChildren | RawSlots
 ): VNode
 
 // Actual implementation
@@ -12393,5 +12745,74 @@ export function h(type: any, propsOrChildren?: any, children?: any): VNode {
 
 
     return createVNode(type, propsOrChildren, children)
+  }
+}
+
+
+export function devtoolsComponentEmit(
+  component: ComponentInternalInstance,
+  event: string,
+  params: any[],
+): void {
+  devtoolsEmit(
+    DevtoolsHooks.COMPONENT_EMIT,
+    component.appContext.app,
+    component,
+    event,
+    params,
+  )
+}
+
+export function compatModelEmit(
+  instance: ComponentInternalInstance,
+  event: string,
+  args: any[],
+): void {
+  if (!isCompatEnabled(DeprecationTypes.COMPONENT_V_MODEL, instance)) {
+    return
+  }
+  const props = instance.vnode.props
+  const modelHandler = props && props[compatModelEventPrefix + event]
+  if (modelHandler) {
+    callWithErrorHandling(
+      modelHandler,
+      instance,
+      ErrorCodes.COMPONENT_EVENT_HANDLER,
+      args,
+    )
+  }
+}
+export function compatInstanceEmit(
+  instance: ComponentInternalInstance,
+  event: string,
+  args: any[],
+): ComponentPublicInstance | null {
+  const cbs = getRegistry(instance)[event]
+  if (cbs) {
+    callWithAsyncErrorHandling(
+      cbs.map(cb => cb.bind(instance.proxy)),
+      instance,
+      ErrorCodes.COMPONENT_EVENT_HANDLER,
+      args,
+    )
+  }
+  return instance.proxy
+}
+
+export function getRegistry(
+  instance: ComponentInternalInstance,
+): EventRegistry {
+  let events = eventRegistryMap.get(instance)
+  if (!events) {
+    eventRegistryMap.set(instance, (events = Object.create(null)))
+  }
+  return events!
+}
+
+function devtoolsEmit(event: string, ...args: any[]) {
+  if (devtools) {
+    devtools.emit(event, ...args)
+  } else if (!devtoolsNotInstalled) {
+    buffer.push({ event, args })
   }
 }

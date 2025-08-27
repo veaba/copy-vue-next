@@ -1266,3 +1266,7 @@ export interface WatchAPIOptions<Immediate = boolean> extends WatchEffectOptions
   deep?: boolean | number
   once?: boolean
 }
+
+export interface EventRegistry {
+  [event: string]: Function[] | undefined
+}
