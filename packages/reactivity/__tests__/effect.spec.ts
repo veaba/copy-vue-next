@@ -2,8 +2,9 @@ import { TrackOpTypes, TriggerOpTypes } from "@vue/reactivity"
 import { h } from "@vue/runtime-core"
 import { nodeOps, render, serializeInner } from "@vue/runtime-test"
 import { nextTick } from "@vue/runtime-core"
-import { computed, DebuggerEvent, Dep, effect, endBatch, getDepFromReactive, ITERATE_KEY, markRaw, onEffectCleanup, pauseTracking, reactive, ReactiveEffectRunner, readonly, ref, resetTracking, shallowReactive, startBatch, toRaw } from "../src/reactive"
-import { stop } from '../src/reactive'
+import { computed, Dep, effect, endBatch, getDepFromReactive, ITERATE_KEY, markRaw, onEffectCleanup, pauseTracking, reactive, readonly, ref, resetTracking, shallowReactive, startBatch, stop, toRaw } from '../src/reactive'
+import { ReactiveEffectRunner } from "../src/interface"
+import { DebuggerEvent } from "../src/type"
 
 describe('reactivity/effect', () => {
   it('should run the passed function once (wrapped by a effect)', () => {

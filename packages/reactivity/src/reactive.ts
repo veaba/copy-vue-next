@@ -4,29 +4,39 @@
  *   - createReactiveObject
  * - effect() 实现
  * - computed() 实现
- *  - 
+ *  -
  * - toRaw()
  * - ref()
  *  - createRef
  *    - RefImpel
- * 
-*/
+ *
+ */
 import {
   capitalize,
-  def, EMPTY_OBJ, extend, hasChanged, hasOwn, isArray, isFunction, isIntegerKey, isMap, isObject, isPlainObject, isSet, isSymbol, NOOP, remove, toRawType
+  def,
+  EMPTY_OBJ,
+  extend,
+  hasChanged,
+  hasOwn,
+  isArray,
+  isFunction,
+  isIntegerKey,
+  isMap,
+  isObject,
+  isPlainObject,
+  isSet,
+  isSymbol,
+  NOOP,
+  remove,
+  toRawType
 } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './constants'
 import { warn } from './warning'
+import { ComputedRef, DebuggerOptions, ReactiveEffectOptions, ReactiveEffectRunner, Ref, Subscriber, Target, WatchHandle, WatchOptions, WritableComputedOptions, WritableComputedRef } from './interface'
+import { ArrayMethods, CollectionTypes, ComputedGetter, ComputedSetter, CustomRefFactory, DebuggerEvent, DebuggerEventExtraInfo, DeepReadonly, EffectScheduler, IfAny, Instrumentations, IterableCollections, KeyToDepMap, MapTypes, MaybeRef, MaybeRefOrGetter, Raw, Reactive, SetTypes, ShallowReactive, ShallowRef, ShallowUnwrapRef, ToRef, ToRefs, UnwrapNestedRefs, UnwrapRef, WatchCallback, WatchEffect, WatchSource } from './type'
+import { EffectFlags, ReactiveFlags, TargetType, WatchErrorCodes } from './enum'
 
 /*** ======> define <=====  ***/
-declare const WritableComputedRefSymbol: unique symbol
-declare const RefSymbol: unique symbol
-declare const RawSymbol: unique symbol
-declare const ShallowRefMarker: unique symbol
-declare const ShallowReactiveMarker: unique symbol
-declare const ReactiveMarkerSymbol: unique symbol
-declare const ComputedRefSymbol: unique symbol
-
 
 let batchDepth = 0 // 批量深度
 let batchedSub: Subscriber | undefined //批量订阅者
@@ -39,7 +49,7 @@ const builtInSymbols = new Set(
     // function
     .filter(key => key !== 'arguments' && key !== 'caller')
     .map(key => Symbol[key as keyof SymbolConstructor])
-    .filter(isSymbol),
+    .filter(isSymbol)
 )
 export const reactiveMap: WeakMap<Target, any> = new WeakMap<Target, any>()
 let activeEffectScope: EffectScope | undefined
@@ -47,20 +57,19 @@ let activeEffectScope: EffectScope | undefined
 const arrayProto = Array.prototype
 
 export const ITERATE_KEY: unique symbol = Symbol(
-  __DEV__ ? 'Object iterate' : '',
+  __DEV__ ? 'Object iterate' : ''
 )
 export const MAP_KEY_ITERATE_KEY: unique symbol = Symbol(
-  __DEV__ ? 'Map keys iterate' : '',
+  __DEV__ ? 'Map keys iterate' : ''
 )
 
 export const ARRAY_ITERATE_KEY: unique symbol = Symbol(
-  __DEV__ ? 'Array iterate' : '',
+  __DEV__ ? 'Array iterate' : ''
 )
 
 const isNonTrackableKeys = /*@__PURE__*/ makeMap(`__proto__,__v_isRef,__isVue`)
 
-
-export let shouldTrack = true;
+export let shouldTrack = true
 const trackStack: boolean[] = []
 const pausedQueueEffects = new WeakSet<ReactiveEffect>()
 
@@ -74,271 +83,15 @@ export const shallowReadonlyMap: WeakMap<Target, any> = new WeakMap<
   Target,
   any
 >()
-export const shallowReactiveMap: WeakMap<Target, any> = new WeakMap<Target, any>()
+export const shallowReactiveMap: WeakMap<Target, any> = new WeakMap<
+  Target,
+  any
+>()
 
-type KeyToDepMap = Map<any, Dep>
 const getProto = <T extends CollectionTypes>(v: T): any =>
   Reflect.getPrototypeOf(v)
 
 export const readonlyMap: WeakMap<Target, any> = new WeakMap<Target, any>()
-
-/*** ======> enum <=====  ***/
-export enum ReactiveFlags {
-  SKIP = '__v_skip',
-  // 判断是响应式
-  IS_REACTIVE = '__v_isReactive',
-  // 只读，一些对象不希望被改
-  IS_READONLY = '__v_isReadonly',
-  // 区别深层嵌套
-  IS_SHALLOW = '__v_isShallow',
-  RAW = '__v_raw',
-  IS_REF = '__v_isRef'
-}
-
-enum TargetType {
-  INVALID = 0,
-  COMMON = 1,
-  COLLECTION = 2
-}
-
-export enum EffectFlags {
-  /**
-   * ReactiveEffect only
-   */
-  ACTIVE = 1 << 0,
-  RUNNING = 1 << 1,
-  TRACKING = 1 << 2,
-  NOTIFIED = 1 << 3,
-  DIRTY = 1 << 4,
-  ALLOW_RECURSE = 1 << 5,
-  PAUSED = 1 << 6,
-  // 评估
-  EVALUATED = 1 << 7,
-}
-
-export enum WatchErrorCodes {
-  WATCH_GETTER = 2,
-  WATCH_CALLBACK,
-  WATCH_CLEANUP,
-}
-
-/*** ======> type <=====  ***/
-type IterableCollections = (Map<any, any> | Set<any>) & Target
-type WeakCollections = (WeakMap<any, any> | WeakSet<any>) & Target
-type CollectionTypes = IterableCollections | WeakCollections
-type Instrumentations = Record<string | symbol, Function | number>
-type MapTypes = (Map<any, any> | WeakMap<any, any>) & Target
-type SetTypes = (Set<any> | WeakSet<any>) & Target
-
-export type OnCleanup = (cleanupFn: () => void) => void
-export type EffectScheduler = (...args: any[]) => any
-// If the type T accepts type "any", output type Y, otherwise output type N.
-// https://stackoverflow.com/questions/49927523/disallow-call-with-any/49928360#49928360
-export type IfAny<T, Y, N> = 0 extends 1 & T ? Y : N
-
-
-// only unwrap nested ref
-export type UnwrapNestedRefs<T> = T extends Ref ? T : UnwrapRefSimple<T>
-export type Reactive<T> = UnwrapNestedRefs<T> &
-  (T extends readonly any[] ? ReactiveMarker : {})
-export type ShallowReactive<T> = T & { [ShallowReactiveMarker]?: true }
-
-export type ComputedGetter<T> = (oldValue?: T) => T
-export type ComputedSetter<T> = (newValue: T) => void
-
-// in the codebase we enforce es2016, but user code may run in environments
-// higher than that
-type ArrayMethods = keyof Array<any> | 'findLast' | 'findLastIndex'
-
-export type Raw<T> = T & { [RawSymbol]?: true }
-
-export interface Ref<T = any, S = T> {
-  get value(): T
-  set value(_: S)
-  /**
-   * Type differentiator only.
-   * We need this to be in public d.ts but don't want it to show up in IDE
-   * autocomplete, so we use a private Symbol instead.
-   */
-  [RefSymbol]: true
-}
-
-export type ToRefs<T = any> = {
-  [K in keyof T]: ToRef<T[K]>
-}
-
-export type ToRef<T> = IfAny<T, Ref<T>, [T] extends [Ref] ? T : Ref<T>>
-type Primitive = string | number | boolean | bigint | symbol | undefined | null // 基本类型
-export type Builtin = Primitive | Function | Date | Error | RegExp // 引用类型
-export type DeepReadonly<T> = T extends Builtin
-  ? T
-  : T extends Map<infer K, infer V>
-  ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
-  : T extends ReadonlyMap<infer K, infer V>
-  ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
-  : T extends WeakMap<infer K, infer V>
-  ? WeakMap<DeepReadonly<K>, DeepReadonly<V>>
-  : T extends Set<infer U>
-  ? ReadonlySet<DeepReadonly<U>>
-  : T extends ReadonlySet<infer U>
-  ? ReadonlySet<DeepReadonly<U>>
-  : T extends WeakSet<infer U>
-  ? WeakSet<DeepReadonly<U>>
-  : T extends Promise<infer U>
-  ? Promise<DeepReadonly<U>>
-  : T extends Ref<infer U, unknown>
-  ? Readonly<Ref<DeepReadonly<U>>>
-  : T extends {}
-  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-  : Readonly<T>
-
-
-
-export type ShallowRef<T = any, S = T> = Ref<T, S> & {
-  [ShallowRefMarker]?: true
-}
-
-type DistributeRef<T> = T extends Ref<infer V, unknown> ? V : T
-
-export type MaybeRef<T = any> =
-  | T
-  | Ref<T>
-  | ShallowRef<T>
-  | WritableComputedRef<T>
-
-export type ShallowUnwrapRef<T> = {
-  [K in keyof T]: DistributeRef<T[K]>
-}
-
-export type WatchStopHandle = () => void
-
-export type UnwrapRef<T> =
-  T extends ShallowRef<infer V, unknown>
-  ? V
-  : T extends Ref<infer V, unknown>
-  ? UnwrapRefSimple<V>
-  : UnwrapRefSimple<T>
-
-
-export type UnwrapRefSimple<T> = T extends
-  | Builtin
-  | Ref
-  | RefUnwrapBailTypes[keyof RefUnwrapBailTypes]
-  | { [RawSymbol]?: true }
-  ? T
-  : T extends Map<infer K, infer V>
-  ? Map<K, UnwrapRefSimple<V>> & UnwrapRef<Omit<T, keyof Map<any, any>>>
-  : T extends WeakMap<infer K, infer V>
-  ? WeakMap<K, UnwrapRefSimple<V>> &
-  UnwrapRef<Omit<T, keyof WeakMap<any, any>>>
-  : T extends Set<infer V>
-  ? Set<UnwrapRefSimple<V>> & UnwrapRef<Omit<T, keyof Set<any>>>
-  : T extends WeakSet<infer V>
-  ? WeakSet<UnwrapRefSimple<V>> & UnwrapRef<Omit<T, keyof WeakSet<any>>>
-  : T extends ReadonlyArray<any>
-  ? { [K in keyof T]: UnwrapRefSimple<T[K]> }
-  : T extends object & { [ShallowReactiveMarker]?: never }
-  ? {
-    [P in keyof T]: P extends symbol ? T[P] : UnwrapRef<T[P]>
-  }
-  : T
-export type DebuggerEventExtraInfo = {
-  target: object
-  type: TrackOpTypes | TriggerOpTypes
-  key: any
-  newValue?: any
-  oldValue?: any
-  oldTarget?: Map<any, any> | Set<any>
-}
-
-export type DebuggerEvent = {
-  effect: Subscriber
-} & DebuggerEventExtraInfo
-
-export type WatchScheduler = (job: () => void, isFirstRun: boolean) => void
-
-
-/*** ======> interface  <===== ***/
-
-export interface RefUnwrapBailTypes { }
-export interface Target {
-  [ReactiveFlags.SKIP]?: boolean
-  [ReactiveFlags.IS_REACTIVE]?: boolean
-  [ReactiveFlags.IS_READONLY]?: boolean
-  [ReactiveFlags.IS_SHALLOW]?: boolean
-  [ReactiveFlags.RAW]?: any
-}
-
-export interface ReactiveMarker {
-  [ReactiveMarkerSymbol]?: void
-}
-
-export interface ReactiveEffectRunner<T = any> {
-  (): T
-  effect: ReactiveEffect
-}
-
-export interface DebuggerOptions {
-  onTrack?: (event: DebuggerEvent) => void
-  onTrigger?: (event: DebuggerEvent) => void
-}
-export interface Subscriber extends DebuggerOptions {
-  deps?: Link
-
-  depsTail?: Link
-
-  flags: EffectFlags
-  next?: Subscriber
-  notify(): true | void
-}
-
-interface ReactiveEffectOptions extends DebuggerOptions {
-  scheduler?: EffectScheduler
-  allowRecurse?: boolean
-  onStop?: () => void
-}
-
-interface BaseComputedRef<T, S = T> extends Ref<T, S> {
-  [ComputedRefSymbol]: true
-  /**
-   * @deprecated computed no longer uses effect
-   */
-  effect: ComputedRefImpl
-}
-
-export interface ComputedRef<T = any> extends BaseComputedRef<T> {
-  readonly value: T
-}
-
-export interface WritableComputedOptions<T, S = T> {
-  get: ComputedGetter<T>
-  set: ComputedSetter<S>
-}
-
-export interface WritableComputedRef<T, S = T> extends BaseComputedRef<T, S> {
-  [WritableComputedRefSymbol]: true
-}
-
-export interface WatchOptions<Immediate = boolean> extends DebuggerOptions {
-  immediate?: Immediate
-  deep?: boolean | number
-  once?: boolean
-  scheduler?: WatchScheduler
-  onWarn?: (msg: string, ...args: any[]) => void
-  /**
-   * @internal
-   */
-  augmentJob?: (job: (...args: any[]) => void) => void
-  /**
-   * @internal
-   */
-  call?: (
-    fn: Function | Function[],
-    type: WatchErrorCodes,
-    args?: unknown[],
-  ) => void
-}
-
 
 /*** ======> class  <===== ***/
 export class EffectScope {
@@ -383,7 +136,7 @@ export class EffectScope {
     if (!detached && activeEffectScope) {
       this.index =
         (activeEffectScope.scopes || (activeEffectScope.scopes = [])).push(
-          this,
+          this
         ) - 1
     }
   }
@@ -506,7 +259,7 @@ class ObjectRefImpl<T extends object, K extends keyof T> {
   constructor(
     private readonly _object: T,
     private readonly _key: K,
-    private readonly _defaultValue?: T[K],
+    private readonly _defaultValue?: T[K]
   ) {}
 
   get value() {
@@ -523,7 +276,6 @@ class ObjectRefImpl<T extends object, K extends keyof T> {
   }
 }
 
-
 class GetterRefImpl<T> {
   public readonly [ReactiveFlags.IS_REF] = true
   public readonly [ReactiveFlags.IS_READONLY] = true
@@ -535,7 +287,8 @@ class GetterRefImpl<T> {
   }
 }
 
-export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOptions {
+export class ReactiveEffect<T = any>
+  implements Subscriber, ReactiveEffectOptions {
   deps?: Link | undefined
   depsTail?: Link | undefined
   flags: EffectFlags = EffectFlags.ACTIVE | EffectFlags.TRACKING
@@ -552,11 +305,9 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
     }
   }
   pause(): void {
-    console.log(" pause")
     this.flags |= EffectFlags.PAUSED
   }
   resume(): void {
-    console.log(" resume")
     if (this.flags & EffectFlags.PAUSED) {
       this.flags &= ~EffectFlags.PAUSED
       if (pausedQueueEffects.has(this)) {
@@ -567,8 +318,6 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
   }
 
   notify(): void {
-    console.log(" notify")
-
     if (
       this.flags & EffectFlags.RUNNING &&
       !(this.flags & EffectFlags.ALLOW_RECURSE)
@@ -580,8 +329,6 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
     }
   }
   run(): T {
-    console.log(" run")
-
     if (!(this.flags & EffectFlags.ACTIVE)) {
       // stopped during cleanup
       return this.fn()
@@ -601,7 +348,7 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
       if (__DEV__ && activeSub !== this) {
         warn(
           'Active effect was not restored correctly - ' +
-          'this is likely a Vue internal bug.',
+            'this is likely a Vue internal bug.'
         )
       }
       cleanupDeps(this)
@@ -612,8 +359,6 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
   }
 
   stop(): void {
-    console.log(" stop")
-
     if (this.flags & EffectFlags.ACTIVE) {
       for (let link = this.deps; link; link = link.nextDep) {
         removeSub(link)
@@ -626,8 +371,6 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
   }
 
   trigger(): void {
-    console.log(" trigger")
-
     if (this.flags & EffectFlags.PAUSED) {
       pausedQueueEffects.add(this)
     } else if (this.scheduler) {
@@ -637,28 +380,23 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
     }
   }
 
-
   /**
    * @internal
    */
   runIfDirty(): void {
-    console.log(" runIfDirty")
-
     if (isDirty(this)) {
       this.run()
     }
   }
 
   get dirty(): boolean {
-    console.log(" get dirty")
-
     return isDirty(this)
   }
 }
 
 /**
  * @internal
-*/
+ */
 export class Dep {
   version = 0
 
@@ -717,9 +455,12 @@ export class Dep {
     }
     if (__DEV__ && activeSub.onTrack) {
       activeSub.onTrack(
-        extend({
-          effect: activeSub,
-        }, debugInfo),
+        extend(
+          {
+            effect: activeSub
+          },
+          debugInfo
+        )
       )
     }
     return link
@@ -742,10 +483,10 @@ export class Dep {
             head.sub.onTrigger(
               extend(
                 {
-                  effect: head.sub,
+                  effect: head.sub
                 },
-                debugInfo,
-              ),
+                debugInfo
+              )
             )
           }
         }
@@ -755,7 +496,7 @@ export class Dep {
           // if notify() returns `true`, this is a computed. Also call notify
           // on its dep - it's called here instead of inside computed's notify
           // in order to reduce call stack depth.
-          ; (link.sub as ComputedRefImpl).dep.notify()
+          ;(link.sub as ComputedRefImpl).dep.notify()
         }
       }
     } finally {
@@ -767,7 +508,7 @@ export class Dep {
 export class ComputedRefImpl<T = any> implements Subscriber {
   /**
    * @internal
-  */
+   */
   _value: any = undefined
 
   readonly dep: Dep = new Dep(this)
@@ -780,8 +521,8 @@ export class ComputedRefImpl<T = any> implements Subscriber {
   isSSR: boolean
   next?: Subscriber | undefined
   effect: this = this
-  onTrack?: ((event: DebuggerEvent) => void)
-  onTrigger?: ((event: DebuggerEvent) => void)
+  onTrack?: (event: DebuggerEvent) => void
+  onTrigger?: (event: DebuggerEvent) => void
 
   _warnRecursive?: boolean
 
@@ -808,7 +549,9 @@ export class ComputedRefImpl<T = any> implements Subscriber {
   }
 
   get value(): T {
-    const link = __DEV__ ? this.dep.track({ target: this, type: TrackOpTypes.GET, key: 'value' }) : this.dep.track()
+    const link = __DEV__
+      ? this.dep.track({ target: this, type: TrackOpTypes.GET, key: 'value' })
+      : this.dep.track()
 
     refreshComputed(this)
     if (link) {
@@ -824,39 +567,28 @@ export class ComputedRefImpl<T = any> implements Subscriber {
       warn('Write operation failed: computed value is readonly')
     }
   }
-
 }
 
 // 双链表描述 track 的依赖
-class Link {
+export class Link {
   version: number
   nextDep?: Link
   prevDep?: Link
   nextSub?: Link
   prevSub?: Link
   prevActiveLink?: Link
-  constructor(
-    public sub: Subscriber,
-    public dep: Dep
-  ) {
+  constructor(public sub: Subscriber, public dep: Dep) {
     this.version = dep.version
-    this.nextDep =
-      this.prevDep =
-      this.nextSub =
-      this.prevSub =
-      this.prevActiveLink =
-      undefined
+    this.nextDep = this.prevDep = this.nextSub = this.prevSub = this.prevActiveLink = undefined
   }
-
 }
 class BaseReactiveHandler implements ProxyHandler<Target> {
   constructor(
     protected readonly _isReadonly = false,
     protected readonly _isShallow = false
-  ) { }
+  ) {}
 
   get(target: Target, key: string | symbol, receiver: object): any {
-
     if (key === ReactiveFlags.SKIP) return target[ReactiveFlags.SKIP]
 
     const isReadonly = this._isReadonly,
@@ -870,16 +602,16 @@ class BaseReactiveHandler implements ProxyHandler<Target> {
       return isShallow
     } else if (key === ReactiveFlags.RAW) {
       if (
-        receiver === 
-          (isReadonly 
-            ? isShallow 
-              ? shallowReadonlyMap 
-              : readonlyMap 
-            : isShallow 
-              ? shallowReactiveMap 
-              : reactiveMap
-          ).get(target) || 
-          Object.getPrototypeOf(target) === Object.getPrototypeOf(receiver)
+        receiver ===
+          (isReadonly
+            ? isShallow
+              ? shallowReadonlyMap
+              : readonlyMap
+            : isShallow
+            ? shallowReactiveMap
+            : reactiveMap
+          ).get(target) ||
+        Object.getPrototypeOf(target) === Object.getPrototypeOf(receiver)
       ) {
         return target
       }
@@ -927,7 +659,12 @@ class MutableReactiveHandler extends BaseReactiveHandler {
     super(false, isShallow)
   }
 
-  set(target: Record<string | symbol, unknown>, key: string | symbol, value: unknown, receiver: object): boolean {
+  set(
+    target: Record<string | symbol, unknown>,
+    key: string | symbol,
+    value: unknown,
+    receiver: object
+  ): boolean {
     let oldValue: unknown = target[key]
     if (!this._isShallow) {
       const isOldValueReadonly = isReadonly(oldValue)
@@ -939,8 +676,10 @@ class MutableReactiveHandler extends BaseReactiveHandler {
         if (isOldValueReadonly) {
           if (__DEV__) {
             warn(
-              `Set operation on key "${String(key)}" failed: target is readonly.`,
-              target[key],
+              `Set operation on key "${String(
+                key
+              )}" failed: target is readonly.`,
+              target[key]
             )
           }
           return true
@@ -948,7 +687,6 @@ class MutableReactiveHandler extends BaseReactiveHandler {
           oldValue.value = value
           return true
         }
-
       }
     } else {
       // TODO
@@ -962,7 +700,7 @@ class MutableReactiveHandler extends BaseReactiveHandler {
       target,
       key,
       value,
-      isRef(target) ? target : receiver,
+      isRef(target) ? target : receiver
     )
 
     // don't trigger if target is something up in the prototype chain of original
@@ -976,7 +714,10 @@ class MutableReactiveHandler extends BaseReactiveHandler {
     return result
   }
 
-  deleteProperty(target: Record<string | symbol, unknown>, key: string | symbol): boolean {
+  deleteProperty(
+    target: Record<string | symbol, unknown>,
+    key: string | symbol
+  ): boolean {
     const hadKey = hasOwn(target, key)
     const oldValue = target[key]
     const result = Reflect.deleteProperty(target, key)
@@ -997,7 +738,7 @@ class MutableReactiveHandler extends BaseReactiveHandler {
     track(
       target,
       TrackOpTypes.ITERATE,
-      isArray(target) ? 'length' : ITERATE_KEY,
+      isArray(target) ? 'length' : ITERATE_KEY
     )
     return Reflect.ownKeys(target)
   }
@@ -1012,7 +753,7 @@ class ReadonlyReactiveHandler extends BaseReactiveHandler {
     if (__DEV__) {
       warn(
         `Set operation on key "${String(key)}" failed: target is readonly.`,
-        target,
+        target
       )
     }
     return true
@@ -1021,7 +762,7 @@ class ReadonlyReactiveHandler extends BaseReactiveHandler {
     if (__DEV__) {
       warn(
         `Delete operation on key "${String(key)}" failed: target is readonly.`,
-        target,
+        target
       )
     }
     return true
@@ -1036,7 +777,6 @@ class RefImpl<T = any> {
   public readonly [ReactiveFlags.IS_SHALLOW]: boolean = false
 
   constructor(value: T, isShallow: boolean) {
-
     this._rawValue = isShallow ? value : toRaw(value)
     this._value = isShallow ? value : toReactive(value)
     this[ReactiveFlags.IS_SHALLOW] = isShallow
@@ -1057,7 +797,8 @@ class RefImpl<T = any> {
 
   set value(newValue) {
     const oldValue = this._rawValue
-    const useDirectValue = this[ReactiveFlags.IS_SHALLOW] ||
+    const useDirectValue =
+      this[ReactiveFlags.IS_SHALLOW] ||
       isShallow(newValue) ||
       isReadonly(newValue)
 
@@ -1138,10 +879,14 @@ export function isRef(r: any): r is Ref {
   return r ? r[ReactiveFlags.IS_REF] === true : false
 }
 
-
 function isDirty(sub: Subscriber): boolean {
   for (let link = sub.deps; link; link = link.nextDep) {
-    if (link.dep.version !== link.version || (link.dep.computed && (refreshComputed(link.dep.computed) || link.dep.version !== link.version))) {
+    if (
+      link.dep.version !== link.version ||
+      (link.dep.computed &&
+        (refreshComputed(link.dep.computed) ||
+          link.dep.version !== link.version))
+    ) {
       return true
     }
   }
@@ -1152,17 +897,28 @@ function isDirty(sub: Subscriber): boolean {
   return false
 }
 
-
 export const mutableHandlers: ProxyHandler<object> = new MutableReactiveHandler()
-export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(false, false)}
+export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: createInstrumentationGetter(false, false)
+}
 
 export const readonlyHandlers: ProxyHandler<object> = new ReadonlyReactiveHandler()
-export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(true, false)}
+export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: createInstrumentationGetter(true, false)
+}
 
-export const shallowReactiveHandlers: MutableReactiveHandler = new MutableReactiveHandler(true)
-export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(false, true)}
-export const shallowReadonlyHandlers: ReadonlyReactiveHandler = new ReadonlyReactiveHandler(true)
-export const shallowReadonlyCollectionHandlers: ProxyHandler<CollectionTypes> = { get: createInstrumentationGetter(true, true)}
+export const shallowReactiveHandlers: MutableReactiveHandler = new MutableReactiveHandler(
+  true
+)
+export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: createInstrumentationGetter(false, true)
+}
+export const shallowReadonlyHandlers: ReadonlyReactiveHandler = new ReadonlyReactiveHandler(
+  true
+)
+export const shallowReadonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: createInstrumentationGetter(true, true)
+}
 
 export function reactive<T extends object>(target: T): Reactive<T>
 
@@ -1178,7 +934,6 @@ export function reactive(target: object): any {
     reactiveMap
   )
 }
-
 
 /**
  * Shallow version of {@link reactive}.
@@ -1211,14 +966,14 @@ export function reactive(target: object): any {
  * @see {@link https://vuejs.org/api/reactivity-advanced.html#shallowreactive}
  */
 export function shallowReactive<T extends object>(
-  target: T,
+  target: T
 ): ShallowReactive<T> {
   return createReactiveObject(
     target,
     false,
     shallowReactiveHandlers,
     shallowCollectionHandlers,
-    shallowReactiveMap,
+    shallowReactiveMap
   )
 }
 
@@ -1258,21 +1013,21 @@ export function shallowReadonly<T extends object>(target: T): Readonly<T> {
     true,
     shallowReadonlyHandlers,
     shallowReadonlyCollectionHandlers,
-    shallowReadonlyMap,
+    shallowReadonlyMap
   )
 }
 export function computed<T>(
   getter: ComputedGetter<T>,
-  debugOptions?: DebuggerOptions,
+  debugOptions?: DebuggerOptions
 ): ComputedRef<T>
 export function computed<T, S = T>(
   options: WritableComputedOptions<T, S>,
-  debugOptions?: DebuggerOptions,
+  debugOptions?: DebuggerOptions
 ): WritableComputedRef<T, S>
 export function computed<T>(
   getterOrOptions: ComputedGetter<T> | WritableComputedOptions<T>,
   debugOptions?: DebuggerOptions,
-  isSSR = false,
+  isSSR = false
 ) {
   let getter: ComputedGetter<T>
   let setter: ComputedSetter<T> | undefined
@@ -1294,9 +1049,10 @@ export function computed<T>(
   return cRef as any
 }
 
-
-export function effect<T = any>(fn: () => T, options?: ReactiveEffectOptions): ReactiveEffectRunner<T> {
-
+export function effect<T = any>(
+  fn: () => T,
+  options?: ReactiveEffectOptions
+): ReactiveEffectRunner<T> {
   if ((fn as ReactiveEffectRunner).effect instanceof ReactiveEffect) {
     fn = (fn as ReactiveEffectRunner).effect.fn
   }
@@ -1344,14 +1100,13 @@ function createReactiveObject(
   collectionHandlers: ProxyHandler<any>,
   proxyMap: WeakMap<Target, any>
 ) {
-
   // 不是对象
   if (!isObject(target)) {
     if (__DEV__) {
       warn(
         `value cannot be made ${isReadonly ? 'readonly' : 'reactive'}: ${String(
-          target,
-        )}`,
+          target
+        )}`
       )
     }
     return target
@@ -1397,7 +1152,6 @@ function createInstrumentations(
   // 重新集合方法的实现
   const instrumentations: Instrumentations = {
     get(this: MapTypes, key: unknown) {
-
       const target = this[ReactiveFlags.RAW]
       const rawTarget = toRaw(target)
       const rawKey = toRaw(key)
@@ -1421,7 +1175,9 @@ function createInstrumentations(
       }
     },
     get size() {
-      const target = (this as unknown as IterableCollections)[ReactiveFlags.RAW]
+      const target = ((this as unknown) as IterableCollections)[
+        ReactiveFlags.RAW
+      ]
       !readonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
       return target.size
     },
@@ -1435,7 +1191,9 @@ function createInstrumentations(
         }
         track(rawTarget, TrackOpTypes.HAS, rawKey)
       }
-      return key === rawKey ? target.has(key) : target.has(key) || target.has(rawKey)
+      return key === rawKey
+        ? target.has(key)
+        : target.has(key) || target.has(rawKey)
     },
     forEach(this: IterableCollections, callback: Function, thisArg?: unknown) {
       const observed = this
@@ -1452,92 +1210,109 @@ function createInstrumentations(
   }
 
   // 拓展方法
-  extend(instrumentations, readonly ? {
-    add: createReadonlyMethod(TriggerOpTypes.ADD),
-    set: createReadonlyMethod(TriggerOpTypes.SET),
-    delete: createReadonlyMethod(TriggerOpTypes.DELETE),
-    clear: createReadonlyMethod(TriggerOpTypes.CLEAR),
-  } : {
-    add(this: SetTypes, value: unknown) {
-      if (!shallow && !isShallow(value) && !isReadonly(value)) {
-        value = toRaw(value)
-      }
+  extend(
+    instrumentations,
+    readonly
+      ? {
+          add: createReadonlyMethod(TriggerOpTypes.ADD),
+          set: createReadonlyMethod(TriggerOpTypes.SET),
+          delete: createReadonlyMethod(TriggerOpTypes.DELETE),
+          clear: createReadonlyMethod(TriggerOpTypes.CLEAR)
+        }
+      : {
+          add(this: SetTypes, value: unknown) {
+            if (!shallow && !isShallow(value) && !isReadonly(value)) {
+              value = toRaw(value)
+            }
 
-      const target = toRaw(this)
-      const proto = getProto(target)
-      const hadKey = proto.has.call(target, value)
+            const target = toRaw(this)
+            const proto = getProto(target)
+            const hadKey = proto.has.call(target, value)
 
-      if (!hadKey) {
-        target.add(value)
-        trigger(target, TriggerOpTypes.ADD, value, value)
-      }
+            if (!hadKey) {
+              target.add(value)
+              trigger(target, TriggerOpTypes.ADD, value, value)
+            }
 
-      return this
-    },
-    set(this: MapTypes, key: unknown, value: unknown) {
-      if (!shallow && !isShallow(value) && !isReadonly(value)) {
-        value = toRaw(value)
-      }
+            return this
+          },
+          set(this: MapTypes, key: unknown, value: unknown) {
+            if (!shallow && !isShallow(value) && !isReadonly(value)) {
+              value = toRaw(value)
+            }
 
-      const target = toRaw(this)
-      const { has, get } = getProto(target)
+            const target = toRaw(this)
+            const { has, get } = getProto(target)
 
-      let hadKey = has.call(target, key)
-      if (!hadKey) {
-        key = toRaw(key)
-        hadKey = has.call(target, key)
-      } else if (__DEV__) {
-        checkIdentityKeys(target, has, key)
-      }
+            let hadKey = has.call(target, key)
+            if (!hadKey) {
+              key = toRaw(key)
+              hadKey = has.call(target, key)
+            } else if (__DEV__) {
+              checkIdentityKeys(target, has, key)
+            }
 
-      const oldValue = get.call(target, key)
-      target.set(key, value)
+            const oldValue = get.call(target, key)
+            target.set(key, value)
 
-      if (!hadKey) {
-        trigger(target, TriggerOpTypes.ADD, key, value)
-      } else if (hasChanged(value, oldValue)) {
-        trigger(target, TriggerOpTypes.SET, key, value, oldValue)
-      }
-      return this
-    },
-    delete(this: CollectionTypes, key: unknown) {
+            if (!hadKey) {
+              trigger(target, TriggerOpTypes.ADD, key, value)
+            } else if (hasChanged(value, oldValue)) {
+              trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+            }
+            return this
+          },
+          delete(this: CollectionTypes, key: unknown) {
+            const target = toRaw(this)
+            const { has, get } = getProto(target)
+            let hadKey = has.call(target, key)
+            if (!hadKey) {
+              key = toRaw(key)
+              hadKey = has.call(target, key)
+            } else if (__DEV__) {
+              checkIdentityKeys(target, has, key)
+            }
 
-      const target = toRaw(this)
-      const { has, get } = getProto(target)
-      let hadKey = has.call(target, key)
-      if (!hadKey) {
-        key = toRaw(key)
-        hadKey = has.call(target, key)
-      } else if (__DEV__) {
-        checkIdentityKeys(target, has, key)
-      }
+            const oldValue = get ? get.call(target, key) : undefined
+            // 排队之前前进的操作
+            const result = target.delete(key)
+            if (hadKey) {
+              trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+            }
+            return result
+          },
+          clear(this: IterableCollections) {
+            const target = toRaw(this)
+            const hadItems = target.size !== 0
 
-      const oldValue = get ? get.call(target, key) : undefined
-      // 排队之前前进的操作
-      const result = target.delete(key)
-      if (hadKey) {
-        trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
-      }
-      return result
-    },
-    clear(this: IterableCollections) {
-      const target = toRaw(this)
-      const hadItems = target.size !== 0
-
-      // dev 模式下，收集下 old value
-      const oldTarget = __DEV__ ? isMap(target) ? new Map(target) : new Set(target) : undefined
-      const result = target.clear()
-      if (hadItems) {
-        trigger(
-          target, TriggerOpTypes.CLEAR, undefined, undefined, oldTarget
-        )
-      }
-      return result
-    }
-  })
+            // dev 模式下，收集下 old value
+            const oldTarget = __DEV__
+              ? isMap(target)
+                ? new Map(target)
+                : new Set(target)
+              : undefined
+            const result = target.clear()
+            if (hadItems) {
+              trigger(
+                target,
+                TriggerOpTypes.CLEAR,
+                undefined,
+                undefined,
+                oldTarget
+              )
+            }
+            return result
+          }
+        }
+  )
 
   // 可迭代的方法
-  const iteratorMethods = ['keys', 'values', 'entries', Symbol.iterator] as const
+  const iteratorMethods = [
+    'keys',
+    'values',
+    'entries',
+    Symbol.iterator
+  ] as const
 
   iteratorMethods.forEach(method => {
     instrumentations[method] = createIterableMethod(method, readonly, shallow)
@@ -1586,7 +1361,7 @@ function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
  * @see {@link https://vuejs.org/api/reactivity-advanced.html#shallowref}
  */
 export function shallowRef<T>(
-  value: T,
+  value: T
 ): Ref extends T
   ? T extends Ref
     ? IfAny<T, ShallowRef<T>, T>
@@ -1597,15 +1372,12 @@ export function shallowRef(value?: unknown) {
   return createRef(value, true)
 }
 
-
 function createRef(rawValue: unknown, shallow: boolean) {
-
   if (isRef(rawValue)) {
     return rawValue
   }
   return new RefImpl(rawValue, shallow)
 }
-
 
 /**
  * Takes an inner value and returns a reactive and mutable ref object, which
@@ -1615,14 +1387,12 @@ function createRef(rawValue: unknown, shallow: boolean) {
  * @see {@link https://vuejs.org/api/reactivity-core.html#ref}
  */
 export function ref<T>(
-  value: T,
+  value: T
 ): [T] extends [Ref] ? IfAny<T, Ref<T>, T> : Ref<UnwrapRef<T>, UnwrapRef<T> | T>
 export function ref<T = any>(): Ref<T | undefined>
 export function ref(value?: unknown) {
   return createRef(value, false)
 }
-
-
 
 /**
  * Used to normalize values / refs / getters into refs.
@@ -1668,25 +1438,25 @@ export function ref(value?: unknown) {
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#toref}
  */
 export function toRef<T>(
-  value: T,
+  value: T
 ): T extends () => infer R
   ? Readonly<Ref<R>>
   : T extends Ref
-    ? T
-    : Ref<UnwrapRef<T>>
+  ? T
+  : Ref<UnwrapRef<T>>
 export function toRef<T extends object, K extends keyof T>(
   object: T,
-  key: K,
+  key: K
 ): ToRef<T[K]>
 export function toRef<T extends object, K extends keyof T>(
   object: T,
   key: K,
-  defaultValue: T[K],
+  defaultValue: T[K]
 ): ToRef<Exclude<T[K], undefined>>
 export function toRef(
   source: Record<string, any> | MaybeRef,
   key?: string,
-  defaultValue?: unknown,
+  defaultValue?: unknown
 ): Ref {
   if (isRef(source)) {
     return source
@@ -1752,15 +1522,13 @@ export function toValue<T>(source: MaybeRefOrGetter<T>): T {
 function propertyToRef(
   source: Record<string, any>,
   key: string,
-  defaultValue?: unknown,
+  defaultValue?: unknown
 ) {
   const val = source[key]
   return isRef(val)
     ? val
     : (new ObjectRefImpl(source, key, defaultValue) as any)
 }
-
-
 
 export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
   __proto__: null,
@@ -1771,7 +1539,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 
   concat(...args: unknown[]) {
     return reactiveReadArray(this).concat(
-      ...args.map(x => (isArray(x) ? reactiveReadArray(x) : x)),
+      ...args.map(x => (isArray(x) ? reactiveReadArray(x) : x))
     )
   },
 
@@ -1784,42 +1552,42 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 
   every(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'every', fn, thisArg, undefined, arguments)
   },
 
   filter(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'filter', fn, thisArg, v => v.map(toReactive), arguments)
   },
 
   find(
     fn: (item: unknown, index: number, array: unknown[]) => boolean,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'find', fn, thisArg, toReactive, arguments)
   },
 
   findIndex(
     fn: (item: unknown, index: number, array: unknown[]) => boolean,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'findIndex', fn, thisArg, undefined, arguments)
   },
 
   findLast(
     fn: (item: unknown, index: number, array: unknown[]) => boolean,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'findLast', fn, thisArg, toReactive, arguments)
   },
 
   findLastIndex(
     fn: (item: unknown, index: number, array: unknown[]) => boolean,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'findLastIndex', fn, thisArg, undefined, arguments)
   },
@@ -1828,7 +1596,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 
   forEach(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'forEach', fn, thisArg, undefined, arguments)
   },
@@ -1853,7 +1621,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 
   map(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'map', fn, thisArg, undefined, arguments)
   },
@@ -1871,7 +1639,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
       acc: unknown,
       item: unknown,
       index: number,
-      array: unknown[],
+      array: unknown[]
     ) => unknown,
     ...args: unknown[]
   ) {
@@ -1883,7 +1651,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
       acc: unknown,
       item: unknown,
       index: number,
-      array: unknown[],
+      array: unknown[]
     ) => unknown,
     ...args: unknown[]
   ) {
@@ -1898,7 +1666,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 
   some(
     fn: (item: unknown, index: number, array: unknown[]) => unknown,
-    thisArg?: unknown,
+    thisArg?: unknown
   ) {
     return apply(this, 'some', fn, thisArg, undefined, arguments)
   },
@@ -1928,7 +1696,7 @@ export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
 
   values() {
     return iterator(this, 'values', toReactive)
-  },
+  }
 }
 
 /**
@@ -1943,32 +1711,43 @@ export function reactiveReadArray<T>(array: T[]): T[] {
   return isShallow(array) ? raw : raw.map(toReactive)
 }
 
-
 // 创建可迭代的方法
-function createIterableMethod(method: string | symbol, isReadonly: boolean, isShallow: boolean) {
-
-  return function (this: IterableCollections, ...args: unknown[]): Iterable<unknown> & Iterator<unknown> {
-
+function createIterableMethod(
+  method: string | symbol,
+  isReadonly: boolean,
+  isShallow: boolean
+) {
+  return function(
+    this: IterableCollections,
+    ...args: unknown[]
+  ): Iterable<unknown> & Iterator<unknown> {
     const target = this[ReactiveFlags.RAW]
     const rawTarget = toRaw(target)
     const targetIsMap = isMap(rawTarget)
 
-    const isPair = method === 'entries' || (method === Symbol.iterator && targetIsMap)
+    const isPair =
+      method === 'entries' || (method === Symbol.iterator && targetIsMap)
     const isKeyOnly = method === 'keys' && targetIsMap
 
     const innerIterator = target[method](...args)
 
     const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
-    !isReadonly && track(
-      rawTarget,
-      TrackOpTypes.ITERATE,
-      isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
-    )
+    !isReadonly &&
+      track(
+        rawTarget,
+        TrackOpTypes.ITERATE,
+        isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
+      )
     // 返回包装的迭代器
     return {
       next() {
         const { value, done } = innerIterator.next()
-        return done ? { value, done } : { value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value), done }
+        return done
+          ? { value, done }
+          : {
+              value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
+              done
+            }
       },
       [Symbol.iterator]() {
         return this
@@ -1981,13 +1760,11 @@ function createIterableMethod(method: string | symbol, isReadonly: boolean, isSh
  * 追踪函数
  * @param target
  * @param type
- * @param key 
+ * @param key
  * */
 export function track(target: object, type: TrackOpTypes, key: unknown): void {
   if (shouldTrack && activeSub) {
     let depsMap = targetMap.get(target)
-
-
 
     if (!depsMap) {
       targetMap.set(target, (depsMap = new Map()))
@@ -1998,7 +1775,6 @@ export function track(target: object, type: TrackOpTypes, key: unknown): void {
       depsMap.set(key, (dep = new Dep()))
       dep.map = depsMap
       dep.key = key
-
     }
     if (__DEV__) {
       dep.track({
@@ -2058,7 +1834,11 @@ export function trigger(
       const newLength = Number(newValue)
 
       depsMap.forEach((dep, key) => {
-        if (key === 'length' || key === ARRAY_ITERATE_KEY || (!isSymbol(key) && key >= newLength)) {
+        if (
+          key === 'length' ||
+          key === ARRAY_ITERATE_KEY ||
+          (!isSymbol(key) && key >= newLength)
+        ) {
           run(dep)
         }
       })
@@ -2108,20 +1888,21 @@ export function trigger(
 
 // 创建 readonly 方法
 function createReadonlyMethod(type: TriggerOpTypes): Function {
-
-  return function (this: CollectionTypes, ...args: unknown[]) {
-
+  return function(this: CollectionTypes, ...args: unknown[]) {
     if (__DEV__) {
       const key = args[0] ? `on key "${args[0]}" ` : ``
       warn(
         `${capitalize(type)} operation ${key}failed: target is readonly.`,
-        toRaw(this),
+        toRaw(this)
       )
     }
 
-    return type === TriggerOpTypes.DELETE ? false : type === TriggerOpTypes.CLEAR ? undefined : this
+    return type === TriggerOpTypes.DELETE
+      ? false
+      : type === TriggerOpTypes.CLEAR
+      ? undefined
+      : this
   }
-
 }
 
 export function startBatch(): void {
@@ -2156,7 +1937,7 @@ export function endBatch(): void {
       e.flags &= ~EffectFlags.NOTIFIED
       if (e.flags & EffectFlags.ACTIVE) {
         try {
-          ; (e as ReactiveEffect).trigger()
+          ;(e as ReactiveEffect).trigger()
         } catch (err) {
           if (!error) error = err
         }
@@ -2174,7 +1955,7 @@ export function shallowReadArray<T>(arr: T[]): T[] {
 function iterator(
   self: unknown[],
   method: keyof Array<unknown>,
-  wrapValue: (value: any) => unknown,
+  wrapValue: (value: any) => unknown
 ) {
   // note that taking ARRAY_ITERATE dependency here is not strictly equivalent
   // to calling iterate on the proxied array.
@@ -2200,7 +1981,6 @@ function iterator(
   }
   return iter
 }
-
 
 // 返回原始代理的对象
 export function toRaw<T>(observed: T): T {
@@ -2238,27 +2018,30 @@ export function markRaw<T extends object>(value: T): Raw<T> {
 }
 
 export function readonly<T extends object>(
-  target: T,
+  target: T
 ): DeepReadonly<UnwrapNestedRefs<T>> {
   return createReactiveObject(
     target,
     true,
     readonlyHandlers,
     readonlyCollectionHandlers,
-    readonlyMap,
+    readonlyMap
   )
 }
 const toShallow = <T extends unknown>(value: T): T => value
 
-const toReadonly = <T extends unknown>(value: T): DeepReadonly<T> => isObject(value) ? readonly(value) : (value as DeepReadonly<T>)
+const toReadonly = <T extends unknown>(value: T): DeepReadonly<T> =>
+  isObject(value) ? readonly(value) : (value as DeepReadonly<T>)
 
-const toReactive = <T extends unknown>(value: T): T => isObject(value) ? reactive(value) : value
+const toReactive = <T extends unknown>(value: T): T =>
+  isObject(value) ? reactive(value) : value
 
-
-
-// 刷新 computed 
+// 刷新 computed
 function refreshComputed(computed: ComputedRefImpl): undefined {
-  if (computed.flags & EffectFlags.TRACKING && !(computed.flags & EffectFlags.DIRTY)) {
+  if (
+    computed.flags & EffectFlags.TRACKING &&
+    !(computed.flags & EffectFlags.DIRTY)
+  ) {
     return
   }
   computed.flags &= ~EffectFlags.DIRTY
@@ -2269,7 +2052,11 @@ function refreshComputed(computed: ComputedRefImpl): undefined {
 
   computed.globalVersion = globalVersion
 
-  if (!computed.isSSR && computed.flags & EffectFlags.EVALUATED && ((!computed.deps && !(computed as any)._dirty) || !isDirty(computed))) {
+  if (
+    !computed.isSSR &&
+    computed.flags & EffectFlags.EVALUATED &&
+    ((!computed.deps && !(computed as any)._dirty) || !isDirty(computed))
+  ) {
     return
   }
 
@@ -2300,17 +2087,17 @@ function refreshComputed(computed: ComputedRefImpl): undefined {
 function checkIdentityKeys(
   target: CollectionTypes,
   has: (key: unknown) => boolean,
-  key: unknown,
+  key: unknown
 ) {
   const rawKey = toRaw(key)
   if (rawKey !== key && has.call(target, rawKey)) {
     const type = toRawType(target)
     warn(
       `Reactive ${type} contains both the raw and reactive ` +
-      `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
-      `which can lead to inconsistencies. ` +
-      `Avoid differentiating between the raw and reactive versions ` +
-      `of an object and only use the reactive version if possible.`,
+        `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
+        `which can lead to inconsistencies. ` +
+        `Avoid differentiating between the raw and reactive versions ` +
+        `of an object and only use the reactive version if possible.`
     )
   }
 }
@@ -2323,7 +2110,7 @@ function apply(
   fn: (item: unknown, index: number, array: unknown[]) => unknown,
   thisArg?: unknown,
   wrappedRetFn?: (result: any) => unknown,
-  args?: IArguments,
+  args?: IArguments
 ) {
   const arr = shallowReadArray(self)
   const needsWrap = arr !== self && !isShallow(self)
@@ -2342,11 +2129,11 @@ function apply(
   let wrappedFn = fn
   if (arr !== self) {
     if (needsWrap) {
-      wrappedFn = function (this: unknown, item, index) {
+      wrappedFn = function(this: unknown, item, index) {
         return fn.call(this, toReactive(item), index, self)
       }
     } else if (fn.length > 2) {
-      wrappedFn = function (this: unknown, item, index) {
+      wrappedFn = function(this: unknown, item, index) {
         return fn.call(this, item, index, self)
       }
     }
@@ -2355,23 +2142,22 @@ function apply(
   return needsWrap && wrappedRetFn ? wrappedRetFn(result) : result
 }
 
-
 // instrument reduce and reduceRight to take ARRAY_ITERATE dependency
 function reduce(
   self: unknown[],
   method: keyof Array<any>,
   fn: (acc: unknown, item: unknown, index: number, array: unknown[]) => unknown,
-  args: unknown[],
+  args: unknown[]
 ) {
   const arr = shallowReadArray(self)
   let wrappedFn = fn
   if (arr !== self) {
     if (!isShallow(self)) {
-      wrappedFn = function (this: unknown, acc, item, index) {
+      wrappedFn = function(this: unknown, acc, item, index) {
         return fn.call(this, acc, toReactive(item), index, self)
       }
     } else if (fn.length > 3) {
-      wrappedFn = function (this: unknown, acc, item, index) {
+      wrappedFn = function(this: unknown, acc, item, index) {
         return fn.call(this, acc, item, index, self)
       }
     }
@@ -2384,7 +2170,7 @@ function reduce(
 function noTracking(
   self: unknown[],
   method: keyof Array<any>,
-  args: unknown[] = [],
+  args: unknown[] = []
 ) {
   pauseTracking()
   startBatch()
@@ -2419,12 +2205,11 @@ export function resetTracking(): void {
   shouldTrack = last === undefined ? true : last
 }
 
-
 // instrument identity-sensitive methods to account for reactive proxies
 function searchProxy(
   self: unknown[],
   method: keyof Array<any>,
-  args: unknown[],
+  args: unknown[]
 ) {
   const arr = toRaw(self) as any
   track(arr, TrackOpTypes.ITERATE, ARRAY_ITERATE_KEY)
@@ -2439,7 +2224,6 @@ function searchProxy(
 
   return res
 }
-
 
 export function batch(sub: Subscriber, isComputed = false): void {
   sub.flags |= EffectFlags.NOTIFIED
@@ -2601,8 +2385,6 @@ function hasOwnProperty(this: object, key: unknown) {
   return obj.hasOwnProperty(key as string)
 }
 
-
-
 /**
  * Returns the inner value if the argument is a ref, otherwise return the
  * argument itself. This is a sugar function for
@@ -2624,29 +2406,6 @@ export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
 }
 
 /************** watch */
-export interface WatchHandle extends WatchStopHandle {
-  pause: () => void
-  resume: () => void
-  stop: () => void
-}
-export type WatchSource<T = any> = Ref<T, any> | ComputedRef<T> | (() => T)
-export type WatchEffect = (onCleanup: OnCleanup) => void
-export type WatchCallback<V = any, OV = any> = (
-  value: V,
-  oldValue: OV,
-  onCleanup: OnCleanup,
-) => any
-
-export type CustomRefFactory<T> = (
-  track: () => void,
-  trigger: () => void,
-) => {
-  get: () => T
-  set: (value: T) => void
-}
-export type MaybeRefOrGetter<T = any> = MaybeRef<T> | ComputedRef<T> | (() => T)
-
-
 
 const cleanupMap: WeakMap<ReactiveEffect, (() => void)[]> = new WeakMap()
 let activeWatcher: ReactiveEffect | undefined = undefined
@@ -2667,7 +2426,7 @@ const INITIAL_WATCHER_VALUE = {}
 export function onWatcherCleanup(
   cleanupFn: () => void,
   failSilently = false,
-  owner: ReactiveEffect | undefined = activeWatcher,
+  owner: ReactiveEffect | undefined = activeWatcher
 ): void {
   if (owner) {
     let cleanups = cleanupMap.get(owner)
@@ -2676,7 +2435,7 @@ export function onWatcherCleanup(
   } else if (__DEV__ && !failSilently) {
     warn(
       `onWatcherCleanup() was called when there was no active watcher` +
-        ` to associate with.`,
+        ` to associate with.`
     )
   }
 }
@@ -2693,7 +2452,7 @@ export function getCurrentScope(): EffectScope | undefined {
 export function watch(
   source: WatchSource | WatchSource[] | WatchEffect | object,
   cb?: WatchCallback | null,
-  options: WatchOptions = EMPTY_OBJ,
+  options: WatchOptions = EMPTY_OBJ
 ): WatchHandle {
   const { immediate, deep, once, scheduler, augmentJob, call } = options
 
@@ -2702,7 +2461,7 @@ export function watch(
       `Invalid watch source: `,
       s,
       `A watch source can only be a getter/effect function, a ref, ` +
-        `a reactive object, or an array of these types.`,
+        `a reactive object, or an array of these types.`
     )
   }
 
@@ -2833,9 +2592,9 @@ export function watch(
             oldValue === INITIAL_WATCHER_VALUE
               ? undefined
               : isMultiSource && oldValue[0] === INITIAL_WATCHER_VALUE
-                ? []
-                : oldValue,
-            boundCleanup,
+              ? []
+              : oldValue,
+            boundCleanup
           ]
           oldValue = newValue
           call
@@ -2901,13 +2660,10 @@ export function watch(
   return watchHandle
 }
 
-
-
-
 export function traverse(
   value: unknown,
   depth: number = Infinity,
-  seen?: Set<unknown>,
+  seen?: Set<unknown>
 ): unknown {
   if (depth <= 0 || !isObject(value) || (value as any)[ReactiveFlags.SKIP]) {
     return value
@@ -2955,7 +2711,7 @@ const shallowUnwrapHandlers: ProxyHandler<any> = {
     } else {
       return Reflect.set(target, key, value, receiver)
     }
-  },
+  }
 }
 
 /**
@@ -2967,10 +2723,10 @@ const shallowUnwrapHandlers: ProxyHandler<any> = {
  * that contains refs.
  */
 export function proxyRefs<T extends object>(
-  objectWithRefs: T,
+  objectWithRefs: T
 ): ShallowUnwrapRef<T> {
   return isReactive(objectWithRefs)
-    ? objectWithRefs as unknown as ShallowUnwrapRef<T>
+    ? ((objectWithRefs as unknown) as ShallowUnwrapRef<T>)
     : new Proxy(objectWithRefs, shallowUnwrapHandlers)
 }
 
@@ -3001,16 +2757,16 @@ export function proxyRefs<T extends object>(
  */
 export function triggerRef(ref: Ref): void {
   // ref may be an instance of ObjectRefImpl
-  if ((ref as unknown as RefImpl).dep) {
+  if (((ref as unknown) as RefImpl).dep) {
     if (__DEV__) {
-      ;(ref as unknown as RefImpl).dep.trigger({
+      ;((ref as unknown) as RefImpl).dep.trigger({
         target: ref,
         type: TriggerOpTypes.SET,
         key: 'value',
-        newValue: (ref as unknown as RefImpl)._value,
+        newValue: ((ref as unknown) as RefImpl)._value
       })
     } else {
-      ;(ref as unknown as RefImpl).dep.trigger()
+      ;((ref as unknown) as RefImpl).dep.trigger()
     }
   }
 }
@@ -3033,18 +2789,17 @@ export function onEffectCleanup(fn: () => void, failSilently = false): void {
   } else if (__DEV__ && !failSilently) {
     warn(
       `onEffectCleanup() was called when there was no active effect` +
-        ` to associate with.`,
+        ` to associate with.`
     )
   }
 }
 
 export function getDepFromReactive(
   object: any,
-  key: string | number | symbol,
+  key: string | number | symbol
 ): Dep | undefined {
   const depMap = targetMap.get(object)
   return depMap && depMap.get(key)
-
 }
 
 /**
@@ -3060,7 +2815,6 @@ export function effectScope(detached?: boolean): EffectScope {
   return new EffectScope(detached)
 }
 
-
 /**
  * Registers a dispose callback on the current active effect scope. The
  * callback will be invoked when the associated effect scope is stopped.
@@ -3074,7 +2828,7 @@ export function onScopeDispose(fn: () => void, failSilently = false): void {
   } else if (__DEV__ && !failSilently) {
     warn(
       `onScopeDispose() is called when there is no active effect scope` +
-        ` to be associated with.`,
+        ` to be associated with.`
     )
   }
 }

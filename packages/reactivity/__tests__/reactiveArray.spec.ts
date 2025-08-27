@@ -1,14 +1,4 @@
-import {
-  reactive,
-  effect,
-  ref,
-  isReactive,
-  toRaw,
-  isRef,
-  shallowReactive,
-  computed
-} from '@vue/reactivity'
-import { ComputedRef } from '../src/reactive'
+import { reactive, isReactive, effect,ref, toRaw, isRef, shallowReactive, computed, ComputedRef } from "@vue/reactivity"
 
 describe('reactivity/reactive/Array', () => {
   test('should make Array reactive', () => {

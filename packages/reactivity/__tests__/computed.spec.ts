@@ -1,18 +1,36 @@
 import {
-  computed, ComputedRef, ComputedRefImpl,
-  DebuggerEvent,
-  effect, EffectFlags,
-  isReadonly,
-  ITERATE_KEY, pauseTracking,
   reactive,
-  ref, resetTracking, shallowRef,
+  computed,
+  ref,
+  effect,
+  isReadonly,
   toRaw,
-  triggerRef,
-  WritableComputedRef
-} from '../src/reactive'
-import { TrackOpTypes, TriggerOpTypes } from '../src/constants'
-import { nextTick, defineComponent, h, onMounted, onUnmounted } from '@vue/runtime-core'
-import { nodeOps, render, serializeInner, TestElement, triggerEvent } from '@vue/runtime-test'
+  TrackOpTypes,
+  TriggerOpTypes,
+  EffectFlags,
+  shallowRef,
+  ComputedRef,
+  pauseTracking,
+  resetTracking,
+  triggerRef
+} from '@vue/reactivity'
+import {
+  h,
+  nextTick,
+  onUnmounted,
+  onMounted,
+  defineComponent
+} from '@vue/runtime-core'
+import {
+  nodeOps,
+  render,
+  serializeInner,
+  triggerEvent,
+  TestElement
+} from '@vue/runtime-test'
+import { WritableComputedRef } from '../src/interface'
+import { ITERATE_KEY, ComputedRefImpl } from '../src/reactive'
+import { DebuggerEvent } from '../src/type'
 
 describe('reactivity/computed', () => {
   it('should return updated value', () => {
@@ -141,7 +159,7 @@ describe('reactivity/computed', () => {
       get: () => n.value + 1,
       set: val => {
         n.value = val - 1
-      },
+      }
     })
 
     expect(plusOne.value).toBe(2)
@@ -158,7 +176,7 @@ describe('reactivity/computed', () => {
       get: () => n.value + 1,
       set: val => {
         n.value = val - 1
-      },
+      }
     })
 
     let dummy
@@ -194,7 +212,7 @@ describe('reactivity/computed', () => {
     ;(plusOne as WritableComputedRef<number>).value++ // Type cast to prevent TS from preventing the error
 
     expect(
-      'Write operation failed: computed value is readonly',
+      'Write operation failed: computed value is readonly'
     ).toHaveBeenWarnedLast()
   })
 
@@ -210,7 +228,7 @@ describe('reactivity/computed', () => {
       },
       set(v) {
         a = v
-      },
+      }
     })
     expect(isReadonly(z)).toBe(false)
     expect(isReadonly(z.value.a)).toBe(false)
@@ -223,7 +241,7 @@ describe('reactivity/computed', () => {
     })
     const obj = reactive({ foo: 1, bar: 2 })
     const c = computed(() => (obj.foo, 'bar' in obj, Object.keys(obj)), {
-      onTrack,
+      onTrack
     })
     expect(c.value).toEqual(['foo', 'bar'])
     expect(onTrack).toHaveBeenCalledTimes(3)
@@ -232,20 +250,20 @@ describe('reactivity/computed', () => {
         effect: c,
         target: toRaw(obj),
         type: TrackOpTypes.GET,
-        key: 'foo',
+        key: 'foo'
       },
       {
         effect: c,
         target: toRaw(obj),
         type: TrackOpTypes.HAS,
-        key: 'bar',
+        key: 'bar'
       },
       {
         effect: c,
         target: toRaw(obj),
         type: TrackOpTypes.ITERATE,
-        key: ITERATE_KEY,
-      },
+        key: ITERATE_KEY
+      }
     ])
   })
 
@@ -269,7 +287,7 @@ describe('reactivity/computed', () => {
       type: TriggerOpTypes.SET,
       key: 'foo',
       oldValue: 1,
-      newValue: 2,
+      newValue: 2
     })
 
     delete obj.foo
@@ -280,7 +298,7 @@ describe('reactivity/computed', () => {
       target: toRaw(obj),
       type: TriggerOpTypes.DELETE,
       key: 'foo',
-      oldValue: 2,
+      oldValue: 2
     })
   })
 
@@ -289,7 +307,7 @@ describe('reactivity/computed', () => {
     const cSpy = vi.fn()
 
     const a = ref<null | { v: number }>({
-      v: 1,
+      v: 1
     })
     const b = computed(() => {
       return a.value
@@ -369,27 +387,27 @@ describe('reactivity/computed', () => {
     const cSpy = vi.fn()
 
     const a = ref(0)
-    const b = computed(() => {
+    const b = (computed(() => {
       return a.value % 3 !== 0
-    }) as unknown as ComputedRefImpl
-    const c = computed(() => {
+    }) as unknown) as ComputedRefImpl
+    const c = (computed(() => {
       cSpy()
       if (a.value % 3 === 2) {
         return 'expensive'
       }
       return 'cheap'
-    }) as unknown as ComputedRefImpl
-    const d = computed(() => {
+    }) as unknown) as ComputedRefImpl
+    const d = (computed(() => {
       return a.value % 3 === 2
-    }) as unknown as ComputedRefImpl
-    const e = computed(() => {
+    }) as unknown) as ComputedRefImpl
+    const e = (computed(() => {
       if (b.value) {
         if (d.value) {
           return 'Avoiding expensive calculation'
         }
       }
       return c.value
-    }) as unknown as ComputedRefImpl
+    }) as unknown) as ComputedRefImpl
 
     e.value
     a.value++
@@ -448,8 +466,8 @@ describe('reactivity/computed', () => {
 
   it('should chained recursive effects clear dirty after trigger', () => {
     const v = ref(1)
-    const c1 = computed(() => v.value) as unknown as ComputedRefImpl
-    const c2 = computed(() => c1.value) as unknown as ComputedRefImpl
+    const c1 = (computed(() => v.value) as unknown) as ComputedRefImpl
+    const c2 = (computed(() => c1.value) as unknown) as ComputedRefImpl
 
     c2.value
     expect(c1.flags & EffectFlags.DIRTY).toBeFalsy()
@@ -552,7 +570,7 @@ describe('reactivity/computed', () => {
           state.a = 2
         })
         return () => consumer.value
-      },
+      }
     }
     const root = nodeOps.createElement('div')
     render(h(Comp), root)
@@ -570,7 +588,7 @@ describe('reactivity/computed', () => {
     const Comp = {
       setup: () => {
         return () => c.value
-      },
+      }
     }
     const root = nodeOps.createElement('div')
 
@@ -805,14 +823,14 @@ describe('reactivity/computed', () => {
         c.value
         onUnmounted(() => spy(c.value))
         return () => {}
-      },
+      }
     }
 
     const show = ref(true)
     const Parent = {
       setup() {
         return () => (show.value ? h(Child) : null)
-      },
+      }
     }
 
     render(h(Parent), nodeOps.createElement('div'))
@@ -844,11 +862,11 @@ describe('reactivity/computed', () => {
           h(
             'div',
             {
-              ref: () => (a.value = 1),
+              ref: () => (a.value = 1)
             },
-            b.value,
+            b.value
           )
-      },
+      }
     }
 
     render(h(App), nodeOps.createElement('div'))
@@ -868,7 +886,7 @@ describe('reactivity/computed', () => {
     const Comp = {
       setup: () => {
         return () => d.value + ' | ' + e.value
-      },
+      }
     }
     const root = nodeOps.createElement('div')
 
@@ -879,7 +897,7 @@ describe('reactivity/computed', () => {
     v.value += ' World'
     await nextTick()
     expect(serializeInner(root)).toBe(
-      'Hello World World World World | Hello World World World World',
+      'Hello World World World World | Hello World World World World'
     )
   })
 
@@ -898,7 +916,7 @@ describe('reactivity/computed', () => {
         return () => {
           return [d.value.d, d.value.d]
         }
-      },
+      }
     }
 
     const root = nodeOps.createElement('div')
@@ -945,7 +963,7 @@ describe('reactivity/computed', () => {
       type: TriggerOpTypes.SET,
       key: 'value',
       oldValue: 1,
-      newValue: 2,
+      newValue: 2
     })
   })
 
@@ -954,7 +972,7 @@ describe('reactivity/computed', () => {
     const Comp = defineComponent({
       data() {
         return {
-          counter: 0,
+          counter: 0
         }
       },
 
@@ -966,7 +984,7 @@ describe('reactivity/computed', () => {
           } else {
             return `Step ${this.counter}`
           }
-        },
+        }
       },
 
       render() {
@@ -976,13 +994,13 @@ describe('reactivity/computed', () => {
             {
               onClick: () => {
                 this.counter++
-              },
+              }
             },
-            'Step',
+            'Step'
           ),
-          h('p', this.message),
+          h('p', this.message)
         ]
-      },
+      }
     })
     const root = nodeOps.createElement('div')
     render(h(Comp), root)
@@ -1061,7 +1079,7 @@ describe('reactivity/computed', () => {
       prop1: shallowRef(1),
       prop2: shallowRef(2),
       prop3: shallowRef(3),
-      prop4: shallowRef(4),
+      prop4: shallowRef(4)
     }
 
     let layer = start
@@ -1074,7 +1092,7 @@ describe('reactivity/computed', () => {
         prop1: computed(() => m.prop2.value),
         prop2: computed(() => m.prop1.value - m.prop3.value),
         prop3: computed(() => m.prop2.value + m.prop4.value),
-        prop4: computed(() => m.prop3.value),
+        prop4: computed(() => m.prop3.value)
       }
       effect(() => s.prop1.value)
       effect(() => s.prop2.value)
@@ -1101,7 +1119,7 @@ describe('reactivity/computed', () => {
       end.prop1.value,
       end.prop2.value,
       end.prop3.value,
-      end.prop4.value,
+      end.prop4.value
     ]).toMatchObject([-2, -4, 2, 3])
   })
 
@@ -1118,12 +1136,12 @@ describe('reactivity/computed', () => {
       computeds.push(
         computed(() => {
           return base.value + earlier.reduce((sum, c) => sum + c.value, 0)
-        }),
+        })
       )
     }
 
     const tail = computed(() =>
-      trigger.value ? computeds[computeds.length - 1].value : 0,
+      trigger.value ? computeds[computeds.length - 1].value : 0
     )
 
     const t0 = performance.now()

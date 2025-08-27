@@ -1,6 +1,6 @@
-import { computed, ComputedRef, effect, EffectScope, effectScope, getCurrentScope, onScopeDispose, reactive, ref, watch } from "@vue/reactivity"
-import { nextTick, watchEffect } from "@vue/runtime-core"
-
+import { effectScope, reactive,ref,watch, effect, EffectScope, onScopeDispose, ComputedRef, computed, getCurrentScope } from "@vue/reactivity"
+import { watchEffect } from "@vue/runtime-core"
+import { nextTick } from "@vue/runtime-core"
 
 describe('reactivity/effect/scope', () => {
   it('should run', () => {

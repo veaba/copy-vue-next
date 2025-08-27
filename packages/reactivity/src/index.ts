@@ -6,10 +6,12 @@ export { isReactive, toRaw, isProxy, isReadonly, isShallow, isRef } from './reac
 export { toRefs, toRef, customRef, toValue } from './reactive'
 export { getDepFromReactive } from './reactive'
 // types
-export type { Ref, ToRef, Subscriber, DebuggerEventExtraInfo, ComputedRef, ComputedGetter, WritableComputedOptions, OnCleanup, WatchOptions, WatchStopHandle, ShallowUnwrapRef, UnwrapNestedRefs } from './reactive'
-export type { DebuggerOptions, ShallowRef, WatchHandle, WatchEffect, WatchSource, ReactiveMarker } from './reactive'
+export type {  ToRef, DebuggerEventExtraInfo,  ComputedGetter, OnCleanup, WatchStopHandle, ShallowUnwrapRef, UnwrapNestedRefs } from './type'
+export type {  ShallowRef,  WatchEffect, WatchSource,  } from './type'
+// interface 
+export type { Ref,ComputedRef,DebuggerOptions, WritableComputedOptions,  WatchOptions,Subscriber,WatchHandle, ReactiveMarker } from './interface'
 // class
-export { ReactiveEffect, ReactiveFlags, EffectScope } from './reactive'
+export { ReactiveEffect, EffectScope } from './reactive'
 // enums
-export { WatchErrorCodes, EffectFlags } from './reactive'
+export { WatchErrorCodes, EffectFlags, ReactiveFlags } from './enum'
 export { TriggerOpTypes, TrackOpTypes } from './constants'

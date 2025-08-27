@@ -4,10 +4,11 @@ import {
   computed,
   ref,
   watch,
-  WatchOptions,
   EffectScope,
 } from '@vue/reactivity'
-import { WatchScheduler, onWatcherCleanup } from '../src/reactive'
+import { onWatcherCleanup } from '../src/reactive'
+import { WatchScheduler } from '../src/type'
+import { WatchOptions } from '../src/interface'
 
 const queue: (() => void)[] = []
 
