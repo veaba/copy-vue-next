@@ -163,6 +163,11 @@ export interface Ref<T = any, S = T> {
   [RefSymbol]: true
 }
 
+export type ToRefs<T = any> = {
+  [K in keyof T]: ToRef<T[K]>
+}
+
+export type ToRef<T> = IfAny<T, Ref<T>, [T] extends [Ref] ? T : Ref<T>>
 type Primitive = string | number | boolean | bigint | symbol | undefined | null // 基本类型
 export type Builtin = Primitive | Function | Date | Error | RegExp // 引用类型
 export type DeepReadonly<T> = T extends Builtin
@@ -491,6 +496,42 @@ export class EffectScope {
       }
       this.parent = undefined
     }
+  }
+}
+
+class ObjectRefImpl<T extends object, K extends keyof T> {
+  public readonly [ReactiveFlags.IS_REF] = true
+  public _value: T[K] = undefined!
+
+  constructor(
+    private readonly _object: T,
+    private readonly _key: K,
+    private readonly _defaultValue?: T[K],
+  ) {}
+
+  get value() {
+    const val = this._object[this._key]
+    return (this._value = val === undefined ? this._defaultValue! : val)
+  }
+
+  set value(newVal) {
+    this._object[this._key] = newVal
+  }
+
+  get dep(): Dep | undefined {
+    return getDepFromReactive(toRaw(this._object), this._key)
+  }
+}
+
+
+class GetterRefImpl<T> {
+  public readonly [ReactiveFlags.IS_REF] = true
+  public readonly [ReactiveFlags.IS_READONLY] = true
+  public _value: T = undefined!
+
+  constructor(private readonly _getter: () => T) {}
+  get value() {
+    return (this._value = this._getter())
   }
 }
 
@@ -1039,6 +1080,33 @@ class RefImpl<T = any> {
     }
   }
 }
+
+class CustomRefImpl<T> {
+  public dep: Dep
+
+  private readonly _get: ReturnType<CustomRefFactory<T>>['get']
+  private readonly _set: ReturnType<CustomRefFactory<T>>['set']
+
+  public readonly [ReactiveFlags.IS_REF] = true
+
+  public _value: T = undefined!
+
+  constructor(factory: CustomRefFactory<T>) {
+    const dep = (this.dep = new Dep())
+    const { get, set } = factory(dep.track.bind(dep), dep.trigger.bind(dep))
+    this._get = get
+    this._set = set
+  }
+
+  get value() {
+    return (this._value = this._get())
+  }
+
+  set value(newVal) {
+    this._set(newVal)
+  }
+}
+
 /*** ======> function  <===== ***/
 
 export function isReactive(value: unknown): boolean {
@@ -1553,6 +1621,145 @@ export function ref<T = any>(): Ref<T | undefined>
 export function ref(value?: unknown) {
   return createRef(value, false)
 }
+
+
+
+/**
+ * Used to normalize values / refs / getters into refs.
+ *
+ * @example
+ * ```js
+ * // returns existing refs as-is
+ * toRef(existingRef)
+ *
+ * // creates a ref that calls the getter on .value access
+ * toRef(() => props.foo)
+ *
+ * // creates normal refs from non-function values
+ * // equivalent to ref(1)
+ * toRef(1)
+ * ```
+ *
+ * Can also be used to create a ref for a property on a source reactive object.
+ * The created ref is synced with its source property: mutating the source
+ * property will update the ref, and vice-versa.
+ *
+ * @example
+ * ```js
+ * const state = reactive({
+ *   foo: 1,
+ *   bar: 2
+ * })
+ *
+ * const fooRef = toRef(state, 'foo')
+ *
+ * // mutating the ref updates the original
+ * fooRef.value++
+ * console.log(state.foo) // 2
+ *
+ * // mutating the original also updates the ref
+ * state.foo++
+ * console.log(fooRef.value) // 3
+ * ```
+ *
+ * @param source - A getter, an existing ref, a non-function value, or a
+ *                 reactive object to create a property ref from.
+ * @param [key] - (optional) Name of the property in the reactive object.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#toref}
+ */
+export function toRef<T>(
+  value: T,
+): T extends () => infer R
+  ? Readonly<Ref<R>>
+  : T extends Ref
+    ? T
+    : Ref<UnwrapRef<T>>
+export function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K,
+): ToRef<T[K]>
+export function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K,
+  defaultValue: T[K],
+): ToRef<Exclude<T[K], undefined>>
+export function toRef(
+  source: Record<string, any> | MaybeRef,
+  key?: string,
+  defaultValue?: unknown,
+): Ref {
+  if (isRef(source)) {
+    return source
+  } else if (isFunction(source)) {
+    return new GetterRefImpl(source) as any
+  } else if (isObject(source) && arguments.length > 1) {
+    return propertyToRef(source, key!, defaultValue)
+  } else {
+    return ref(source)
+  }
+}
+
+/**
+ * Converts a reactive object to a plain object where each property of the
+ * resulting object is a ref pointing to the corresponding property of the
+ * original object. Each individual ref is created using {@link toRef}.
+ *
+ * @param object - Reactive object to be made into an object of linked refs.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#torefs}
+ */
+export function toRefs<T extends object>(object: T): ToRefs<T> {
+  if (__DEV__ && !isProxy(object)) {
+    warn(`toRefs() expects a reactive object but received a plain one.`)
+  }
+  const ret: any = isArray(object) ? new Array(object.length) : {}
+  for (const key in object) {
+    ret[key] = propertyToRef(object, key)
+  }
+  return ret
+}
+
+/**
+ * Creates a customized ref with explicit control over its dependency tracking
+ * and updates triggering.
+ *
+ * @param factory - The function that receives the `track` and `trigger` callbacks.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#customref}
+ */
+export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
+  return new CustomRefImpl(factory) as any
+}
+
+/**
+ * Normalizes values / refs / getters to values.
+ * This is similar to {@link unref}, except that it also normalizes getters.
+ * If the argument is a getter, it will be invoked and its return value will
+ * be returned.
+ *
+ * @example
+ * ```js
+ * toValue(1) // 1
+ * toValue(ref(1)) // 1
+ * toValue(() => 1) // 1
+ * ```
+ *
+ * @param source - A getter, an existing ref, or a non-function value.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#tovalue}
+ */
+export function toValue<T>(source: MaybeRefOrGetter<T>): T {
+  return isFunction(source) ? source() : unref(source)
+}
+
+function propertyToRef(
+  source: Record<string, any>,
+  key: string,
+  defaultValue?: unknown,
+) {
+  const val = source[key]
+  return isRef(val)
+    ? val
+    : (new ObjectRefImpl(source, key, defaultValue) as any)
+}
+
 
 
 export const arrayInstrumentations: Record<string | symbol, Function> = <any>{
@@ -2430,6 +2637,17 @@ export type WatchCallback<V = any, OV = any> = (
   onCleanup: OnCleanup,
 ) => any
 
+export type CustomRefFactory<T> = (
+  track: () => void,
+  trigger: () => void,
+) => {
+  get: () => T
+  set: (value: T) => void
+}
+export type MaybeRefOrGetter<T = any> = MaybeRef<T> | ComputedRef<T> | (() => T)
+
+
+
 const cleanupMap: WeakMap<ReactiveEffect, (() => void)[]> = new WeakMap()
 let activeWatcher: ReactiveEffect | undefined = undefined
 // initial value for watchers to trigger on undefined initial values
@@ -2827,4 +3045,36 @@ export function getDepFromReactive(
   const depMap = targetMap.get(object)
   return depMap && depMap.get(key)
 
+}
+
+/**
+ * Creates an effect scope object which can capture the reactive effects (i.e.
+ * computed and watchers) created within it so that these effects can be
+ * disposed together. For detailed use cases of this API, please consult its
+ * corresponding {@link https://github.com/vuejs/rfcs/blob/master/active-rfcs/0041-reactivity-effect-scope.md | RFC}.
+ *
+ * @param detached - Can be used to create a "detached" effect scope.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#effectscope}
+ */
+export function effectScope(detached?: boolean): EffectScope {
+  return new EffectScope(detached)
+}
+
+
+/**
+ * Registers a dispose callback on the current active effect scope. The
+ * callback will be invoked when the associated effect scope is stopped.
+ *
+ * @param fn - The callback function to attach to the scope's cleanup.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#onscopedispose}
+ */
+export function onScopeDispose(fn: () => void, failSilently = false): void {
+  if (activeEffectScope) {
+    activeEffectScope.cleanups.push(fn)
+  } else if (__DEV__ && !failSilently) {
+    warn(
+      `onScopeDispose() is called when there is no active effect scope` +
+        ` to be associated with.`,
+    )
+  }
 }

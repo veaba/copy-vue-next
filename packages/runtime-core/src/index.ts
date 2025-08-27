@@ -33,7 +33,8 @@ import {
   TrackOpTypes,
   track,
   computed,
-  WatchOptions
+  WatchOptions,
+  EffectScope
 } from '@vue/reactivity'
 import { watch as baseWatch } from '@vue/reactivity'
 import { camelize, capitalize, EMPTY_ARR, EMPTY_OBJ, extend, getEscapedCssVarName, getGlobalThis, hasOwn, IfAny, includeBooleanAttr, isArray, isBooleanAttr, isBuiltInDirective, isGloballyAllowed, } from '@vue/shared'
@@ -44,7 +45,7 @@ import { CompilerOptions, ComponentInjectOptions } from '@vue/compile-core'
 import { LifecycleHooks, ErrorCodes, TeleportMoveTypes, MoveType, DeprecationTypes, SchedulerJobFlags, DOMNodeTypes, MismatchTypes, AccessTypes, DevtoolsHooks, BooleanFlags, OptionTypes } from './enum'
 import { compatModelEventPrefix, COMPONENTS, DIRECTIVES, FILTERS, } from './define'
 import { Fragment, isHmrUpdating, leaveCbKey, NULL_DYNAMIC_COMPONENT, ssrContextKey, Static, TeleportEndKey, Text, Comment } from './define'
-import type { App, AppConfig, AppContext, AsyncComponentOptions, ClassComponent, ComponentInternalInstance, ComponentOptionsBase, ComponentRenderContext, } from './interface'
+import type { App, AppConfig, AppContext, AsyncComponentOptions, ClassComponent, ComponentInternalInstance, ComponentOptionsBase, ComponentRenderContext, WatchEffectOptions, } from './interface'
 import type { DevtoolsHook, DirectiveBinding, FunctionalComponent, HydrationRenderer, KeepAliveContext, LegacyDirective, LegacyVNodeProps, ObjectDirective, PropOptions, } from './interface'
 import type { Renderer, RendererElement, RendererInternals, RendererNode, RendererOptions, SchedulerJob, SuspenseBoundary, SuspenseProps, TeleportProps, TeleportTargetElement, TransitionHooks, VNode, WatchAPIOptions } from './interface'
 import type { AssetTypes, AsyncComponentLoader, CompatConfig, CompatVue, Component, ComponentObjectPropsOptions, ComponentOptions, ComponentOptionsMixin, Constructor, HTMLElementEventHandler, RawChildren, RawProps, } from './type'
@@ -70,7 +71,6 @@ let shouldCacheAccess = true
 let currentRenderingInstance: ComponentInternalInstance | null = null
 let isInSSRComponentSetup = false
 let hasWarned = false
-let activeEffectScope: EffectScope | undefined
 
 let currentInstance: ComponentInternalInstance | null = null
 
@@ -246,171 +246,6 @@ const skipLegacyRootLevelProps = /*@__PURE__*/ makeMap(
   'staticStyle,staticClass,directives,model,hook',
 )
 
-/**** type ***/
-
-
-
-/**** interface ***/
-
-
-/**** class  ***/
-export class EffectScope {
-  /**
-   * @internal
-   */
-  private _active = true
-  /**
-   * @internal track `on` calls, allow `on` call multiple times
-   */
-  private _on = 0
-  /**
-   * @internal
-   */
-  effects: ReactiveEffect[] = []
-  /**
-   * @internal
-   */
-  cleanups: (() => void)[] = []
-
-  private _isPaused = false
-
-  /**
-   * only assigned by undetached scope
-   * @internal
-   */
-  parent: EffectScope | undefined
-  /**
-   * record undetached scopes
-   * @internal
-   */
-  scopes: EffectScope[] | undefined
-  /**
-   * track a child scope's index in its parent's scopes array for optimized
-   * removal
-   * @internal
-   */
-  private index: number | undefined
-
-  constructor(public detached = false) {
-    this.parent = activeEffectScope
-    if (!detached && activeEffectScope) {
-      this.index =
-        (activeEffectScope.scopes || (activeEffectScope.scopes = [])).push(
-          this,
-        ) - 1
-    }
-  }
-
-  get active(): boolean {
-    return this._active
-  }
-
-  pause(): void {
-    if (this._active) {
-      this._isPaused = true
-      let i, l
-      if (this.scopes) {
-        for (i = 0, l = this.scopes.length; i < l; i++) {
-          this.scopes[i].pause()
-        }
-      }
-      for (i = 0, l = this.effects.length; i < l; i++) {
-        this.effects[i].pause()
-      }
-    }
-  }
-
-  /**
-   * Resumes the effect scope, including all child scopes and effects.
-   */
-  resume(): void {
-    if (this._active) {
-      if (this._isPaused) {
-        this._isPaused = false
-        let i, l
-        if (this.scopes) {
-          for (i = 0, l = this.scopes.length; i < l; i++) {
-            this.scopes[i].resume()
-          }
-        }
-        for (i = 0, l = this.effects.length; i < l; i++) {
-          this.effects[i].resume()
-        }
-      }
-    }
-  }
-
-  run<T>(fn: () => T): T | undefined {
-    if (this._active) {
-      const currentEffectScope = activeEffectScope
-      try {
-        activeEffectScope = this
-        return fn()
-      } finally {
-        activeEffectScope = currentEffectScope
-      }
-    } else if (__DEV__) {
-      warn(`cannot run an inactive effect scope.`)
-    }
-  }
-
-  prevScope: EffectScope | undefined
-  /**
-   * This should only be called on non-detached scopes
-   * @internal
-   */
-  on(): void {
-    if (++this._on === 1) {
-      this.prevScope = activeEffectScope
-      activeEffectScope = this
-    }
-  }
-
-  /**
-   * This should only be called on non-detached scopes
-   * @internal
-   */
-  off(): void {
-    if (this._on > 0 && --this._on === 0) {
-      activeEffectScope = this.prevScope
-      this.prevScope = undefined
-    }
-  }
-
-  stop(fromParent?: boolean): void {
-    if (this._active) {
-      this._active = false
-      let i, l
-      for (i = 0, l = this.effects.length; i < l; i++) {
-        this.effects[i].stop()
-      }
-      this.effects.length = 0
-
-      for (i = 0, l = this.cleanups.length; i < l; i++) {
-        this.cleanups[i]()
-      }
-      this.cleanups.length = 0
-
-      if (this.scopes) {
-        for (i = 0, l = this.scopes.length; i < l; i++) {
-          this.scopes[i].stop(true)
-        }
-        this.scopes.length = 0
-      }
-
-      // nested scope, dereference from parent to avoid memory leaks
-      if (!this.detached && this.parent && !fromParent) {
-        // optimized O(1) removal
-        const last = this.parent.scopes!.pop()
-        if (last && last !== this) {
-          this.parent.scopes![this.index!] = last
-          last.index = this.index!
-        }
-      }
-      this.parent = undefined
-    }
-  }
-}
 
 const hasSetupBinding = (state: Data, key: string) =>
   state !== EMPTY_OBJ && !state.__isScriptSetup && hasOwn(state, key)
@@ -7757,6 +7592,15 @@ export function watchAPI<T = any, Immediate extends Readonly<boolean> = false>(
     )
   }
   return doWatch(source as any, cb, options)
+}
+
+
+// Simple effect.
+export function watchEffect(
+  effect: WatchEffect,
+  options?: WatchEffectOptions,
+): WatchHandle {
+  return doWatch(effect, null, options)
 }
 
 // this.$watch

@@ -36,11 +36,23 @@ private npm packages：
 
 ### unit tests
 
-- [x] `computed.spec.ts`
-- [x] `reactive.spec.ts`
-- [x] `reactiveArray.spec.ts`
-- [x] `effect.spec.ts`
-- [x] `readonly.spec.ts`
+- [x] collections
+  - [x] Map.spec.ts
+  - [x] Set.spec.ts
+  - [x] WeakMap.spec.ts
+  - [x] WeakSet.spec.ts
+  - [x] shallowReadonly.spec.ts
+- [x] computed.spec.ts
+- [x] effect.spec.ts
+- [x] effectScope.spec.ts
+- [x] gc.spec.ts`（skip）
+- [x] reactive.spec.ts
+- [x] reactiveArray.spec.ts
+- [x] readonly.spec.ts
+- [x] ref.spec.ts
+- [x] shallowReactive.spec.ts
+- [x] shallowReadonly.spec.ts
+- [x] watch.spec.ts
 
 ## runtime-core
 
