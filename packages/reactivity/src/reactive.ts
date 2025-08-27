@@ -511,9 +511,11 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
     }
   }
   pause(): void {
+    console.log(" pause")
     this.flags |= EffectFlags.PAUSED
   }
   resume(): void {
+    console.log(" resume")
     if (this.flags & EffectFlags.PAUSED) {
       this.flags &= ~EffectFlags.PAUSED
       if (pausedQueueEffects.has(this)) {
@@ -524,6 +526,8 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
   }
 
   notify(): void {
+    console.log(" notify")
+
     if (
       this.flags & EffectFlags.RUNNING &&
       !(this.flags & EffectFlags.ALLOW_RECURSE)
@@ -535,6 +539,8 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
     }
   }
   run(): T {
+    console.log(" run")
+
     if (!(this.flags & EffectFlags.ACTIVE)) {
       // stopped during cleanup
       return this.fn()
@@ -565,6 +571,8 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
   }
 
   stop(): void {
+    console.log(" stop")
+
     if (this.flags & EffectFlags.ACTIVE) {
       for (let link = this.deps; link; link = link.nextDep) {
         removeSub(link)
@@ -577,6 +585,8 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
   }
 
   trigger(): void {
+    console.log(" trigger")
+
     if (this.flags & EffectFlags.PAUSED) {
       pausedQueueEffects.add(this)
     } else if (this.scheduler) {
@@ -591,12 +601,16 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
    * @internal
    */
   runIfDirty(): void {
+    console.log(" runIfDirty")
+
     if (isDirty(this)) {
       this.run()
     }
   }
 
   get dirty(): boolean {
+    console.log(" get dirty")
+
     return isDirty(this)
   }
 }
@@ -604,7 +618,7 @@ export class ReactiveEffect<T = any> implements Subscriber, ReactiveEffectOption
 /**
  * @internal
 */
-class Dep {
+export class Dep {
   version = 0
 
   activeLink?: Link = undefined
@@ -839,7 +853,7 @@ class BaseReactiveHandler implements ProxyHandler<Target> {
         return fn
       }
 
-      if (key === 'haOwnProperty') {
+      if (key === 'hasOwnProperty') {
         return hasOwnProperty
       }
     }
@@ -1901,11 +1915,11 @@ function createReadonlyMethod(type: TriggerOpTypes): Function {
 
 }
 
-function startBatch(): void {
+export function startBatch(): void {
   batchDepth++
 }
 
-function endBatch(): void {
+export function endBatch(): void {
   if (--batchDepth > 0) {
     return
   }
@@ -2179,6 +2193,15 @@ function noTracking(
   endBatch()
   resetTracking()
   return res
+}
+
+/**
+ * Stops the effect associated with the given runner.
+ *
+ * @param runner - Association with the effect to stop tracking.
+ */
+export function stop(runner: ReactiveEffectRunner): void {
+  runner.effect.stop()
 }
 
 /**
@@ -2780,4 +2803,35 @@ export function triggerRef(ref: Ref): void {
       ;(ref as unknown as RefImpl).dep.trigger()
     }
   }
+}
+
+/**
+ * Registers a cleanup function for the current active effect.
+ * The cleanup function is called right before the next effect run, or when the
+ * effect is stopped.
+ *
+ * Throws a warning if there is no current active effect. The warning can be
+ * suppressed by passing `true` to the second argument.
+ *
+ * @param fn - the cleanup function to be registered
+ * @param failSilently - if `true`, will not throw warning when called without
+ * an active effect.
+ */
+export function onEffectCleanup(fn: () => void, failSilently = false): void {
+  if (activeSub instanceof ReactiveEffect) {
+    activeSub.cleanup = fn
+  } else if (__DEV__ && !failSilently) {
+    warn(
+      `onEffectCleanup() was called when there was no active effect` +
+        ` to associate with.`,
+    )
+  }
+}
+
+export function getDepFromReactive(
+  object: any,
+  key: string | number | symbol,
+): Dep | undefined {
+  const depMap = targetMap.get(object)
+  return depMap && depMap.get(key)
 }

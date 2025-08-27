@@ -12,7 +12,7 @@ public npm packages：
 | `compiler-dom`        | |
 | `compiler-sfc`        | |
 | `compiler-ssr`        | |
-| `compiler-reactivity` | |
+| `reactive`          | |
 | `runtime-core`        | |
 | `runtime-dom`         | |
 | `runtime-test`        | |
@@ -31,6 +31,14 @@ private npm packages：
 | `template-explorer`   | |
 | `compiler-reactivity` | |
 | `vite-debug`          | |
+
+### reactive
+
+### unit tests
+
+- [x] `computed.spec.ts`
+- [x] `reactivity.spec.ts`
+- [x] `effect.spec.ts`
 
 ## runtime-core
 
@@ -75,7 +83,7 @@ const c = _computed(getterOrOptions as any);
 ## learning
 
 - typeScript: `infer K`
-	- ts 类型推断
+  - ts 类型推断
 
 - 在ts 开发中，省略 `{`，`}` 容易丢失
 
@@ -199,3 +207,12 @@ console.log([...new Set([11, 1, 1, 1, 1, 1])])
 测试 reactivity
 
 > jest packages/reactivity
+
+
+```diff
+- if (key === 'haOwnProperty') {
++ if (key === 'hasOwnProperty') {
+  return hasOwnProperty
+}
+
+```
