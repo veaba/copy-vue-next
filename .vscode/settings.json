@@ -15,8 +15,10 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "cSpell.words": [
+    "cmap",
     "codegen",
     "computeds",
+    "cset",
     "deopt",
     "hotspot",
     "klass",
@@ -25,7 +27,9 @@
     "minifiers",
     "noops",
     "problemtic",
+    "reactives",
     "Renderable",
+    "sref",
     "strat",
     "STRATS",
     "suspensible",

@@ -1,5 +1,9 @@
 # 响应式
 
+## 基本规则
+
+- `reactive()` 函数入参必须是对象
+
 ## 创建响应式
 
 - 先处理 readonly
@@ -28,3 +32,5 @@ enum ReactiveFlags = {
 ```
 
 - 递归读取 `[ReactiveFlags.RAW]`
+
+## reactive 和 ref 函数区别
