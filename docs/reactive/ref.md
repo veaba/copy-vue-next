@@ -33,7 +33,6 @@ set 时，从 `this._rawValue` 作为 `oldValue` 与 `newValue` 对比，不同�
 ```mermaid
 classDiagram
     direction LR
-    
     RefImpl: +T _value
     RefImpl: +T _rawValue
     RefImpl: +Dep dep
@@ -41,7 +40,7 @@ classDiagram
     RefImpl: +boolean IS_SHALLOW
     RefImpl: +get()
     RefImpl: +set()
-    
+
     class Dep {
         +String: version
         +Link?: subs
@@ -53,5 +52,43 @@ classDiagram
 
     RefImpl --|> Dep: get -> this.dep.track()
     RefImpl --|> Dep: set -> this.dep.trigger()
-    
+
+```
+
+## toRefs()
+
+### 解构对象
+
+```ts
+const state = reactive({
+  name: '张三',
+  age: 25,
+  address: '北京'
+})
+
+// 直接解构会失去响应性
+const { name, age } = state // ❌ 失去响应性
+
+// 使用 toRefs 保持响应性
+const { name, age, address } = toRefs(state) // ✅ 保持响应性
+
+// 使用方式
+console.log(name.value) // '张三'
+name.value = '李四' // 会更新原始 state
+```
+
+### 解构  props
+
+```ts
+const props = defineProps({
+  title: String,
+  count: Number
+})
+
+// 直接解构 props 会失去响应性
+const { title, count } = props // ❌
+
+// 使用 toRefs 保持响应性
+const { title, count } = toRefs(props) // ✅
+
 ```

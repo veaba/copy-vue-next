@@ -31,6 +31,7 @@ describe('reactivity/ref', () => {
   })
 
   it('ref wrapped in reactive should not track internal _value access', () => {
+    // ref 封装的的响应式不应该 track 内部 _value
     const a = ref(1)
     const b = reactive(a)
     let dummy
@@ -148,7 +149,7 @@ describe('reactivity/ref', () => {
       '1',
       { a: 1 },
       () => 0,
-      ref(0),
+      ref(0)
     ]
     const tupleRef = ref(tuple)
 
@@ -179,7 +180,7 @@ describe('reactivity/ref', () => {
       [Symbol.toPrimitive]: new WeakMap<Ref<boolean>, string>(),
       [Symbol.toStringTag]: { weakSet: new WeakSet<Ref<boolean>>() },
       [Symbol.unscopables]: { weakMap: new WeakMap<Ref<boolean>, string>() },
-      [customSymbol]: { arr: [ref(1)] },
+      [customSymbol]: { arr: [ref(1)] }
     }
 
     const objRef = ref(obj)
@@ -240,6 +241,10 @@ describe('reactivity/ref', () => {
     // force trigger
     triggerRef(sref)
     expect(dummy).toBe(2)
+
+    sref.value.a = 4
+    expect(dummy).toBe(2)
+
   })
 
   test('shallowRef isShallow', () => {
@@ -260,13 +265,13 @@ describe('reactivity/ref', () => {
     const a = reactive({
       x: 1,
     })
-    const x = toRef(a, 'x')
+    const x = toRef(a, 'x')  // 判断入参 Object -> propertyToRef -> new ObjectRefImpl
 
     const b = ref({ y: 1 })
 
     const c = toRef(b)
 
-    const d = toRef({ z: 1 })
+    const d = toRef({ z: 1 }) // toRef() -> ref() -> createRef()
 
     expect(isRef(d)).toBe(true)
     expect(d.value.z).toBe(1)
@@ -330,32 +335,33 @@ describe('reactivity/ref', () => {
     expect(() => (x.value = 123)).toThrow()
 
     expect(isReadonly(x)).toBe(true)
+    expect(isRef(x)).toBe(true)
   })
 
   test('toRefs', () => {
     const a = reactive({
       x: 1,
-      y: 2,
+      y: 2
     })
 
     const { x, y } = toRefs(a)
 
-    // expect(isRef(x)).toBe(true)
-    // expect(isRef(y)).toBe(true)
-    // expect(x.value).toBe(1)
-    // expect(y.value).toBe(2)
+    expect(isRef(x)).toBe(true)
+    expect(isRef(y)).toBe(true)
+    expect(x.value).toBe(1)
+    expect(y.value).toBe(2)
 
-    // // source -> proxy
-    // a.x = 2
-    // a.y = 3
-    // expect(x.value).toBe(2)
-    // expect(y.value).toBe(3)
+    // source -> proxy
+    a.x = 2
+    a.y = 3
+    expect(x.value).toBe(2)
+    expect(y.value).toBe(3)
 
-    // // proxy -> source
+    // proxy -> source
     x.value = 3
     y.value = 4
-    // expect(a.x).toBe(3)
-    // expect(a.y).toBe(4)
+    expect(a.x).toBe(3)
+    expect(a.y).toBe(4)
 
     // reactivity
     let dummyX, dummyY
@@ -366,11 +372,11 @@ describe('reactivity/ref', () => {
     expect(dummyX).toBe(x.value)
     expect(dummyY).toBe(y.value)
 
-    // // mutating source should trigger effect using the proxy refs
-    // a.x = 4
-    // a.y = 5
-    // expect(dummyX).toBe(4)
-    // expect(dummyY).toBe(5)
+    // mutating source should trigger effect using the proxy refs
+    a.x = 4
+    a.y = 5
+    expect(dummyX).toBe(4)
+    expect(dummyY).toBe(5)
   })
 
   test('toRefs should warn on plain object', () => {
@@ -402,13 +408,13 @@ describe('reactivity/ref', () => {
 
     const custom = customRef((track, trigger) => ({
       get() {
-        track()
+        track() // Dep 的 track 方法
         return value
       },
       set(newValue: number) {
         value = newValue
         _trigger = trigger
-      },
+      }
     }))
 
     expect(isRef(custom)).toBe(true)
@@ -425,8 +431,10 @@ describe('reactivity/ref', () => {
 
     _trigger!()
     expect(dummy).toBe(2)
+
   })
 
+  // 当 set 相同 proxy 不会触发 trigger
   test('should not trigger when setting value to same proxy', () => {
     const obj = reactive({ count: 0 })
 
@@ -454,7 +462,9 @@ describe('reactivity/ref', () => {
     const rr = readonly(original)
     const a = ref(original)
 
-    expect(a.value).toBe(r)
+    expect(a.value).toBe(r) // 共享了 reactiveMap
+    expect(a.value).not.toBe(s) // 不共享一个 weakMap：reactiveMap、shallowReactiveMap
+    expect(a.value).not.toBe(rr) // 不共享一个 weakMap：reactiveMap、readonlyMap
 
     a.value = s
     expect(a.value).toBe(s)
@@ -474,6 +484,8 @@ describe('reactivity/ref', () => {
 
     r.value = obj
     expect(spy).toHaveBeenCalledTimes(1)
+
+    // 因为内部  refImpl 中的 - setter 有 hasChanged 方法比较了下才会 trigger
   })
 
   test('toValue', () => {
@@ -503,7 +515,7 @@ describe('reactivity/ref', () => {
         set(value: number) {
           customRefValueCache = value
           trigger()
-        },
+        }
       }
     })
     customRefValue.value

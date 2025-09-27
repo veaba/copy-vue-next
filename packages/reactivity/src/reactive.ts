@@ -32,8 +32,50 @@ import {
 } from '@vue/shared'
 import { TrackOpTypes, TriggerOpTypes } from './constants'
 import { warn } from './warning'
-import { ComputedRef, DebuggerOptions, ReactiveEffectOptions, ReactiveEffectRunner, Ref, Subscriber, Target, WatchHandle, WatchOptions, WritableComputedOptions, WritableComputedRef } from './interface'
-import { ArrayMethods, CollectionTypes, ComputedGetter, ComputedSetter, CustomRefFactory, DebuggerEvent, DebuggerEventExtraInfo, DeepReadonly, EffectScheduler, IfAny, Instrumentations, IterableCollections, KeyToDepMap, MapTypes, MaybeRef, MaybeRefOrGetter, Raw, Reactive, SetTypes, ShallowReactive, ShallowRef, ShallowUnwrapRef, ToRef, ToRefs, UnwrapNestedRefs, UnwrapRef, WatchCallback, WatchEffect, WatchSource } from './type'
+import {
+  ComputedRef,
+  DebuggerOptions,
+  ReactiveEffectOptions,
+  ReactiveEffectRunner,
+  Ref,
+  Subscriber,
+  Target,
+  WatchHandle,
+  WatchOptions,
+  WritableComputedOptions,
+  WritableComputedRef
+} from './interface'
+import {
+  ArrayMethods,
+  CollectionTypes,
+  ComputedGetter,
+  ComputedSetter,
+  CustomRefFactory,
+  DebuggerEvent,
+  DebuggerEventExtraInfo,
+  DeepReadonly,
+  EffectScheduler,
+  IfAny,
+  Instrumentations,
+  IterableCollections,
+  KeyToDepMap,
+  MapTypes,
+  MaybeRef,
+  MaybeRefOrGetter,
+  Raw,
+  Reactive,
+  SetTypes,
+  ShallowReactive,
+  ShallowRef,
+  ShallowUnwrapRef,
+  ToRef,
+  ToRefs,
+  UnwrapNestedRefs,
+  UnwrapRef,
+  WatchCallback,
+  WatchEffect,
+  WatchSource
+} from './type'
 import { EffectFlags, ReactiveFlags, TargetType, WatchErrorCodes } from './enum'
 
 /*** ======> define <=====  ***/
@@ -51,7 +93,21 @@ const builtInSymbols = new Set(
     .map(key => Symbol[key as keyof SymbolConstructor])
     .filter(isSymbol)
 )
+/**  */
 export const reactiveMap: WeakMap<Target, any> = new WeakMap<Target, any>()
+export const targetMap: WeakMap<object, KeyToDepMap> = new WeakMap()
+export const shallowReadonlyMap: WeakMap<Target, any> = new WeakMap<
+  Target,
+  any
+>()
+export const shallowReactiveMap: WeakMap<Target, any> = new WeakMap<
+  Target,
+  any
+>()
+export const readonlyMap: WeakMap<Target, any> = new WeakMap<Target, any>()
+
+const cleanupMap: WeakMap<ReactiveEffect, (() => void)[]> = new WeakMap()
+
 let activeEffectScope: EffectScope | undefined
 
 const arrayProto = Array.prototype
@@ -78,20 +134,10 @@ export let activeSub: Subscriber | undefined
 // computed 计算属性，避免不更新
 export let globalVersion = 0
 
-export const targetMap: WeakMap<object, KeyToDepMap> = new WeakMap()
-export const shallowReadonlyMap: WeakMap<Target, any> = new WeakMap<
-  Target,
-  any
->()
-export const shallowReactiveMap: WeakMap<Target, any> = new WeakMap<
-  Target,
-  any
->()
 
 const getProto = <T extends CollectionTypes>(v: T): any =>
   Reflect.getPrototypeOf(v)
 
-export const readonlyMap: WeakMap<Target, any> = new WeakMap<Target, any>()
 
 /*** ======> class  <===== ***/
 export class EffectScope {
@@ -195,6 +241,7 @@ export class EffectScope {
   }
 
   prevScope: EffectScope | undefined
+
   /**
    * This should only be called on non-detached scopes
    * @internal
@@ -260,7 +307,8 @@ class ObjectRefImpl<T extends object, K extends keyof T> {
     private readonly _object: T,
     private readonly _key: K,
     private readonly _defaultValue?: T[K]
-  ) {}
+  ) {
+  }
 
   get value() {
     const val = this._object[this._key]
@@ -281,7 +329,9 @@ class GetterRefImpl<T> {
   public readonly [ReactiveFlags.IS_READONLY] = true
   public _value: T = undefined!
 
-  constructor(private readonly _getter: () => T) {}
+  constructor(private readonly _getter: () => T) {
+  }
+
   get value() {
     return (this._value = this._getter())
   }
@@ -304,9 +354,11 @@ export class ReactiveEffect<T = any>
       activeEffectScope.effects.push(this)
     }
   }
+
   pause(): void {
     this.flags |= EffectFlags.PAUSED
   }
+
   resume(): void {
     if (this.flags & EffectFlags.PAUSED) {
       this.flags &= ~EffectFlags.PAUSED
@@ -328,6 +380,7 @@ export class ReactiveEffect<T = any>
       batch(this)
     }
   }
+
   run(): T {
     if (!(this.flags & EffectFlags.ACTIVE)) {
       // stopped during cleanup
@@ -348,7 +401,7 @@ export class ReactiveEffect<T = any>
       if (__DEV__ && activeSub !== this) {
         warn(
           'Active effect was not restored correctly - ' +
-            'this is likely a Vue internal bug.'
+          'this is likely a Vue internal bug.'
         )
       }
       cleanupDeps(this)
@@ -408,6 +461,7 @@ export class Dep {
   // 订阅者计数器
   sc: number = 0
   readonly __v_skip = true
+
   constructor(public computed?: ComputedRefImpl | undefined) {
     if (__DEV__) {
       this.subsHead = undefined
@@ -465,6 +519,7 @@ export class Dep {
     }
     return link
   }
+
   trigger(debugInfo?: DebuggerEventExtraInfo): void {
     this.version++
     globalVersion++
@@ -534,6 +589,7 @@ export class ComputedRefImpl<T = any> implements Subscriber {
     this[ReactiveFlags.IS_READONLY] = !setter
     this.isSSR = isSSR
   }
+
   notify(): true | void {
     this.flags |= EffectFlags.DIRTY
     if (
@@ -577,16 +633,19 @@ export class Link {
   nextSub?: Link
   prevSub?: Link
   prevActiveLink?: Link
+
   constructor(public sub: Subscriber, public dep: Dep) {
     this.version = dep.version
     this.nextDep = this.prevDep = this.nextSub = this.prevSub = this.prevActiveLink = undefined
   }
 }
+
 class BaseReactiveHandler implements ProxyHandler<Target> {
   constructor(
     protected readonly _isReadonly = false,
     protected readonly _isShallow = false
-  ) {}
+  ) {
+  }
 
   get(target: Target, key: string | symbol, receiver: object): any {
     if (key === ReactiveFlags.SKIP) return target[ReactiveFlags.SKIP]
@@ -603,14 +662,14 @@ class BaseReactiveHandler implements ProxyHandler<Target> {
     } else if (key === ReactiveFlags.RAW) {
       if (
         receiver ===
-          (isReadonly
+        (isReadonly
             ? isShallow
               ? shallowReadonlyMap
               : readonlyMap
             : isShallow
-            ? shallowReactiveMap
-            : reactiveMap
-          ).get(target) ||
+              ? shallowReactiveMap
+              : reactiveMap
+        ).get(target) ||
         Object.getPrototypeOf(target) === Object.getPrototypeOf(receiver)
       ) {
         return target
@@ -654,6 +713,7 @@ class BaseReactiveHandler implements ProxyHandler<Target> {
     return res
   }
 }
+
 class MutableReactiveHandler extends BaseReactiveHandler {
   constructor(isShallow = false) {
     super(false, isShallow)
@@ -734,6 +794,7 @@ class MutableReactiveHandler extends BaseReactiveHandler {
     }
     return result
   }
+
   ownKeys(target: Record<string | symbol, unknown>): (string | symbol)[] {
     track(
       target,
@@ -758,6 +819,7 @@ class ReadonlyReactiveHandler extends BaseReactiveHandler {
     }
     return true
   }
+
   deleteProperty(target: object, key: string | symbol) {
     if (__DEV__) {
       warn(
@@ -860,6 +922,7 @@ export function isReactive(value: unknown): boolean {
 export function isReadonly(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_READONLY])
 }
+
 export function isShallow(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_SHALLOW])
 }
@@ -891,10 +954,8 @@ function isDirty(sub: Subscriber): boolean {
     }
   }
   // @ts-expect-error， 给 pinia 用的
-  if (sub._dirty) {
-    return true
-  }
-  return false
+  return !!sub._dirty;
+
 }
 
 export const mutableHandlers: ProxyHandler<object> = new MutableReactiveHandler()
@@ -1016,6 +1077,7 @@ export function shallowReadonly<T extends object>(target: T): Readonly<T> {
     shallowReadonlyMap
   )
 }
+
 export function computed<T>(
   getter: ComputedGetter<T>,
   debugOptions?: DebuggerOptions
@@ -1053,9 +1115,7 @@ export function effect<T = any>(
   fn: () => T,
   options?: ReactiveEffectOptions
 ): ReactiveEffectRunner<T> {
-  if ((fn as ReactiveEffectRunner).effect instanceof ReactiveEffect) {
-    fn = (fn as ReactiveEffectRunner).effect.fn
-  }
+  fn = (fn as ReactiveEffectRunner).effect.fn
 
   const e = new ReactiveEffect(fn)
   if (options) {
@@ -1093,6 +1153,7 @@ function getTargetType(value: Target) {
     ? TargetType.INVALID
     : targetTypeMap(toRawType(value))
 }
+
 function createReactiveObject(
   target: Target,
   isReadonly: boolean,
@@ -1117,21 +1178,18 @@ function createReactiveObject(
     target[ReactiveFlags.RAW] &&
     !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
   ) {
-    // console.log('1  createReactiveObject raw && no readonly && no reactive')
     return target
   }
 
   // 只观测到特定值得类型
   const targetType = getTargetType(target)
   if (targetType === TargetType.INVALID) {
-    // console.log('1  createReactiveObject invalid')
     return target
   }
 
   // 已是 proxy
   const existingProxy = proxyMap.get(target)
   if (existingProxy) {
-    // console.log('1  createReactiveObject existingProxy')
     return existingProxy
   }
 
@@ -1140,7 +1198,6 @@ function createReactiveObject(
     target,
     targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers
   )
-  // console.log('1  createReactiveObject proxyMap')
   proxyMap.set(target, proxy)
   return proxy
 }
@@ -1177,7 +1234,7 @@ function createInstrumentations(
     get size() {
       const target = ((this as unknown) as IterableCollections)[
         ReactiveFlags.RAW
-      ]
+        ]
       !readonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
       return target.size
     },
@@ -1214,96 +1271,96 @@ function createInstrumentations(
     instrumentations,
     readonly
       ? {
-          add: createReadonlyMethod(TriggerOpTypes.ADD),
-          set: createReadonlyMethod(TriggerOpTypes.SET),
-          delete: createReadonlyMethod(TriggerOpTypes.DELETE),
-          clear: createReadonlyMethod(TriggerOpTypes.CLEAR)
-        }
+        add: createReadonlyMethod(TriggerOpTypes.ADD),
+        set: createReadonlyMethod(TriggerOpTypes.SET),
+        delete: createReadonlyMethod(TriggerOpTypes.DELETE),
+        clear: createReadonlyMethod(TriggerOpTypes.CLEAR)
+      }
       : {
-          add(this: SetTypes, value: unknown) {
-            if (!shallow && !isShallow(value) && !isReadonly(value)) {
-              value = toRaw(value)
-            }
-
-            const target = toRaw(this)
-            const proto = getProto(target)
-            const hadKey = proto.has.call(target, value)
-
-            if (!hadKey) {
-              target.add(value)
-              trigger(target, TriggerOpTypes.ADD, value, value)
-            }
-
-            return this
-          },
-          set(this: MapTypes, key: unknown, value: unknown) {
-            if (!shallow && !isShallow(value) && !isReadonly(value)) {
-              value = toRaw(value)
-            }
-
-            const target = toRaw(this)
-            const { has, get } = getProto(target)
-
-            let hadKey = has.call(target, key)
-            if (!hadKey) {
-              key = toRaw(key)
-              hadKey = has.call(target, key)
-            } else if (__DEV__) {
-              checkIdentityKeys(target, has, key)
-            }
-
-            const oldValue = get.call(target, key)
-            target.set(key, value)
-
-            if (!hadKey) {
-              trigger(target, TriggerOpTypes.ADD, key, value)
-            } else if (hasChanged(value, oldValue)) {
-              trigger(target, TriggerOpTypes.SET, key, value, oldValue)
-            }
-            return this
-          },
-          delete(this: CollectionTypes, key: unknown) {
-            const target = toRaw(this)
-            const { has, get } = getProto(target)
-            let hadKey = has.call(target, key)
-            if (!hadKey) {
-              key = toRaw(key)
-              hadKey = has.call(target, key)
-            } else if (__DEV__) {
-              checkIdentityKeys(target, has, key)
-            }
-
-            const oldValue = get ? get.call(target, key) : undefined
-            // 排队之前前进的操作
-            const result = target.delete(key)
-            if (hadKey) {
-              trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
-            }
-            return result
-          },
-          clear(this: IterableCollections) {
-            const target = toRaw(this)
-            const hadItems = target.size !== 0
-
-            // dev 模式下，收集下 old value
-            const oldTarget = __DEV__
-              ? isMap(target)
-                ? new Map(target)
-                : new Set(target)
-              : undefined
-            const result = target.clear()
-            if (hadItems) {
-              trigger(
-                target,
-                TriggerOpTypes.CLEAR,
-                undefined,
-                undefined,
-                oldTarget
-              )
-            }
-            return result
+        add(this: SetTypes, value: unknown) {
+          if (!shallow && !isShallow(value) && !isReadonly(value)) {
+            value = toRaw(value)
           }
+
+          const target = toRaw(this)
+          const proto = getProto(target)
+          const hadKey = proto.has.call(target, value)
+
+          if (!hadKey) {
+            target.add(value)
+            trigger(target, TriggerOpTypes.ADD, value, value)
+          }
+
+          return this
+        },
+        set(this: MapTypes, key: unknown, value: unknown) {
+          if (!shallow && !isShallow(value) && !isReadonly(value)) {
+            value = toRaw(value)
+          }
+
+          const target = toRaw(this)
+          const { has, get } = getProto(target)
+
+          let hadKey = has.call(target, key)
+          if (!hadKey) {
+            key = toRaw(key)
+            hadKey = has.call(target, key)
+          } else if (__DEV__) {
+            checkIdentityKeys(target, has, key)
+          }
+
+          const oldValue = get.call(target, key)
+          target.set(key, value)
+
+          if (!hadKey) {
+            trigger(target, TriggerOpTypes.ADD, key, value)
+          } else if (hasChanged(value, oldValue)) {
+            trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+          }
+          return this
+        },
+        delete(this: CollectionTypes, key: unknown) {
+          const target = toRaw(this)
+          const { has, get } = getProto(target)
+          let hadKey = has.call(target, key)
+          if (!hadKey) {
+            key = toRaw(key)
+            hadKey = has.call(target, key)
+          } else if (__DEV__) {
+            checkIdentityKeys(target, has, key)
+          }
+
+          const oldValue = get ? get.call(target, key) : undefined
+          // 排队之前前进的操作
+          const result = target.delete(key)
+          if (hadKey) {
+            trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+          }
+          return result
+        },
+        clear(this: IterableCollections) {
+          const target = toRaw(this)
+          const hadItems = target.size !== 0
+
+          // dev 模式下，收集下 old value
+          const oldTarget = __DEV__
+            ? isMap(target)
+              ? new Map(target)
+              : new Set(target)
+            : undefined
+          const result = target.clear()
+          if (hadItems) {
+            trigger(
+              target,
+              TriggerOpTypes.CLEAR,
+              undefined,
+              undefined,
+              oldTarget
+            )
+          }
+          return result
         }
+      }
   )
 
   // 可迭代的方法
@@ -1442,8 +1499,8 @@ export function toRef<T>(
 ): T extends () => infer R
   ? Readonly<Ref<R>>
   : T extends Ref
-  ? T
-  : Ref<UnwrapRef<T>>
+    ? T
+    : Ref<UnwrapRef<T>>
 export function toRef<T extends object, K extends keyof T>(
   object: T,
   key: K
@@ -1733,11 +1790,11 @@ function createIterableMethod(
 
     const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
     !isReadonly &&
-      track(
-        rawTarget,
-        TrackOpTypes.ITERATE,
-        isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
-      )
+    track(
+      rawTarget,
+      TrackOpTypes.ITERATE,
+      isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY
+    )
     // 返回包装的迭代器
     return {
       next() {
@@ -1745,9 +1802,9 @@ function createIterableMethod(
         return done
           ? { value, done }
           : {
-              value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
-              done
-            }
+            value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
+            done
+          }
       },
       [Symbol.iterator]() {
         return this
@@ -1900,8 +1957,8 @@ function createReadonlyMethod(type: TriggerOpTypes): Function {
     return type === TriggerOpTypes.DELETE
       ? false
       : type === TriggerOpTypes.CLEAR
-      ? undefined
-      : this
+        ? undefined
+        : this
   }
 }
 
@@ -1952,6 +2009,7 @@ export function shallowReadArray<T>(arr: T[]): T[] {
   track((arr = toRaw(arr)), TrackOpTypes.ITERATE, ARRAY_ITERATE_KEY)
   return arr
 }
+
 function iterator(
   self: unknown[],
   method: keyof Array<unknown>,
@@ -2028,6 +2086,7 @@ export function readonly<T extends object>(
     readonlyMap
   )
 }
+
 const toShallow = <T extends unknown>(value: T): T => value
 
 const toReadonly = <T extends unknown>(value: T): DeepReadonly<T> =>
@@ -2084,6 +2143,7 @@ function refreshComputed(computed: ComputedRefImpl): undefined {
     computed.flags &= ~EffectFlags.RUNNING
   }
 }
+
 function checkIdentityKeys(
   target: CollectionTypes,
   has: (key: unknown) => boolean,
@@ -2094,10 +2154,10 @@ function checkIdentityKeys(
     const type = toRawType(target)
     warn(
       `Reactive ${type} contains both the raw and reactive ` +
-        `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
-        `which can lead to inconsistencies. ` +
-        `Avoid differentiating between the raw and reactive versions ` +
-        `of an object and only use the reactive version if possible.`
+      `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
+      `which can lead to inconsistencies. ` +
+      `Avoid differentiating between the raw and reactive versions ` +
+      `of an object and only use the reactive version if possible.`
     )
   }
 }
@@ -2407,7 +2467,6 @@ export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
 
 /************** watch */
 
-const cleanupMap: WeakMap<ReactiveEffect, (() => void)[]> = new WeakMap()
 let activeWatcher: ReactiveEffect | undefined = undefined
 // initial value for watchers to trigger on undefined initial values
 const INITIAL_WATCHER_VALUE = {}
@@ -2435,10 +2494,11 @@ export function onWatcherCleanup(
   } else if (__DEV__ && !failSilently) {
     warn(
       `onWatcherCleanup() was called when there was no active watcher` +
-        ` to associate with.`
+      ` to associate with.`
     )
   }
 }
+
 /**
  * Returns the current active effect scope if there is one.
  *
@@ -2461,7 +2521,7 @@ export function watch(
       `Invalid watch source: `,
       s,
       `A watch source can only be a getter/effect function, a ref, ` +
-        `a reactive object, or an array of these types.`
+      `a reactive object, or an array of these types.`
     )
   }
 
@@ -2592,15 +2652,15 @@ export function watch(
             oldValue === INITIAL_WATCHER_VALUE
               ? undefined
               : isMultiSource && oldValue[0] === INITIAL_WATCHER_VALUE
-              ? []
-              : oldValue,
+                ? []
+                : oldValue,
             boundCleanup
           ]
           oldValue = newValue
           call
             ? call(cb!, WatchErrorCodes.WATCH_CALLBACK, args)
             : // @ts-expect-error
-              cb!(...args)
+            cb!(...args)
         } finally {
           activeWatcher = currentWatcher
         }
@@ -2789,7 +2849,7 @@ export function onEffectCleanup(fn: () => void, failSilently = false): void {
   } else if (__DEV__ && !failSilently) {
     warn(
       `onEffectCleanup() was called when there was no active effect` +
-        ` to associate with.`
+      ` to associate with.`
     )
   }
 }
@@ -2828,7 +2888,7 @@ export function onScopeDispose(fn: () => void, failSilently = false): void {
   } else if (__DEV__ && !failSilently) {
     warn(
       `onScopeDispose() is called when there is no active effect scope` +
-        ` to be associated with.`
+      ` to be associated with.`
     )
   }
 }

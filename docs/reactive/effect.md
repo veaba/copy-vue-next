@@ -1,5 +1,7 @@
 # effect
 
+- 如果设置相同的值，不会被 trigger
+
 ## cleanupEffect 函数
 
 ## cleanupDeps 函数
